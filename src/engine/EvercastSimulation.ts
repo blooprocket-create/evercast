@@ -13,6 +13,8 @@ import { big, quantity } from './numbers';
 import { ProgressionSystem } from './progression/ProgressionSystem';
 import { RebirthSystem } from './prestige/RebirthSystem';
 import { compileSpell } from './spell/SpellCompiler';
+import { spellPointCost } from './spellTree/SpellTreeCatalog';
+import { SpellTreeSystem, totalSpellPoints, unspentSpellPoints } from './spellTree/SpellTreeSystem';
 import { createInitialGameState } from './state';
 import type { EngineCommand, SimulationSnapshot } from './types';
 
@@ -35,6 +37,7 @@ export class EvercastSimulation {
   private readonly progressionSystem: ProgressionSystem;
   private readonly rebirthSystem: RebirthSystem;
   private readonly gearSystem: GearSystem;
+  private readonly spellTreeSystem: SpellTreeSystem;
   private recordPresentationEvents = true;
   private lastEvent = 'The Evercast stirs.';
 
@@ -52,7 +55,9 @@ export class EvercastSimulation {
     this.progressionSystem = new ProgressionSystem(this.config, emit);
     this.rebirthSystem = new RebirthSystem(this.config, emit);
     this.gearSystem = new GearSystem(this.config, emit);
+    this.spellTreeSystem = new SpellTreeSystem(emit);
     this.gearSystem.syncMageStats(this.state);
+    this.spellTreeSystem.syncSpell(this.state);
   }
 
   update(deltaSeconds: number): void {
@@ -97,8 +102,25 @@ export class EvercastSimulation {
         return true;
       case 'level_gear':
         return this.gearSystem.levelUp(this.state, command.slot);
-      case 'rebirth':
-        return this.rebirthSystem.perform(this.state);
+      case 'buy_spell_point':
+        return this.spellTreeSystem.buyPoint(this.state);
+      case 'activate_spell_node': {
+        const activated = this.spellTreeSystem.activateNode(this.state, command.nodeId);
+        if (activated) {
+          this.state.run.castCooldown = Math.min(
+            this.state.run.castCooldown,
+            compileSpell(this.state.run.spell).castInterval,
+          );
+        }
+        return activated;
+      }
+      case 'respec_spell_tree':
+        return this.spellTreeSystem.respec(this.state);
+      case 'rebirth': {
+        const performed = this.rebirthSystem.perform(this.state);
+        if (performed) this.spellTreeSystem.syncSpell(this.state);
+        return performed;
+      }
     }
   }
 
@@ -159,6 +181,20 @@ export class EvercastSimulation {
       gearDamageBonus: quantity(gearStats.baseDamageBonus),
       gearHealthBonus: quantity(gearStats.maxHpBonus),
       castInterval: compiledSpell.castInterval,
+      critChance: compiledSpell.critChance,
+      critMultiplier: compiledSpell.critMultiplier,
+      pierceTargets: compiledSpell.pierceTargets,
+      splashTargets: compiledSpell.splashTargets,
+      splashDamageMultiplier: compiledSpell.splashDamageMultiplier,
+      chainTargets: compiledSpell.chainTargets,
+      chainDamageMultiplier: compiledSpell.chainDamageMultiplier,
+      controlDelaySeconds: compiledSpell.controlDelaySeconds,
+      leechFraction: compiledSpell.leechFraction,
+      spellTreePurchasedPoints: this.state.spellTree.purchasedPoints,
+      spellTreeTotalPoints: totalSpellPoints(this.state.spellTree),
+      spellTreeUnspentPoints: unspentSpellPoints(this.state.spellTree),
+      nextSpellPointCost: quantity(big(spellPointCost(this.state.spellTree.purchasedPoints))),
+      activeSpellNodeIds: [...this.state.spellTree.activatedNodeIds],
       progressToNextEncounter: run.phase === 'travel'
         ? Math.min(1, run.travelElapsed / this.config.travelSeconds)
         : 1,
@@ -335,6 +371,12 @@ function describeEvent(event: GameEvent): string {
       return `${event.slot} reached gear level ${event.level}.`;
     case 'gear_evolved':
       return `${event.name} evolved at gear level ${event.level}.`;
+    case 'spell_point_purchased':
+      return `Evercast absorbs ${event.cost} Essence. +1 Spell Point.`;
+    case 'spell_node_activated':
+      return `${event.nodeName} awakened.`;
+    case 'spell_tree_respecced':
+      return `Evercast reshaped. ${event.refundedPoints} point${event.refundedPoints === 1 ? '' : 's'} returned.`;
     case 'rebirth_performed':
       return `Rebirth ${event.rebirths}: +${event.knowledgeGained} Knowledge.`;
   }
