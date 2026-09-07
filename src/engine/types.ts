@@ -17,6 +17,15 @@ export interface GearSnapshot {
   treeNodes: string[];
 }
 
+export interface EnemySnapshot {
+  instanceId: number;
+  name: string;
+  boss: boolean;
+  hp: QuantitySnapshot;
+  maxHp: QuantitySnapshot;
+  hpPercent: number;
+}
+
 export interface SimulationSnapshot {
   elapsedSeconds: number;
   stage: number;
@@ -36,6 +45,11 @@ export interface SimulationSnapshot {
   enemyMaxHp: QuantitySnapshot;
   enemyHpPercent: number;
   enemyName: string;
+  enemies: EnemySnapshot[];
+  encounterTotalEnemies: number;
+  encounterSpawnedEnemies: number;
+  encounterAliveEnemies: number;
+  spawnInterval: number;
   phase: 'travel' | 'combat';
   boss: boolean;
   casts: number;
