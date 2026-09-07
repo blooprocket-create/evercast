@@ -4,9 +4,12 @@ import { GEAR_SLOT_ORDER } from '../gear/GearCatalog';
 import type { EquipmentState, GearPieceState, GearSlot } from '../gear/types';
 import type { EnemyState, GameState } from '../model';
 import { big } from '../numbers';
+import { SPELL_TREE_NODE_BY_ID, SPELL_TREE_STARTER_POINTS } from '../spellTree/SpellTreeCatalog';
+import { createInitialSpellTreeState } from '../spellTree/SpellTreeSystem';
+import type { SpellTreeState } from '../spellTree/types';
 import { createInitialGameState } from '../state';
 
-export const CURRENT_SAVE_VERSION = 3;
+export const CURRENT_SAVE_VERSION = 4;
 
 type SerializedEnemy = Omit<EnemyState, 'hp' | 'maxHp' | 'attackDamage' | 'reward'> & {
   hp: string;
@@ -41,13 +44,29 @@ interface SerializedEquipment {
   pieces: Record<GearSlot, GearPieceState>;
 }
 
-export interface SaveEnvelopeV3 {
+interface SerializedSpellTree {
+  purchasedPoints: number;
+  activatedNodeIds: string[];
+}
+
+interface LegacySaveEnvelopeV3 {
   version: 3;
+  savedAt?: string;
+  state: {
+    run: SerializedRunV3;
+    meta: SerializedMeta;
+    equipment: SerializedEquipment;
+  };
+}
+
+export interface SaveEnvelopeV4 {
+  version: 4;
   savedAt: string;
   state: {
     run: SerializedRunV3;
     meta: SerializedMeta;
     equipment: SerializedEquipment;
+    spellTree: SerializedSpellTree;
   };
 }
 
@@ -66,7 +85,7 @@ interface LegacySaveEnvelopeV2 {
 export class SaveCodec {
   constructor(private readonly config: EngineConfig) {}
 
-  encode(state: GameState, savedAt = new Date()): SaveEnvelopeV3 {
+  encode(state: GameState, savedAt = new Date()): SaveEnvelopeV4 {
     return {
       version: CURRENT_SAVE_VERSION,
       savedAt: savedAt.toISOString(),
@@ -88,6 +107,10 @@ export class SaveCodec {
           gold: state.equipment.gold.toString(),
           pieces: structuredClone(state.equipment.pieces),
         },
+        spellTree: {
+          purchasedPoints: state.spellTree.purchasedPoints,
+          activatedNodeIds: [...state.spellTree.activatedNodeIds],
+        },
       },
     };
   }
@@ -98,7 +121,7 @@ export class SaveCodec {
     }
 
     const version = (raw as { version?: unknown }).version;
-    if (version !== 1 && version !== 2 && version !== 3) {
+    if (version !== 1 && version !== 2 && version !== 3 && version !== 4) {
       throw new Error(`Unsupported Evercast save version: ${String(version)}`);
     }
 
@@ -113,17 +136,32 @@ export class SaveCodec {
           run: migrateLegacyRun(envelope.state.run),
           meta: deserializeMeta(envelope.state.meta),
           equipment,
+          spellTree: createInitialSpellTreeState(),
         },
       };
     }
 
-    const envelope = raw as SaveEnvelopeV3;
+    if (version === 3) {
+      const envelope = raw as LegacySaveEnvelopeV3;
+      return {
+        savedAt: new Date(envelope.savedAt ?? Date.now()),
+        state: {
+          run: deserializeRunV3(envelope.state.run),
+          meta: deserializeMeta(envelope.state.meta),
+          equipment: deserializeEquipment(envelope.state.equipment),
+          spellTree: createInitialSpellTreeState(),
+        },
+      };
+    }
+
+    const envelope = raw as SaveEnvelopeV4;
     return {
       savedAt: new Date(envelope.savedAt ?? Date.now()),
       state: {
         run: deserializeRunV3(envelope.state.run),
         meta: deserializeMeta(envelope.state.meta),
         equipment: deserializeEquipment(envelope.state.equipment),
+        spellTree: deserializeSpellTree(envelope.state.spellTree),
       },
     };
   }
@@ -164,7 +202,6 @@ function migrateLegacyRun(run: LegacySerializedRun): GameState['run'] {
   const { enemy: _legacyEnemy, ...rest } = run;
   return {
     ...rest,
-    // Active v1/v2 single-enemy combats restart cleanly at their existing stage.
     phase: 'travel',
     travelElapsed: 0,
     castCooldown: 0,
@@ -195,4 +232,16 @@ function deserializeEquipment(serialized: SerializedEquipment | undefined): Equi
     };
   }
   return equipment;
+}
+
+function deserializeSpellTree(serialized: SerializedSpellTree | undefined): SpellTreeState {
+  if (!serialized) return createInitialSpellTreeState();
+  const activatedNodeIds = Array.isArray(serialized.activatedNodeIds)
+    ? [...new Set(serialized.activatedNodeIds.filter((nodeId): nodeId is string => typeof nodeId === 'string' && SPELL_TREE_NODE_BY_ID.has(nodeId)))]
+    : [];
+  const savedPurchased = Number.isFinite(serialized.purchasedPoints)
+    ? Math.max(0, Math.floor(serialized.purchasedPoints))
+    : 0;
+  const purchasedPoints = Math.max(savedPurchased, Math.max(0, activatedNodeIds.length - SPELL_TREE_STARTER_POINTS));
+  return { purchasedPoints, activatedNodeIds };
 }
