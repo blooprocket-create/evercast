@@ -8,9 +8,20 @@ interface HudProps {
   offlineSummary: OfflineSummary | null;
   onRetry: () => void;
   onLevelGear: (slot: GearSlot) => void;
+  onBuySpellPoint: () => void;
+  onActivateSpellNode: (nodeId: string) => void;
+  onRespecSpellTree: () => void;
 }
 
-export function Hud({ snapshot, offlineSummary, onRetry, onLevelGear }: HudProps) {
+export function Hud({
+  snapshot,
+  offlineSummary,
+  onRetry,
+  onLevelGear,
+  onBuySpellPoint,
+  onActivateSpellNode,
+  onRespecSpellTree,
+}: HudProps) {
   return (
     <div className="hud">
       <header className="topbar">
@@ -50,7 +61,13 @@ export function Hud({ snapshot, offlineSummary, onRetry, onLevelGear }: HudProps
 
       <div className="prototype-hint">Prototype: press N to jump to the next biome</div>
       <div className="event-line">{snapshot.lastEvent}</div>
-      <GameMenu snapshot={snapshot} onLevelGear={onLevelGear} />
+      <GameMenu
+        snapshot={snapshot}
+        onLevelGear={onLevelGear}
+        onBuySpellPoint={onBuySpellPoint}
+        onActivateSpellNode={onActivateSpellNode}
+        onRespecSpellTree={onRespecSpellTree}
+      />
     </div>
   );
 }
