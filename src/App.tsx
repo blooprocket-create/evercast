@@ -37,8 +37,6 @@ export default function App() {
       hiddenAt = null;
       backgroundProgressor.apply(simulation, elapsedSeconds);
 
-      // Background catch-up intentionally suppresses presentation events; resume from
-      // the authoritative snapshot instead of replaying stale combat VFX at once.
       simulation.drainPresentationEvents();
       const next = simulation.getSnapshot();
       scene.sync(next, 0, []);
@@ -81,12 +79,16 @@ export default function App() {
     };
   }, []);
 
-  const levelGear = (slot: GearSlot) => {
-    if (simulation.execute({ type: 'level_gear', slot })) {
-      setSnapshot(simulation.getSnapshot());
-      saveGame();
-    }
+  const refreshAfter = (action: () => boolean) => {
+    if (!action()) return;
+    setSnapshot(simulation.getSnapshot());
+    saveGame();
   };
+
+  const levelGear = (slot: GearSlot) => refreshAfter(() => simulation.execute({ type: 'level_gear', slot }));
+  const buySpellPoint = () => refreshAfter(() => simulation.execute({ type: 'buy_spell_point' }));
+  const activateSpellNode = (nodeId: string) => refreshAfter(() => simulation.execute({ type: 'activate_spell_node', nodeId }));
+  const respecSpellTree = () => refreshAfter(() => simulation.execute({ type: 'respec_spell_tree' }));
 
   return (
     <main className="app-shell">
@@ -96,6 +98,9 @@ export default function App() {
         offlineSummary={offlineSummary}
         onRetry={() => simulation.execute({ type: 'retry_frontier' })}
         onLevelGear={levelGear}
+        onBuySpellPoint={buySpellPoint}
+        onActivateSpellNode={activateSpellNode}
+        onRespecSpellTree={respecSpellTree}
       />
     </main>
   );

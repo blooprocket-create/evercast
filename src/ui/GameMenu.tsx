@@ -2,12 +2,16 @@ import { useState } from 'react';
 import { GEAR_EVOLUTION_MILESTONES } from '../engine/gear/GearCatalog';
 import type { GearSlot } from '../engine/gear/types';
 import type { GearSnapshot, SimulationSnapshot } from '../engine/types';
+import { SpellTreeView } from './SpellTreeView';
 
 type MenuName = 'character' | 'tree' | 'gear';
 
 interface GameMenuProps {
   snapshot: SimulationSnapshot;
   onLevelGear: (slot: GearSlot) => void;
+  onBuySpellPoint: () => void;
+  onActivateSpellNode: (nodeId: string) => void;
+  onRespecSpellTree: () => void;
 }
 
 const SLOT_LABELS: Record<GearSlot, string> = {
@@ -21,7 +25,13 @@ const SLOT_LABELS: Record<GearSlot, string> = {
   ringRight: 'Ring II',
 };
 
-export function GameMenu({ snapshot, onLevelGear }: GameMenuProps) {
+export function GameMenu({
+  snapshot,
+  onLevelGear,
+  onBuySpellPoint,
+  onActivateSpellNode,
+  onRespecSpellTree,
+}: GameMenuProps) {
   const [barOpen, setBarOpen] = useState(false);
   const [activeMenu, setActiveMenu] = useState<MenuName | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<GearSlot>('staff');
@@ -53,18 +63,28 @@ export function GameMenu({ snapshot, onLevelGear }: GameMenuProps) {
       </div>
 
       {activeMenu && (
-        <section className="game-menu-panel">
+        <section className={`game-menu-panel ${activeMenu === 'tree' ? 'tree-menu-panel' : ''}`}>
           <header className="game-menu-header">
             <div>
               <span className="eyebrow">EVERCAST</span>
               <h2>{activeMenu === 'character' ? 'Character' : activeMenu === 'tree' ? 'Trees' : 'Gear'}</h2>
             </div>
-            <div className="menu-wallet"><span>Gold</span><strong>{snapshot.gold.display}</strong></div>
+            <div className="menu-wallets">
+              <div className="menu-wallet"><span>Gold</span><strong>{snapshot.gold.display}</strong></div>
+              <div className="menu-wallet"><span>Essence</span><strong>{snapshot.essence.display}</strong></div>
+            </div>
             <button className="panel-close" type="button" onClick={() => setActiveMenu(null)}>×</button>
           </header>
 
           {activeMenu === 'character' && <CharacterPanel snapshot={snapshot} />}
-          {activeMenu === 'tree' && <TreePanel gear={snapshot.gear} />}
+          {activeMenu === 'tree' && (
+            <TreePanel
+              snapshot={snapshot}
+              onBuySpellPoint={onBuySpellPoint}
+              onActivateSpellNode={onActivateSpellNode}
+              onRespecSpellTree={onRespecSpellTree}
+            />
+          )}
           {activeMenu === 'gear' && selectedGear && (
             <GearPanel
               gear={snapshot.gear}
@@ -86,6 +106,7 @@ function CharacterPanel({ snapshot }: { snapshot: SimulationSnapshot }) {
         <Stat label="Health" value={`${snapshot.mageMaxHp.display}`} detail={`+${snapshot.gearHealthBonus.display} from gear`} />
         <Stat label="Arcane Bolt" value={snapshot.damagePerProjectile.display} detail={`${snapshot.spellBaseDamage.display} spell + ${snapshot.gearDamageBonus.display} gear`} />
         <Stat label="Cast Interval" value={`${snapshot.castInterval.toFixed(2)}s`} detail={`${snapshot.projectileCount} projectile${snapshot.projectileCount === 1 ? '' : 's'}`} />
+        <Stat label="Spell Tree" value={`${snapshot.spellTreeTotalPoints} pts`} detail={`${snapshot.spellTreeUnspentPoints} unspent`} />
         <Stat label="Frontier" value={`${snapshot.stage}`} detail={`Highest ${snapshot.highestStageEver}`} />
       </div>
 
@@ -104,22 +125,32 @@ function CharacterPanel({ snapshot }: { snapshot: SimulationSnapshot }) {
   );
 }
 
-function TreePanel({ gear }: { gear: GearSnapshot[] }) {
+function TreePanel({
+  snapshot,
+  onBuySpellPoint,
+  onActivateSpellNode,
+  onRespecSpellTree,
+}: {
+  snapshot: SimulationSnapshot;
+  onBuySpellPoint: () => void;
+  onActivateSpellNode: (nodeId: string) => void;
+  onRespecSpellTree: () => void;
+}) {
   return (
     <div className="tree-panel menu-scroll">
-      <article className="tree-card spell-tree-card">
-        <span className="eyebrow">SPELL</span>
-        <h3>Evercast Spell Tree</h3>
-        <p>The spell tree is intentionally not authored yet. This is where the one true spell will branch, mutate, and eventually become absurd.</p>
-        <div className="tree-placeholder">Spell tree foundation reserved</div>
-      </article>
+      <SpellTreeView
+        snapshot={snapshot}
+        onBuyPoint={onBuySpellPoint}
+        onActivateNode={onActivateSpellNode}
+        onRespec={onRespecSpellTree}
+      />
 
-      <div className="menu-section">
+      <div className="menu-section gear-tree-section">
         <span className="eyebrow">GEAR</span>
         <h3>Gear Trees</h3>
-        <p className="muted-copy">Gear level unlocks deeper tree tiers. The actual nodes and modifiers will be authored separately.</p>
+        <p className="muted-copy">Gear level unlocks deeper tree tiers. The actual gear-tree nodes remain deliberately un-authored while we playtest the Evercast tree.</p>
         <div className="gear-tree-grid">
-          {gear.map((piece) => (
+          {snapshot.gear.map((piece) => (
             <article className="tree-card" key={piece.slot}>
               <div className="tree-card-heading">
                 <strong>{SLOT_LABELS[piece.slot]}</strong>
