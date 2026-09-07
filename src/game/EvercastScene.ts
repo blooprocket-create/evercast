@@ -16,12 +16,14 @@ import {
 } from '@babylonjs/core';
 import type { GameEvent } from '../engine/events/GameEvent';
 import type { SimulationSnapshot } from '../engine/types';
+import { WorldGenerator } from './world/WorldGenerator';
 
 export class EvercastScene {
   private readonly engine: Engine;
   private readonly scene: Scene;
   private readonly mage: Mesh;
   private readonly enemy: Mesh;
+  private readonly world: WorldGenerator;
   private travelPhase = 0;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -37,23 +39,27 @@ export class EvercastScene {
     const skyLight = new HemisphericLight('sky', new Vector3(0, 1, 0), this.scene);
     skyLight.intensity = 0.65;
     const sun = new DirectionalLight('sun', new Vector3(-0.7, -1, -0.4), this.scene);
-    sun.position = new Vector3(8, 12, 6);
+    sun.position = new Vector3(8, 12, -4);
     sun.intensity = 2.2;
 
-    new GlowLayer('glow', this.scene, { blurKernelSize: 32 }).intensity = 0.65;
+    new GlowLayer('glow', this.scene, { blurKernelSize: 32 }).intensity = 0.7;
 
-    this.createWorld();
+    this.world = new WorldGenerator(this.scene, skyLight, sun);
     this.mage = this.createMage();
     this.enemy = this.createEnemy();
 
     this.engine.runRenderLoop(() => this.scene.render());
     window.addEventListener('resize', this.resize);
+    window.addEventListener('keydown', this.keydown);
   }
 
   sync(snapshot: SimulationSnapshot, deltaSeconds: number, events: readonly GameEvent[]): void {
     this.travelPhase += deltaSeconds;
     const walking = snapshot.phase === 'travel';
+    this.world.update(deltaSeconds, walking);
+
     this.mage.position.y = 0.65 + (walking ? Math.sin(this.travelPhase * 8) * 0.035 : 0);
+    this.mage.rotation.z = walking ? Math.sin(this.travelPhase * 8) * 0.01 : 0;
     this.enemy.setEnabled(!walking);
     this.enemy.scaling.setAll(snapshot.boss ? 1.5 : 1);
 
@@ -66,42 +72,17 @@ export class EvercastScene {
 
   dispose(): void {
     window.removeEventListener('resize', this.resize);
+    window.removeEventListener('keydown', this.keydown);
+    this.world.dispose();
     this.scene.dispose();
     this.engine.dispose();
   }
 
   private readonly resize = (): void => this.engine.resize();
 
-  private createWorld(): void {
-    const ground = MeshBuilder.CreateGround('ground', { width: 30, height: 7 }, this.scene);
-    const groundMat = new PBRMaterial('groundMat', this.scene);
-    groundMat.albedoColor = new Color3(0.055, 0.11, 0.085);
-    groundMat.roughness = 0.96;
-    ground.material = groundMat;
-
-    for (let i = 0; i < 18; i += 1) {
-      const rock = MeshBuilder.CreatePolyhedron(`rock-${i}`, { type: 1, size: 0.35 + (i % 4) * 0.08 }, this.scene);
-      rock.position = new Vector3(-12 + i * 1.5, 0.25, i % 2 === 0 ? 2.2 : -2.1);
-      rock.scaling = new Vector3(1, 0.7, 1.4);
-      const mat = new PBRMaterial(`rockMat-${i}`, this.scene);
-      mat.albedoColor = new Color3(0.15, 0.19, 0.18);
-      mat.roughness = 0.9;
-      rock.material = mat;
-    }
-
-    for (let i = 0; i < 7; i += 1) {
-      const trunk = MeshBuilder.CreateCylinder(`trunk-${i}`, { height: 2.8, diameterTop: 0.25, diameterBottom: 0.42, tessellation: 7 }, this.scene);
-      trunk.position = new Vector3(-9 + i * 3.2, 1.4, 2.8);
-      const crown = MeshBuilder.CreatePolyhedron(`crown-${i}`, { type: 2, size: 1.2 }, this.scene);
-      crown.position = trunk.position.add(new Vector3(0, 1.7, 0));
-      const trunkMat = new StandardMaterial(`trunkMat-${i}`, this.scene);
-      trunkMat.diffuseColor = new Color3(0.15, 0.09, 0.055);
-      const crownMat = new StandardMaterial(`crownMat-${i}`, this.scene);
-      crownMat.diffuseColor = new Color3(0.09, 0.23, 0.15);
-      trunk.material = trunkMat;
-      crown.material = crownMat;
-    }
-  }
+  private readonly keydown = (event: KeyboardEvent): void => {
+    if (event.key.toLowerCase() === 'n') this.world.jumpToNextBiome();
+  };
 
   private createMage(): Mesh {
     const body = MeshBuilder.CreateCylinder('mage', { height: 1.25, diameterTop: 0.42, diameterBottom: 0.9, tessellation: 10 }, this.scene);
