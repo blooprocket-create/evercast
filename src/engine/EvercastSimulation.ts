@@ -6,6 +6,8 @@ import { DEFAULT_ENGINE_CONFIG } from './config';
 import { EncounterSystem } from './encounters/EncounterSystem';
 import { EventBus } from './events/EventBus';
 import type { GameEvent } from './events/GameEvent';
+import { GearSystem, compileGearStats, gearDisplayData } from './gear/GearSystem';
+import { GEAR_SLOT_ORDER } from './gear/GearCatalog';
 import type { GameState } from './model';
 import { big, quantity } from './numbers';
 import { ProgressionSystem } from './progression/ProgressionSystem';
@@ -32,6 +34,7 @@ export class EvercastSimulation {
   private readonly combatSystem: CombatSystem;
   private readonly progressionSystem: ProgressionSystem;
   private readonly rebirthSystem: RebirthSystem;
+  private readonly gearSystem: GearSystem;
   private recordPresentationEvents = true;
   private lastEvent = 'The Evercast stirs.';
 
@@ -48,6 +51,8 @@ export class EvercastSimulation {
     this.combatSystem = new CombatSystem(this.config, emit);
     this.progressionSystem = new ProgressionSystem(this.config, emit);
     this.rebirthSystem = new RebirthSystem(this.config, emit);
+    this.gearSystem = new GearSystem(this.config, emit);
+    this.gearSystem.syncMageStats(this.state);
   }
 
   update(deltaSeconds: number): void {
@@ -94,6 +99,8 @@ export class EvercastSimulation {
           compileSpell(this.state.run.spell).castInterval,
         );
         return true;
+      case 'level_gear':
+        return this.gearSystem.levelUp(this.state, command.slot);
       case 'rebirth':
         return this.rebirthSystem.perform(this.state);
     }
@@ -103,6 +110,8 @@ export class EvercastSimulation {
     const run = this.state.run;
     const enemy = run.enemy;
     const compiledSpell = compileSpell(run.spell);
+    const gearStats = compileGearStats(this.state.equipment);
+    const finalDamage = big(compiledSpell.damage).add(gearStats.baseDamageBonus);
     const enemyHpPercent = enemy && enemy.maxHp.cmp(0) > 0
       ? Math.max(0, Math.min(1, enemy.hp.div(enemy.maxHp).toNumber())) * 100
       : 0;
@@ -121,6 +130,7 @@ export class EvercastSimulation {
       farmKillsSinceFailure: run.farmKillsSinceFailure,
       essence: quantity(run.essence),
       knowledge: quantity(this.state.meta.knowledge),
+      gold: quantity(this.state.equipment.gold),
       mageHp: quantity(run.mage.hp),
       mageMaxHp: quantity(run.mage.maxHp),
       mageHpPercent,
@@ -134,7 +144,10 @@ export class EvercastSimulation {
       kills: run.stats.kills,
       deaths: run.stats.deaths,
       projectileCount: compiledSpell.projectileCount,
-      damagePerProjectile: quantity(big(compiledSpell.damage)),
+      damagePerProjectile: quantity(finalDamage),
+      spellBaseDamage: quantity(big(compiledSpell.damage)),
+      gearDamageBonus: quantity(gearStats.baseDamageBonus),
+      gearHealthBonus: quantity(gearStats.maxHpBonus),
       castInterval: compiledSpell.castInterval,
       progressToNextEncounter: run.phase === 'travel'
         ? Math.min(1, run.travelElapsed / this.config.travelSeconds)
@@ -142,6 +155,14 @@ export class EvercastSimulation {
       highestStageEver: this.state.meta.highestStageEver,
       rebirths: this.state.meta.rebirths,
       canRebirth: this.rebirthSystem.canRebirth(this.state),
+      gear: GEAR_SLOT_ORDER.map((slot) => {
+        const data = gearDisplayData(this.state.equipment, slot);
+        return {
+          ...data,
+          contribution: quantity(data.contribution),
+          nextLevelCost: quantity(data.nextLevelCost),
+        };
+      }),
       lastEvent: this.lastEvent,
     };
   }
@@ -201,7 +222,7 @@ export class EvercastSimulation {
 
     // Player wins ties; it feels better and keeps the ordering deterministic.
     if (run.castCooldown <= EPSILON) {
-      const result = this.combatSystem.cast(run);
+      const result = this.combatSystem.cast(run, this.state.equipment);
       run.castCooldown += compileSpell(run.spell).castInterval;
       if (result.enemyKilled) {
         this.progressionSystem.handleVictory(this.state);
@@ -246,6 +267,10 @@ function describeEvent(event: GameEvent): string {
       return `Frontier advanced to stage ${event.stage}.`;
     case 'mode_changed':
       return `${event.mode === 'farm' ? 'Farming' : 'Pushing'}: ${event.reason}.`;
+    case 'gear_leveled':
+      return `${event.slot} reached gear level ${event.level}.`;
+    case 'gear_evolved':
+      return `${event.name} evolved at gear level ${event.level}.`;
     case 'rebirth_performed':
       return `Rebirth ${event.rebirths}: +${event.knowledgeGained} Knowledge.`;
   }
