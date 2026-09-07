@@ -18,6 +18,13 @@ export function compileSpell(build: SpellBuild): CompiledSpell {
   let projectileCount = build.projectileCount;
   let critChance = build.critChance;
   let critMultiplier = build.critMultiplier;
+  let pierceTargets = 0;
+  let splashTargets = 0;
+  let splashDamageMultiplier = 0;
+  let chainTargets = 0;
+  let chainDamageMultiplier = 0;
+  let controlDelaySeconds = 0;
+  let leechFraction = 0;
   const triggerMap = new Map<SpellTrigger, Extract<SpellModifier, { kind: 'trigger' }>[]>();
 
   for (const modifier of build.modifiers) {
@@ -25,6 +32,29 @@ export function compileSpell(build: SpellBuild): CompiledSpell {
       const list = triggerMap.get(modifier.trigger) ?? [];
       list.push(modifier);
       triggerMap.set(modifier.trigger, list);
+      continue;
+    }
+
+    if (modifier.kind === 'combat') {
+      switch (modifier.action.kind) {
+        case 'pierce':
+          pierceTargets += Math.max(0, Math.floor(modifier.action.count));
+          break;
+        case 'splash':
+          splashTargets += Math.max(0, Math.floor(modifier.action.targets));
+          splashDamageMultiplier = Math.max(splashDamageMultiplier, Math.max(0, modifier.action.damageMultiplier));
+          break;
+        case 'chain':
+          chainTargets += Math.max(0, Math.floor(modifier.action.count));
+          chainDamageMultiplier = Math.max(chainDamageMultiplier, Math.max(0, modifier.action.damageMultiplier));
+          break;
+        case 'control':
+          controlDelaySeconds += Math.max(0, modifier.action.delaySeconds);
+          break;
+        case 'leech':
+          leechFraction += Math.max(0, modifier.action.fraction);
+          break;
+      }
       continue;
     }
 
@@ -60,6 +90,13 @@ export function compileSpell(build: SpellBuild): CompiledSpell {
     projectileCount,
     critChance,
     critMultiplier,
+    pierceTargets,
+    splashTargets,
+    splashDamageMultiplier,
+    chainTargets,
+    chainDamageMultiplier,
+    controlDelaySeconds,
+    leechFraction: Math.min(1, leechFraction),
     triggerModifiers: triggerMap,
   };
 }
