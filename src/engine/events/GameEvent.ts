@@ -6,7 +6,7 @@ export type GameEvent =
   | { type: 'spell_cast'; time: number; castId: number; projectiles: number }
   | { type: 'projectile_hit'; time: number; castId: number; projectileIndex: number; instanceId: number; damage: string; critical: boolean }
   | { type: 'enemy_attack'; time: number; instanceId: number; damage: string }
-  | { type: 'enemy_killed'; time: number; stage: number; instanceId: number; enemyId: string; gold: string }
+  | { type: 'enemy_killed'; time: number; stage: number; instanceId: number; enemyId: string; reward: string; gold: string }
   | { type: 'mage_defeated'; time: number; stage: number }
   | { type: 'resource_gained'; time: number; resource: 'essence' | 'knowledge' | 'gold'; amount: string }
   | { type: 'stage_advanced'; time: number; stage: number }
