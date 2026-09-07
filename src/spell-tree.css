@@ -1,0 +1,218 @@
+.game-menu-panel.tree-menu-panel {
+  width: min(1180px, calc(100vw - 48px));
+}
+
+.menu-wallets {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+}
+
+.gear-tree-section {
+  margin-top: 28px;
+  padding-top: 22px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+.spell-tree-layout {
+  display: grid;
+  gap: 14px;
+}
+
+.spell-tree-toolbar {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.025);
+}
+
+.spell-point-wallet {
+  display: grid;
+  gap: 3px;
+}
+
+.spell-point-wallet strong { font-size: 18px; }
+.spell-point-wallet small { color: #929aab; }
+
+.buy-spell-point,
+.respec-tree-button,
+.activate-spell-node {
+  min-height: 42px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(162,145,255,0.38);
+  background: rgba(91,70,168,0.30);
+  cursor: pointer;
+}
+
+.buy-spell-point:hover,
+.activate-spell-node:hover { background: rgba(105,82,190,0.48); }
+
+.respec-tree-button {
+  border-color: rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.05);
+}
+
+.respec-tree-button:disabled,
+.activate-spell-node:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.spell-tree-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 14px;
+  min-height: 560px;
+}
+
+.spell-tree-viewport {
+  min-width: 0;
+  min-height: 560px;
+  overflow: auto;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(103,87,182,0.13), transparent 22%),
+    radial-gradient(circle at 68% 24%, rgba(205,92,65,0.07), transparent 26%),
+    radial-gradient(circle at 78% 72%, rgba(92,151,191,0.07), transparent 24%),
+    radial-gradient(circle at 24% 22%, rgba(101,124,210,0.07), transparent 24%),
+    radial-gradient(circle at 22% 74%, rgba(164,52,78,0.07), transparent 24%),
+    rgba(4,7,13,0.62);
+}
+
+.spell-tree-canvas {
+  position: relative;
+  width: 1000px;
+  height: 760px;
+  transform-origin: top left;
+}
+
+.spell-tree-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.spell-tree-lines line {
+  stroke: rgba(154,163,186,0.18);
+  stroke-width: 3;
+}
+
+.spell-tree-lines line.reachable { stroke: rgba(150,137,221,0.44); }
+.spell-tree-lines line.active { stroke: rgba(184,168,255,0.90); stroke-width: 5; }
+
+.spell-node {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.17);
+  background: #151a27;
+  color: #8d95a7;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  cursor: pointer;
+  z-index: 2;
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease, opacity 120ms ease;
+}
+
+.spell-node:hover,
+.spell-node.selected { transform: translate(-50%, -50%) scale(1.16); z-index: 4; }
+.spell-node.adjacent { border-color: rgba(165,151,235,0.52); }
+.spell-node.available { box-shadow: 0 0 18px rgba(150,126,255,0.30); color: #e7e1ff; }
+.spell-node.active { border-color: rgba(219,210,255,0.92); color: #fff; box-shadow: 0 0 20px rgba(155,129,255,0.42); }
+.spell-node.selected { outline: 2px solid rgba(255,255,255,0.34); outline-offset: 3px; }
+
+.spell-node.kind-notable { width: 40px; height: 40px; }
+.spell-node.kind-mutation {
+  width: 50px;
+  height: 50px;
+  border-radius: 13px;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+.spell-node.kind-mutation > span { transform: rotate(-45deg); }
+.spell-node.kind-mutation:hover,
+.spell-node.kind-mutation.selected { transform: translate(-50%, -50%) rotate(45deg) scale(1.12); }
+.spell-node.kind-root {
+  width: 92px;
+  height: 92px;
+  font-size: 10px;
+  letter-spacing: 0.09em;
+  border-width: 3px;
+  background: radial-gradient(circle, rgba(105,83,196,0.85), rgba(31,27,61,0.94));
+}
+
+.spell-node.region-power.active { background: #5e4d78; }
+.spell-node.region-speed.active { background: #3e6376; }
+.spell-node.region-projectile.active { background: #4a557e; }
+.spell-node.region-crit.active { background: #6c526f; }
+.spell-node.region-arcane.active { background: #4f49a1; }
+.spell-node.region-fire.active { background: #9b4c37; }
+.spell-node.region-frost.active { background: #3d7892; }
+.spell-node.region-storm.active { background: #495d9b; }
+.spell-node.region-blood.active { background: #84394f; }
+
+.tree-region-label {
+  position: absolute;
+  color: rgba(206,211,227,0.18);
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  pointer-events: none;
+}
+.label-arcane { left: 430px; top: 30px; }
+.label-fire { left: 810px; top: 105px; }
+.label-frost { left: 790px; top: 690px; }
+.label-storm { left: 90px; top: 60px; }
+.label-blood { left: 80px; top: 700px; }
+
+.spell-node-detail {
+  align-self: start;
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.09);
+  background: rgba(255,255,255,0.035);
+}
+
+.spell-node-detail h3 { margin: 5px 0 8px; font-size: 22px; }
+.spell-node-detail > p { min-height: 58px; color: #afb6c6; font-size: 12px; line-height: 1.5; }
+
+.node-status-row,
+.spell-build-readout > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  font-size: 11px;
+}
+.node-status-row span,
+.spell-build-readout span { color: #9099ac; }
+
+.activate-spell-node { width: 100%; margin-top: 14px; }
+
+.spell-build-readout {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+.spell-build-readout h4 { margin: 0 0 7px; }
+
+@media (max-width: 900px) {
+  .game-menu-panel.tree-menu-panel { width: calc(100vw - 24px); }
+  .spell-tree-toolbar { grid-template-columns: 1fr; }
+  .spell-tree-main { grid-template-columns: 1fr; }
+  .spell-tree-viewport { min-height: 440px; }
+  .spell-node-detail { position: sticky; bottom: 0; }
+  .menu-wallets { gap: 8px; }
+}
