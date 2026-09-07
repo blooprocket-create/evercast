@@ -13,4 +13,7 @@ export type GameEvent =
   | { type: 'mode_changed'; time: number; mode: 'push' | 'farm'; reason: string }
   | { type: 'gear_leveled'; time: number; slot: GearSlot; level: number; cost: string }
   | { type: 'gear_evolved'; time: number; slot: GearSlot; level: number; evolutionTier: number; name: string }
+  | { type: 'spell_point_purchased'; time: number; purchasedPoints: number; cost: string }
+  | { type: 'spell_node_activated'; time: number; nodeId: string; nodeName: string }
+  | { type: 'spell_tree_respecced'; time: number; refundedPoints: number }
   | { type: 'rebirth_performed'; time: number; knowledgeGained: string; rebirths: number };
