@@ -3,8 +3,7 @@ import type { GameEvent } from '../events/GameEvent';
 import { goldRewardForKill } from '../gear/GearSystem';
 import type { EnemyState, GameState } from '../model';
 import { big } from '../numbers';
-import { resolveEffects } from '../spell/EffectResolver';
-import { compileSpell } from '../spell/SpellCompiler';
+import { firstClearEssenceReward } from './EssenceEconomy';
 
 export class ProgressionSystem {
   constructor(
@@ -14,11 +13,7 @@ export class ProgressionSystem {
 
   handleEnemyKilled(state: GameState, enemy: EnemyState): void {
     const { run, meta, equipment } = state;
-    const compiledSpell = compileSpell(run.spell);
-    const killEffects = resolveEffects(compiledSpell, 'onKill');
-    const reward = enemy.reward.mul(killEffects.essenceMultiplier).floor();
     const gold = goldRewardForKill(enemy.stage, enemy.boss);
-    run.essence = run.essence.add(reward);
     equipment.gold = equipment.gold.add(gold);
     run.stats.kills += 1;
     if (enemy.boss) run.stats.bossKills += 1;
@@ -31,13 +26,7 @@ export class ProgressionSystem {
       stage: enemy.stage,
       instanceId: enemy.instanceId,
       enemyId: enemy.definitionId,
-      reward: reward.toString(),
-    });
-    this.emit({
-      type: 'resource_gained',
-      time: run.elapsedSeconds,
-      resource: 'essence',
-      amount: reward.toString(),
+      gold: gold.toString(),
     });
     this.emit({
       type: 'resource_gained',
@@ -50,6 +39,23 @@ export class ProgressionSystem {
   handleEncounterCleared(state: GameState): void {
     const { run, meta } = state;
     if (run.mode === 'push') {
+      const clearedStage = run.frontierStage;
+      const firstEverClear = clearedStage >= meta.highestStageEver;
+
+      if (firstEverClear) {
+        const essence = firstClearEssenceReward(
+          clearedStage,
+          clearedStage % this.config.bossCadence === 0,
+        );
+        run.essence = run.essence.add(essence);
+        this.emit({
+          type: 'resource_gained',
+          time: run.elapsedSeconds,
+          resource: 'essence',
+          amount: essence.toString(),
+        });
+      }
+
       run.frontierStage += 1;
       run.highestStageThisRun = Math.max(run.highestStageThisRun, run.frontierStage);
       meta.highestStageEver = Math.max(meta.highestStageEver, run.frontierStage);
