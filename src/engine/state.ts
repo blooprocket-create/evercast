@@ -23,7 +23,9 @@ export function createInitialRunState(config: EngineConfig): RunState {
       hp: big(config.baseMageHealth),
       maxHp: big(config.baseMageHealth),
     },
-    enemy: null,
+    enemies: [],
+    encounter: null,
+    nextEnemyInstanceId: 1,
     spell: createDefaultSpellBuild(),
     stats: {
       casts: 0,
