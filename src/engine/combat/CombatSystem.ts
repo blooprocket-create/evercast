@@ -98,8 +98,10 @@ export class CombatSystem {
       run.stats.projectileHits,
     ) < critChance;
 
+    const hpBeforeHit = big(enemy.hp);
     let damage = big(baseDamage).mul(damageMultiplier);
     if (critical) damage = damage.mul(critMultiplier);
+    const actualDamage = damage.cmp(hpBeforeHit) > 0 ? hpBeforeHit : damage;
     enemy.hp = decimalMaxZero(enemy.hp.sub(damage));
     run.stats.projectileHits += 1;
     if (critical) run.stats.criticalHits += 1;
@@ -107,8 +109,8 @@ export class CombatSystem {
     if (spell.controlDelaySeconds > 0 && enemy.hp.cmp(0) > 0) {
       enemy.attackCooldown += spell.controlDelaySeconds;
     }
-    if (spell.leechFraction > 0 && damage.cmp(0) > 0) {
-      const healed = damage.mul(spell.leechFraction);
+    if (spell.leechFraction > 0 && actualDamage.cmp(0) > 0) {
+      const healed = actualDamage.mul(spell.leechFraction);
       run.mage.hp = decimalMin(run.mage.maxHp, run.mage.hp.add(healed));
     }
 
