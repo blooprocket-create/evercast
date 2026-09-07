@@ -35,6 +35,16 @@ interface BiomeSample {
   t: number;
 }
 
+export interface TransitionProfile {
+  raw: number;
+  background: number;
+  sky: number;
+  ground: number;
+  props: number;
+  fog: number;
+  motes: number;
+}
+
 interface WorldChunk {
   index: number;
   root: TransformNode;
@@ -43,12 +53,15 @@ interface WorldChunk {
 }
 
 const CHUNK_SIZE = 12;
+const GROUND_SLICES = 4;
 const VISIBLE_BEHIND = 4;
-const VISIBLE_AHEAD = 7;
-const SEGMENT_LENGTH = 72;
-const TRANSITION_LENGTH = 24;
+const VISIBLE_AHEAD = 8;
+// Prototype scale only. Longer regions give us several screen widths of ecological drift.
+const SEGMENT_LENGTH = 120;
+const TRANSITION_LENGTH = 72;
 const CYCLE_LENGTH = SEGMENT_LENGTH * 3;
 const WORLD_ANCHOR_X = 0;
+const FAR_LOOKAHEAD = 28;
 
 const BIOMES: readonly BiomeStyle[] = [
   {
@@ -95,13 +108,22 @@ const BIOMES: readonly BiomeStyle[] = [
   },
 ] as const;
 
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
 function wrap(value: number, max: number): number {
   return ((value % max) + max) % max;
 }
 
 function smoothstep(t: number): number {
-  const x = Math.max(0, Math.min(1, t));
+  const x = clamp01(t);
   return x * x * (3 - 2 * x);
+}
+
+function staged(raw: number, start: number, end: number): number {
+  if (end <= start) return raw >= end ? 1 : 0;
+  return smoothstep((raw - start) / (end - start));
 }
 
 function random01(seed: number): number {
@@ -117,26 +139,47 @@ function lerpColor(a: Color3, b: Color3, t: number): Color3 {
   return new Color3(lerp(a.r, b.r, t), lerp(a.g, b.g, t), lerp(a.b, b.b, t));
 }
 
-export function sampleBiome(distance: number): { from: BiomeId; to: BiomeId; t: number } {
+function rawBiomeSample(distance: number): BiomeSample {
   const wrapped = wrap(distance, CYCLE_LENGTH);
   const segment = Math.floor(wrapped / SEGMENT_LENGTH);
   const local = wrapped - segment * SEGMENT_LENGTH;
   const from = BIOMES[segment];
   const to = BIOMES[(segment + 1) % BIOMES.length];
   const transitionStart = SEGMENT_LENGTH - TRANSITION_LENGTH;
-  const t = local <= transitionStart ? 0 : smoothstep((local - transitionStart) / TRANSITION_LENGTH);
-  return { from: from.id, to: t === 0 ? from.id : to.id, t };
+  const t = local <= transitionStart ? 0 : clamp01((local - transitionStart) / TRANSITION_LENGTH);
+  return { from, to, t };
 }
 
-function sampleBiomeStyle(distance: number): BiomeSample {
-  const wrapped = wrap(distance, CYCLE_LENGTH);
-  const segment = Math.floor(wrapped / SEGMENT_LENGTH);
-  const local = wrapped - segment * SEGMENT_LENGTH;
-  const from = BIOMES[segment];
-  const to = BIOMES[(segment + 1) % BIOMES.length];
-  const transitionStart = SEGMENT_LENGTH - TRANSITION_LENGTH;
-  const t = local <= transitionStart ? 0 : smoothstep((local - transitionStart) / TRANSITION_LENGTH);
-  return { from, to, t };
+export function sampleTransitionProfile(distance: number): TransitionProfile {
+  const raw = rawBiomeSample(distance).t;
+  return {
+    raw,
+    // Distant scenery telegraphs the destination first.
+    background: staged(raw, 0.0, 0.58),
+    sky: staged(raw, 0.08, 0.76),
+    // The ground and nearby ecosystem lag behind the horizon.
+    ground: staged(raw, 0.16, 0.84),
+    props: staged(raw, 0.24, 0.94),
+    // Thick fog and particles arrive latest so they do not read as a preset crossfade.
+    fog: staged(raw, 0.34, 1.0),
+    motes: staged(raw, 0.42, 1.0),
+  };
+}
+
+export function sampleBiome(distance: number): { from: BiomeId; to: BiomeId; t: number } {
+  const style = rawBiomeSample(distance);
+  const t = smoothstep(style.t);
+  return { from: style.from.id, to: t === 0 ? style.from.id : style.to.id, t };
+}
+
+function styleAt(distance: number, layer: keyof Omit<TransitionProfile, 'raw'>): BiomeSample {
+  const style = rawBiomeSample(distance);
+  const profile = sampleTransitionProfile(distance);
+  return { from: style.from, to: style.to, t: profile[layer] };
+}
+
+function influenceFor(sample: BiomeSample, biome: BiomeId): number {
+  return (sample.from.id === biome ? 1 - sample.t : 0) + (sample.to.id === biome ? sample.t : 0);
 }
 
 export class WorldGenerator {
@@ -156,7 +199,7 @@ export class WorldGenerator {
     this.moteMaterial = new StandardMaterial('world-motes', this.scene);
     this.moteMaterial.disableLighting = true;
     this.moteMaterial.emissiveColor = BIOMES[0].accent;
-    this.moteMaterial.alpha = 0.65;
+    this.moteMaterial.alpha = 0.55;
     this.createAtmosphereMotes();
     this.rebuildVisibleChunks();
   }
@@ -171,7 +214,10 @@ export class WorldGenerator {
 
   jumpToNextBiome(): void {
     const wrapped = wrap(this.distance, SEGMENT_LENGTH);
-    this.distance += SEGMENT_LENGTH - wrapped + 2;
+    const transitionStart = SEGMENT_LENGTH - TRANSITION_LENGTH;
+    // Jump near the beginning of the transition, not past it, so N previews the full drift.
+    const target = transitionStart + 5;
+    this.distance += wrapped < target ? target - wrapped : SEGMENT_LENGTH - wrapped + target;
     this.lastCenterIndex = Number.NaN;
     this.rebuildVisibleChunks(true);
     this.updateAtmosphere();
@@ -211,7 +257,6 @@ export class WorldGenerator {
     for (let index = min; index <= max; index += 1) {
       if (!this.chunks.has(index)) this.chunks.set(index, this.buildChunk(index));
     }
-
     this.positionChunks();
   }
 
@@ -225,43 +270,33 @@ export class WorldGenerator {
     const root = new TransformNode(`world-chunk-${index}`, this.scene);
     const meshes: Mesh[] = [];
     const materials: Array<PBRMaterial | StandardMaterial> = [];
-    const absoluteCenter = index * CHUNK_SIZE + CHUNK_SIZE / 2;
-    const style = sampleBiomeStyle(absoluteCenter);
+    const absoluteStart = index * CHUNK_SIZE;
+    const absoluteCenter = absoluteStart + CHUNK_SIZE / 2;
 
-    const blended = {
-      ground: lerpColor(style.from.ground, style.to.ground, style.t),
-      road: lerpColor(style.from.road, style.to.road, style.t),
-      trunk: lerpColor(style.from.trunk, style.to.trunk, style.t),
-      foliage: lerpColor(style.from.foliage, style.to.foliage, style.t),
-      stone: lerpColor(style.from.stone, style.to.stone, style.t),
-      accent: lerpColor(style.from.accent, style.to.accent, style.t),
-    };
+    // Split the floor into smaller pieces so material changes are not quantized to 12m chunks.
+    this.addGroundSlices(index, absoluteStart, root, meshes, materials);
 
-    const groundMat = this.makePbr(`ground-${index}`, blended.ground, 0.98, materials);
-    const roadMat = this.makePbr(`road-${index}`, blended.road, 0.94, materials);
-    const trunkMat = this.makePbr(`trunk-${index}`, blended.trunk, 0.92, materials);
-    const foliageMat = this.makePbr(`foliage-${index}`, blended.foliage, 0.88, materials);
-    const stoneMat = this.makePbr(`stone-${index}`, blended.stone, 0.96, materials);
-    const accentMat = this.makePbr(`accent-${index}`, blended.accent, 0.8, materials);
-    accentMat.emissiveColor = blended.accent.scale(0.08);
+    const localStyle = styleAt(absoluteCenter, 'props');
+    const trunkMat = this.makePbr(`trunk-${index}`, lerpColor(localStyle.from.trunk, localStyle.to.trunk, localStyle.t), 0.92, materials);
+    const foliageMat = this.makePbr(`foliage-${index}`, lerpColor(localStyle.from.foliage, localStyle.to.foliage, localStyle.t), 0.88, materials);
+    const stoneMat = this.makePbr(`stone-${index}`, lerpColor(localStyle.from.stone, localStyle.to.stone, localStyle.t), 0.96, materials);
+    const accent = lerpColor(localStyle.from.accent, localStyle.to.accent, localStyle.t);
+    const accentMat = this.makePbr(`accent-${index}`, accent, 0.8, materials);
+    accentMat.emissiveColor = accent.scale(0.08);
 
-    const ground = MeshBuilder.CreateBox(`ground-${index}`, { width: CHUNK_SIZE + 0.06, height: 0.32, depth: 7 }, this.scene);
-    ground.parent = root;
-    ground.position.y = -0.16;
-    ground.material = groundMat;
-    meshes.push(ground);
+    this.addFarScenery(index, absoluteCenter, root, meshes, materials);
 
-    const road = MeshBuilder.CreateBox(`road-${index}`, { width: CHUNK_SIZE + 0.08, height: 0.04, depth: 1.55 }, this.scene);
-    road.parent = root;
-    road.position = new Vector3(0, 0.02, 0);
-    road.material = roadMat;
-    meshes.push(road);
-
-    this.addFarScenery(index, root, meshes, materials, style, stoneMat, foliageMat);
-
-    for (let slot = 0; slot < 7; slot += 1) {
+    // Density itself now changes with biome influence instead of always placing seven props.
+    for (let slot = 0; slot < 10; slot += 1) {
       const seed = index * 97 + slot * 13;
-      const localX = -CHUNK_SIZE / 2 + 0.8 + random01(seed + 1) * (CHUNK_SIZE - 1.6);
+      const localX = -CHUNK_SIZE / 2 + 0.6 + random01(seed + 1) * (CHUNK_SIZE - 1.2);
+      const absoluteX = absoluteCenter + localX;
+      const style = styleAt(absoluteX, 'props');
+      const woods = influenceFor(style, 'whispering_woods');
+      const grave = influenceFor(style, 'gravehollow');
+      const density = 0.54 + woods * 0.4 + grave * 0.12;
+      if (random01(seed + 90) > density) continue;
+
       const side = random01(seed + 2) > 0.48 ? 1 : -1;
       const z = side * (1.55 + random01(seed + 3) * 1.55);
       const chooseTo = random01(seed + 4) < style.t;
@@ -269,15 +304,47 @@ export class WorldGenerator {
       this.addBiomeProp(biome, localX, z, seed, root, meshes, trunkMat, foliageMat, stoneMat, accentMat);
     }
 
+    // Arrival landmarks sit at the end of the ecological blend, rather than causing it.
     const wrappedCenter = wrap(absoluteCenter, CYCLE_LENGTH);
-    if (Math.abs(wrappedCenter - SEGMENT_LENGTH) < CHUNK_SIZE * 0.55) {
+    if (Math.abs(wrappedCenter - SEGMENT_LENGTH) < CHUNK_SIZE * 0.52) {
       this.addForestThreshold(root, meshes, trunkMat, foliageMat);
     }
-    if (Math.abs(wrappedCenter - SEGMENT_LENGTH * 2) < CHUNK_SIZE * 0.55) {
+    if (Math.abs(wrappedCenter - SEGMENT_LENGTH * 2) < CHUNK_SIZE * 0.52) {
       this.addGraveGate(root, meshes, stoneMat, accentMat);
     }
 
     return { index, root, meshes, materials };
+  }
+
+  private addGroundSlices(
+    index: number,
+    absoluteStart: number,
+    root: TransformNode,
+    meshes: Mesh[],
+    materials: Array<PBRMaterial | StandardMaterial>,
+  ): void {
+    const width = CHUNK_SIZE / GROUND_SLICES;
+    for (let slice = 0; slice < GROUND_SLICES; slice += 1) {
+      const localX = -CHUNK_SIZE / 2 + width * (slice + 0.5);
+      const absoluteX = absoluteStart + width * (slice + 0.5);
+      const style = styleAt(absoluteX, 'ground');
+      const groundColor = lerpColor(style.from.ground, style.to.ground, style.t);
+      const roadColor = lerpColor(style.from.road, style.to.road, style.t);
+      const groundMat = this.makePbr(`ground-${index}-${slice}`, groundColor, 0.98, materials);
+      const roadMat = this.makePbr(`road-${index}-${slice}`, roadColor, 0.94, materials);
+
+      const ground = MeshBuilder.CreateBox(`ground-${index}-${slice}`, { width: width + 0.035, height: 0.32, depth: 7 }, this.scene);
+      ground.parent = root;
+      ground.position = new Vector3(localX, -0.16, 0);
+      ground.material = groundMat;
+      meshes.push(ground);
+
+      const road = MeshBuilder.CreateBox(`road-${index}-${slice}`, { width: width + 0.045, height: 0.04, depth: 1.55 }, this.scene);
+      road.parent = root;
+      road.position = new Vector3(localX, 0.02, 0);
+      road.material = roadMat;
+      meshes.push(road);
+    }
   }
 
   private addBiomeProp(
@@ -293,9 +360,9 @@ export class WorldGenerator {
     accentMat: PBRMaterial,
   ): void {
     if (biome === 'greenfields') {
-      if (random01(seed + 10) < 0.45) {
+      if (random01(seed + 10) < 0.38) {
         this.addTree(x, z, 0.7 + random01(seed + 11) * 0.55, root, meshes, trunkMat, foliageMat, false);
-      } else if (random01(seed + 12) < 0.55) {
+      } else if (random01(seed + 12) < 0.5) {
         this.addRock(x, z, 0.3 + random01(seed + 13) * 0.35, root, meshes, stoneMat);
       } else {
         this.addFlowerPatch(x, z, root, meshes, accentMat, seed);
@@ -304,7 +371,7 @@ export class WorldGenerator {
     }
 
     if (biome === 'whispering_woods') {
-      if (random01(seed + 20) < 0.72) {
+      if (random01(seed + 20) < 0.78) {
         this.addTree(x, z, 0.9 + random01(seed + 21) * 0.8, root, meshes, trunkMat, foliageMat, false);
       } else {
         this.addRock(x, z, 0.4 + random01(seed + 22) * 0.45, root, meshes, stoneMat);
@@ -403,39 +470,45 @@ export class WorldGenerator {
 
   private addFarScenery(
     index: number,
+    absoluteCenter: number,
     root: TransformNode,
     meshes: Mesh[],
     materials: Array<PBRMaterial | StandardMaterial>,
-    style: BiomeSample,
-    stoneMat: PBRMaterial,
-    foliageMat: PBRMaterial,
   ): void {
-    const dominant = style.t < 0.5 ? style.from.id : style.to.id;
+    // Far scenery samples ahead of the player, so the destination appears on the horizon
+    // before the local ground and props have fully changed.
+    const style = styleAt(absoluteCenter + FAR_LOOKAHEAD, 'background');
     const farSeed = index * 151;
+    const chooseTo = random01(farSeed + 70) < style.t;
+    const biome = chooseTo ? style.to.id : style.from.id;
+    const foliageColor = lerpColor(style.from.foliage, style.to.foliage, style.t).scale(0.58);
+    const stoneColor = lerpColor(style.from.stone, style.to.stone, style.t).scale(0.72);
+    const farFoliage = this.makePbr(`far-foliage-${index}`, foliageColor, 1, materials);
+    const farStone = this.makePbr(`far-stone-${index}`, stoneColor, 1, materials);
 
-    if (dominant === 'greenfields') {
-      const hillMat = this.makePbr(`hill-${index}`, lerpColor(style.from.foliage, style.to.foliage, style.t).scale(0.58), 1, materials);
+    if (biome === 'greenfields') {
       const hill = MeshBuilder.CreateSphere(`far-hill-${index}`, { diameter: 5.5 + random01(farSeed) * 3, segments: 8 }, this.scene);
       hill.parent = root;
       hill.position = new Vector3((random01(farSeed + 1) - 0.5) * 6, 0.2, 5.8);
       hill.scaling = new Vector3(1.8, 0.55, 0.75);
-      hill.material = hillMat;
+      hill.material = farFoliage;
       meshes.push(hill);
       return;
     }
 
-    if (dominant === 'whispering_woods') {
+    if (biome === 'whispering_woods') {
       for (let i = 0; i < 3; i += 1) {
-        this.addTree(-4 + i * 4 + random01(farSeed + i) * 1.2, 4.6 + random01(farSeed + i + 8), 1.25 + random01(farSeed + i + 20) * 0.65, root, meshes, stoneMat, foliageMat, false);
+        this.addTree(-4 + i * 4 + random01(farSeed + i) * 1.2, 4.6 + random01(farSeed + i + 8), 1.25 + random01(farSeed + i + 20) * 0.65, root, meshes, farStone, farFoliage, false);
       }
       return;
     }
 
-    if (Math.abs(index % 17) === 0 || Math.abs(index % 17) === 1) {
-      this.addCathedralSilhouette(root, meshes, stoneMat);
+    const graveInfluence = influenceFor(style, 'gravehollow');
+    if (graveInfluence > 0.35 && (Math.abs(index % 17) === 0 || Math.abs(index % 17) === 1)) {
+      this.addCathedralSilhouette(root, meshes, farStone);
     } else {
       for (let i = 0; i < 3; i += 1) {
-        this.addTombstone(-4 + i * 3.5, 4.7 + random01(farSeed + i) * 1.2, root, meshes, stoneMat, farSeed + i);
+        this.addTombstone(-4 + i * 3.5, 4.7 + random01(farSeed + i) * 1.2, root, meshes, farStone, farSeed + i);
       }
     }
   }
@@ -519,13 +592,13 @@ export class WorldGenerator {
   }
 
   private updateMotes(deltaSeconds: number): void {
-    const style = sampleBiomeStyle(this.distance + 12);
+    const style = styleAt(this.distance + 8, 'motes');
     const accent = lerpColor(style.from.accent, style.to.accent, style.t);
     this.moteMaterial.emissiveColor = accent;
-    this.moteMaterial.alpha = lerp(0.42, 0.78, style.t);
+    this.moteMaterial.alpha = lerp(0.42, 0.72, style.t);
 
-    const graveInfluence = (style.from.id === 'gravehollow' ? 1 - style.t : 0) + (style.to.id === 'gravehollow' ? style.t : 0);
-    const woodsInfluence = (style.from.id === 'whispering_woods' ? 1 - style.t : 0) + (style.to.id === 'whispering_woods' ? style.t : 0);
+    const graveInfluence = influenceFor(style, 'gravehollow');
+    const woodsInfluence = influenceFor(style, 'whispering_woods');
     const driftX = lerp(0.12, -0.38, graveInfluence);
 
     for (let i = 0; i < this.motes.length; i += 1) {
@@ -542,17 +615,26 @@ export class WorldGenerator {
   }
 
   private updateAtmosphere(): void {
-    const style = sampleBiomeStyle(this.distance + 12);
-    const sky = lerpColor(style.from.sky, style.to.sky, style.t);
-    const fog = lerpColor(style.from.fog, style.to.fog, style.t);
+    // Each atmospheric system has its own curve; they no longer all lerp with the same t.
+    const skyStyle = styleAt(this.distance + 10, 'sky');
+    const groundStyle = styleAt(this.distance, 'ground');
+    const fogStyle = styleAt(this.distance + 4, 'fog');
+
+    const sky = lerpColor(skyStyle.from.sky, skyStyle.to.sky, skyStyle.t);
+    const fog = lerpColor(fogStyle.from.fog, fogStyle.to.fog, fogStyle.t);
     this.scene.clearColor = new Color4(sky.r, sky.g, sky.b, 1);
     this.scene.fogColor = fog;
-    this.scene.fogDensity = lerp(style.from.fogDensity, style.to.fogDensity, style.t);
-    this.skyLight.intensity = lerp(style.from.ambient, style.to.ambient, style.t);
-    this.skyLight.diffuse = lerpColor(new Color3(0.82, 0.88, 1), new Color3(0.62, 0.65, 0.82), style.t);
-    this.skyLight.groundColor = lerpColor(style.from.ground.scale(0.32), style.to.ground.scale(0.32), style.t);
-    this.sun.intensity = lerp(style.from.sun, style.to.sun, style.t);
-    this.sun.diffuse = lerpColor(new Color3(1, 0.92, 0.76), new Color3(0.72, 0.75, 0.94), style.t);
+    this.scene.fogDensity = lerp(fogStyle.from.fogDensity, fogStyle.to.fogDensity, fogStyle.t);
+
+    this.skyLight.intensity = lerp(skyStyle.from.ambient, skyStyle.to.ambient, skyStyle.t);
+    this.skyLight.diffuse = lerpColor(new Color3(0.82, 0.88, 1), new Color3(0.62, 0.65, 0.82), skyStyle.t);
+    this.skyLight.groundColor = lerpColor(groundStyle.from.ground.scale(0.32), groundStyle.to.ground.scale(0.32), groundStyle.t);
+
+    // Sun changes later than the sky, preserving warm light for a while as the horizon darkens.
+    const sunT = staged(rawBiomeSample(this.distance + 6).t, 0.24, 0.9);
+    const sunSample = rawBiomeSample(this.distance + 6);
+    this.sun.intensity = lerp(sunSample.from.sun, sunSample.to.sun, sunT);
+    this.sun.diffuse = lerpColor(new Color3(1, 0.92, 0.76), new Color3(0.72, 0.75, 0.94), sunT);
   }
 
   private disposeChunk(chunk: WorldChunk): void {
