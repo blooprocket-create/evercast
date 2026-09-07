@@ -1,5 +1,6 @@
 import type { EngineConfig } from '../config';
 import type { GameEvent } from '../events/GameEvent';
+import { goldRewardForKill } from '../gear/GearSystem';
 import type { GameState } from '../model';
 import { big } from '../numbers';
 import { resolveEffects } from '../spell/EffectResolver';
@@ -12,14 +13,16 @@ export class ProgressionSystem {
   ) {}
 
   handleVictory(state: GameState): void {
-    const { run, meta } = state;
+    const { run, meta, equipment } = state;
     const enemy = run.enemy;
     if (!enemy) return;
 
     const compiledSpell = compileSpell(run.spell);
     const killEffects = resolveEffects(compiledSpell, 'onKill');
     const reward = enemy.reward.mul(killEffects.essenceMultiplier).floor();
+    const gold = goldRewardForKill(enemy.stage, enemy.boss);
     run.essence = run.essence.add(reward);
+    equipment.gold = equipment.gold.add(gold);
     run.stats.kills += 1;
     if (enemy.boss) run.stats.bossKills += 1;
     meta.lifetimeKills += 1;
@@ -36,6 +39,12 @@ export class ProgressionSystem {
       time: run.elapsedSeconds,
       resource: 'essence',
       amount: reward.toString(),
+    });
+    this.emit({
+      type: 'resource_gained',
+      time: run.elapsedSeconds,
+      resource: 'gold',
+      amount: gold.toString(),
     });
 
     if (run.mode === 'push') {
