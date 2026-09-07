@@ -7,6 +7,7 @@ import { big } from '../numbers';
 import { random01 } from '../random/DeterministicRandom';
 import { resolveEffects } from '../spell/EffectResolver';
 import { compileSpell } from '../spell/SpellCompiler';
+import type { CompiledSpell } from '../spell/types';
 
 export interface CombatResult {
   killedEnemyIds: number[];
@@ -32,15 +33,32 @@ export class CombatSystem {
       projectiles: spell.projectileCount,
     });
 
-    const killed = new Set<number>();
     for (let projectileIndex = 0; projectileIndex < spell.projectileCount; projectileIndex += 1) {
       const target = firstLivingEnemy(run);
       if (!target) break;
-      this.hit(run, target, baseDamage, castId, projectileIndex, spell.critChance, spell.critMultiplier, true);
-      if (target.hp.cmp(0) <= 0) killed.add(target.instanceId);
+      this.hit(run, target, baseDamage, castId, projectileIndex, spell.critChance, spell.critMultiplier, true, 1, spell);
+
+      const pierced = livingEnemiesExcluding(run, new Set([target.instanceId])).slice(0, spell.pierceTargets);
+      for (const enemy of pierced) {
+        this.hit(run, enemy, baseDamage, castId, projectileIndex, 0, spell.critMultiplier, false, 1, spell);
+      }
+
+      const chainExcluded = new Set([target.instanceId, ...pierced.map((enemy) => enemy.instanceId)]);
+      const chained = livingEnemiesExcluding(run, chainExcluded).slice(0, spell.chainTargets);
+      for (const enemy of chained) {
+        this.hit(run, enemy, baseDamage, castId, projectileIndex, 0, spell.critMultiplier, false, spell.chainDamageMultiplier, spell);
+      }
+
+      const splashed = livingEnemiesExcluding(run, new Set([target.instanceId])).slice(0, spell.splashTargets);
+      for (const enemy of splashed) {
+        this.hit(run, enemy, baseDamage, castId, projectileIndex, 0, spell.critMultiplier, false, spell.splashDamageMultiplier, spell);
+      }
     }
 
-    return { killedEnemyIds: [...killed], mageDefeated: false };
+    return {
+      killedEnemyIds: run.enemies.filter((enemy) => enemy.hp.cmp(0) <= 0).map((enemy) => enemy.instanceId),
+      mageDefeated: false,
+    };
   }
 
   enemyAttack(run: RunState, enemy: EnemyState): CombatResult {
@@ -66,9 +84,12 @@ export class CombatSystem {
     critChance: number,
     critMultiplier: number,
     allowTriggers: boolean,
-    damageMultiplier = 1,
+    damageMultiplier: number,
+    spell: CompiledSpell,
   ): void {
-    const critical = random01(
+    if (enemy.hp.cmp(0) <= 0 || damageMultiplier <= 0) return;
+
+    const critical = critChance > 0 && random01(
       this.config.seed,
       run.encounterStage,
       castId,
@@ -83,6 +104,14 @@ export class CombatSystem {
     run.stats.projectileHits += 1;
     if (critical) run.stats.criticalHits += 1;
 
+    if (spell.controlDelaySeconds > 0 && enemy.hp.cmp(0) > 0) {
+      enemy.attackCooldown += spell.controlDelaySeconds;
+    }
+    if (spell.leechFraction > 0 && damage.cmp(0) > 0) {
+      const healed = damage.mul(spell.leechFraction);
+      run.mage.hp = decimalMin(run.mage.maxHp, run.mage.hp.add(healed));
+    }
+
     this.emit({
       type: 'projectile_hit',
       time: run.elapsedSeconds,
@@ -94,7 +123,6 @@ export class CombatSystem {
     });
 
     if (!allowTriggers || enemy.hp.cmp(0) <= 0) return;
-    const spell = compileSpell(run.spell);
     const hitEffects = resolveEffects(spell, 'onHit', damage.toString());
     if (big(hitEffects.bonusDamage).cmp(0) > 0) {
       enemy.hp = decimalMaxZero(enemy.hp.sub(hitEffects.bonusDamage));
@@ -118,6 +146,7 @@ export class CombatSystem {
             critMultiplier,
             false,
             repeat.damageMultiplier,
+            spell,
           );
           repeatIndex += 1;
         }
@@ -130,6 +159,14 @@ function firstLivingEnemy(run: RunState): EnemyState | undefined {
   return run.enemies.find((enemy) => enemy.hp.cmp(0) > 0);
 }
 
+function livingEnemiesExcluding(run: RunState, excluded: ReadonlySet<number>): EnemyState[] {
+  return run.enemies.filter((enemy) => enemy.hp.cmp(0) > 0 && !excluded.has(enemy.instanceId));
+}
+
 function decimalMaxZero(value: ReturnType<typeof big>) {
   return value.cmp(0) < 0 ? big(0) : value;
+}
+
+function decimalMin(max: ReturnType<typeof big>, value: ReturnType<typeof big>) {
+  return value.cmp(max) > 0 ? big(max) : value;
 }
