@@ -4,12 +4,13 @@ import { GEAR_SLOT_ORDER } from '../gear/GearCatalog';
 import type { EquipmentState, GearPieceState, GearSlot } from '../gear/types';
 import type { EnemyState, GameState } from '../model';
 import { big } from '../numbers';
-import { SPELL_TREE_NODE_BY_ID, SPELL_TREE_STARTER_POINTS } from '../spellTree/SpellTreeCatalog';
-import { createInitialSpellTreeState } from '../spellTree/SpellTreeSystem';
+import { totalFirstClearEssenceEarned } from '../progression/EssenceEconomy';
+import { SPELL_TREE_NODE_BY_ID, SPELL_TREE_STARTER_POINTS, spellPointCost } from '../spellTree/SpellTreeCatalog';
+import { buildSpellFromTree, createInitialSpellTreeState } from '../spellTree/SpellTreeSystem';
 import type { SpellTreeState } from '../spellTree/types';
 import { createInitialGameState } from '../state';
 
-export const CURRENT_SAVE_VERSION = 4;
+export const CURRENT_SAVE_VERSION = 5;
 
 type SerializedEnemy = Omit<EnemyState, 'hp' | 'maxHp' | 'attackDamage' | 'reward'> & {
   hp: string;
@@ -59,8 +60,19 @@ interface LegacySaveEnvelopeV3 {
   };
 }
 
-export interface SaveEnvelopeV4 {
+interface LegacySaveEnvelopeV4 {
   version: 4;
+  savedAt?: string;
+  state: {
+    run: SerializedRunV3;
+    meta: SerializedMeta;
+    equipment: SerializedEquipment;
+    spellTree: SerializedSpellTree;
+  };
+}
+
+export interface SaveEnvelopeV5 {
+  version: 5;
   savedAt: string;
   state: {
     run: SerializedRunV3;
@@ -85,7 +97,7 @@ interface LegacySaveEnvelopeV2 {
 export class SaveCodec {
   constructor(private readonly config: EngineConfig) {}
 
-  encode(state: GameState, savedAt = new Date()): SaveEnvelopeV4 {
+  encode(state: GameState, savedAt = new Date()): SaveEnvelopeV5 {
     return {
       version: CURRENT_SAVE_VERSION,
       savedAt: savedAt.toISOString(),
@@ -121,7 +133,7 @@ export class SaveCodec {
     }
 
     const version = (raw as { version?: unknown }).version;
-    if (version !== 1 && version !== 2 && version !== 3 && version !== 4) {
+    if (version !== 1 && version !== 2 && version !== 3 && version !== 4 && version !== 5) {
       throw new Error(`Unsupported Evercast save version: ${String(version)}`);
     }
 
@@ -130,31 +142,47 @@ export class SaveCodec {
       const equipment = version === 2
         ? deserializeEquipment((envelope as LegacySaveEnvelopeV2).state.equipment)
         : createInitialEquipmentState();
+      const state: GameState = {
+        run: migrateLegacyRun(envelope.state.run),
+        meta: deserializeMeta(envelope.state.meta),
+        equipment,
+        spellTree: createInitialSpellTreeState(),
+      };
       return {
         savedAt: new Date(envelope.savedAt ?? Date.now()),
-        state: {
-          run: migrateLegacyRun(envelope.state.run),
-          meta: deserializeMeta(envelope.state.meta),
-          equipment,
-          spellTree: createInitialSpellTreeState(),
-        },
+        state: reconcileLegacyEssenceEconomy(state, this.config),
       };
     }
 
     if (version === 3) {
       const envelope = raw as LegacySaveEnvelopeV3;
+      const state: GameState = {
+        run: deserializeRunV3(envelope.state.run),
+        meta: deserializeMeta(envelope.state.meta),
+        equipment: deserializeEquipment(envelope.state.equipment),
+        spellTree: createInitialSpellTreeState(),
+      };
       return {
         savedAt: new Date(envelope.savedAt ?? Date.now()),
-        state: {
-          run: deserializeRunV3(envelope.state.run),
-          meta: deserializeMeta(envelope.state.meta),
-          equipment: deserializeEquipment(envelope.state.equipment),
-          spellTree: createInitialSpellTreeState(),
-        },
+        state: reconcileLegacyEssenceEconomy(state, this.config),
       };
     }
 
-    const envelope = raw as SaveEnvelopeV4;
+    if (version === 4) {
+      const envelope = raw as LegacySaveEnvelopeV4;
+      const state: GameState = {
+        run: deserializeRunV3(envelope.state.run),
+        meta: deserializeMeta(envelope.state.meta),
+        equipment: deserializeEquipment(envelope.state.equipment),
+        spellTree: deserializeSpellTree(envelope.state.spellTree),
+      };
+      return {
+        savedAt: new Date(envelope.savedAt ?? Date.now()),
+        state: reconcileLegacyEssenceEconomy(state, this.config),
+      };
+    }
+
+    const envelope = raw as SaveEnvelopeV5;
     return {
       savedAt: new Date(envelope.savedAt ?? Date.now()),
       state: {
@@ -244,4 +272,28 @@ function deserializeSpellTree(serialized: SerializedSpellTree | undefined): Spel
     : 0;
   const purchasedPoints = Math.max(savedPurchased, Math.max(0, activatedNodeIds.length - SPELL_TREE_STARTER_POINTS));
   return { purchasedPoints, activatedNodeIds };
+}
+
+function reconcileLegacyEssenceEconomy(state: GameState, config: EngineConfig): GameState {
+  const earnedBudget = totalFirstClearEssenceEarned(state.meta.highestStageEver, config.bossCadence);
+  const requestedPurchased = Math.max(0, Math.floor(state.spellTree.purchasedPoints));
+  let affordablePurchased = 0;
+  let spent = big(0);
+
+  while (affordablePurchased < requestedPurchased) {
+    const cost = big(spellPointCost(affordablePurchased));
+    if (spent.add(cost).cmp(earnedBudget) > 0) break;
+    spent = spent.add(cost);
+    affordablePurchased += 1;
+  }
+
+  const totalAffordablePoints = SPELL_TREE_STARTER_POINTS + affordablePurchased;
+  state.spellTree = {
+    purchasedPoints: affordablePurchased,
+    // Nodes are stored in activation order, so a prefix preserves connected pathing.
+    activatedNodeIds: state.spellTree.activatedNodeIds.slice(0, totalAffordablePoints),
+  };
+  state.run.essence = earnedBudget.sub(spent);
+  state.run.spell = buildSpellFromTree(state.spellTree);
+  return state;
 }
