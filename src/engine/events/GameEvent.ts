@@ -1,3 +1,5 @@
+import type { GearSlot } from '../gear/types';
+
 export type GameEvent =
   | { type: 'encounter_started'; time: number; stage: number; enemyId: string; enemyName: string; boss: boolean }
   | { type: 'spell_cast'; time: number; castId: number; projectiles: number }
@@ -5,7 +7,9 @@ export type GameEvent =
   | { type: 'enemy_attack'; time: number; damage: string }
   | { type: 'enemy_killed'; time: number; stage: number; enemyId: string; reward: string }
   | { type: 'mage_defeated'; time: number; stage: number }
-  | { type: 'resource_gained'; time: number; resource: 'essence' | 'knowledge'; amount: string }
+  | { type: 'resource_gained'; time: number; resource: 'essence' | 'knowledge' | 'gold'; amount: string }
   | { type: 'stage_advanced'; time: number; stage: number }
   | { type: 'mode_changed'; time: number; mode: 'push' | 'farm'; reason: string }
+  | { type: 'gear_leveled'; time: number; slot: GearSlot; level: number; cost: string }
+  | { type: 'gear_evolved'; time: number; slot: GearSlot; level: number; evolutionTier: number; name: string }
   | { type: 'rebirth_performed'; time: number; knowledgeGained: string; rebirths: number };
