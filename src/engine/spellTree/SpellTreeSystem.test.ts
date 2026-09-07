@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { EvercastSimulation } from '../EvercastSimulation';
 import { big } from '../numbers';
 import { spellPointCost } from './SpellTreeCatalog';
+import { MAX_SPELL_TREE_POINTS } from './SpellTreeSystem';
 
 describe('SpellTreeSystem', () => {
   it('starts with one free point and buys additional points with Arcane Essence', () => {
@@ -15,6 +16,21 @@ describe('SpellTreeSystem', () => {
     expect(sim.execute({ type: 'buy_spell_point' })).toBe(true);
     expect(sim.getSnapshot().spellTreeTotalPoints).toBe(2);
     expect(Number(sim.getSnapshot().essence.raw)).toBe(100 - cost);
+  });
+
+  it('rejects purchases once every non-root node can be funded', () => {
+    const sim = new EvercastSimulation();
+    sim.getState().run.essence = big('1e20');
+
+    while (sim.getSnapshot().spellTreeTotalPoints < MAX_SPELL_TREE_POINTS) {
+      expect(sim.execute({ type: 'buy_spell_point' })).toBe(true);
+    }
+
+    const essenceBeforeRejectedPurchase = sim.getSnapshot().essence.raw;
+    expect(sim.getSnapshot().spellTreeTotalPoints).toBe(MAX_SPELL_TREE_POINTS);
+    expect(sim.execute({ type: 'buy_spell_point' })).toBe(false);
+    expect(sim.getSnapshot().spellTreeTotalPoints).toBe(MAX_SPELL_TREE_POINTS);
+    expect(sim.getSnapshot().essence.raw).toBe(essenceBeforeRejectedPurchase);
   });
 
   it('requires connected pathing and free respec returns spent points', () => {
