@@ -1,7 +1,7 @@
 import type { EngineConfig } from '../config';
 import type { GameEvent } from '../events/GameEvent';
 import { goldRewardForKill } from '../gear/GearSystem';
-import type { GameState } from '../model';
+import type { EnemyState, GameState } from '../model';
 import { big } from '../numbers';
 import { resolveEffects } from '../spell/EffectResolver';
 import { compileSpell } from '../spell/SpellCompiler';
@@ -12,11 +12,8 @@ export class ProgressionSystem {
     private readonly emit: (event: GameEvent) => void,
   ) {}
 
-  handleVictory(state: GameState): void {
+  handleEnemyKilled(state: GameState, enemy: EnemyState): void {
     const { run, meta, equipment } = state;
-    const enemy = run.enemy;
-    if (!enemy) return;
-
     const compiledSpell = compileSpell(run.spell);
     const killEffects = resolveEffects(compiledSpell, 'onKill');
     const reward = enemy.reward.mul(killEffects.essenceMultiplier).floor();
@@ -26,11 +23,13 @@ export class ProgressionSystem {
     run.stats.kills += 1;
     if (enemy.boss) run.stats.bossKills += 1;
     meta.lifetimeKills += 1;
+    if (run.mode === 'farm') run.farmKillsSinceFailure += 1;
 
     this.emit({
       type: 'enemy_killed',
       time: run.elapsedSeconds,
       stage: enemy.stage,
+      instanceId: enemy.instanceId,
       enemyId: enemy.definitionId,
       reward: reward.toString(),
     });
@@ -46,7 +45,10 @@ export class ProgressionSystem {
       resource: 'gold',
       amount: gold.toString(),
     });
+  }
 
+  handleEncounterCleared(state: GameState): void {
+    const { run, meta } = state;
     if (run.mode === 'push') {
       run.frontierStage += 1;
       run.highestStageThisRun = Math.max(run.highestStageThisRun, run.frontierStage);
@@ -56,20 +58,16 @@ export class ProgressionSystem {
         time: run.elapsedSeconds,
         stage: run.frontierStage,
       });
-    } else {
-      run.farmKillsSinceFailure += 1;
-      if (run.farmKillsSinceFailure >= this.config.autoRetryFarmKills) {
-        run.mode = 'push';
-        run.farmKillsSinceFailure = 0;
-        this.emit({
-          type: 'mode_changed',
-          time: run.elapsedSeconds,
-          mode: 'push',
-          reason: 'automatic frontier retry',
-        });
-      }
+    } else if (run.farmKillsSinceFailure >= this.config.autoRetryFarmKills) {
+      run.mode = 'push';
+      run.farmKillsSinceFailure = 0;
+      this.emit({
+        type: 'mode_changed',
+        time: run.elapsedSeconds,
+        mode: 'push',
+        reason: 'automatic frontier retry',
+      });
     }
-
     this.resetAfterEncounter(run);
   }
 
@@ -104,7 +102,8 @@ export class ProgressionSystem {
     if (run.mode === 'push') return;
     run.mode = 'push';
     run.farmKillsSinceFailure = 0;
-    run.enemy = null;
+    run.enemies = [];
+    run.encounter = null;
     run.phase = 'travel';
     run.travelElapsed = 0;
     run.mage.hp = big(run.mage.maxHp);
@@ -123,7 +122,8 @@ export class ProgressionSystem {
   }
 
   private resetAfterEncounter(run: GameState['run']): void {
-    run.enemy = null;
+    run.enemies = [];
+    run.encounter = null;
     run.phase = 'travel';
     run.travelElapsed = 0;
     run.castCooldown = 0;
