@@ -1,4 +1,5 @@
 import Decimal from 'break_eternity.js';
+import type { EquipmentState } from './gear/types';
 import type { SpellBuild } from './spell/types';
 
 export type RunMode = 'push' | 'farm';
@@ -63,4 +64,5 @@ export interface MetaState {
 export interface GameState {
   run: RunState;
   meta: MetaState;
+  equipment: EquipmentState;
 }
