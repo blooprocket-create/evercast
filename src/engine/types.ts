@@ -61,6 +61,20 @@ export interface SimulationSnapshot {
   gearDamageBonus: QuantitySnapshot;
   gearHealthBonus: QuantitySnapshot;
   castInterval: number;
+  critChance: number;
+  critMultiplier: number;
+  pierceTargets: number;
+  splashTargets: number;
+  splashDamageMultiplier: number;
+  chainTargets: number;
+  chainDamageMultiplier: number;
+  controlDelaySeconds: number;
+  leechFraction: number;
+  spellTreePurchasedPoints: number;
+  spellTreeTotalPoints: number;
+  spellTreeUnspentPoints: number;
+  nextSpellPointCost: QuantitySnapshot;
+  activeSpellNodeIds: string[];
   progressToNextEncounter: number;
   highestStageEver: number;
   rebirths: number;
@@ -73,4 +87,7 @@ export type EngineCommand =
   | { type: 'retry_frontier' }
   | { type: 'set_spell_build'; build: import('./spell/types').SpellBuild }
   | { type: 'level_gear'; slot: GearSlot }
+  | { type: 'buy_spell_point' }
+  | { type: 'activate_spell_node'; nodeId: string }
+  | { type: 'respec_spell_tree' }
   | { type: 'rebirth' };
