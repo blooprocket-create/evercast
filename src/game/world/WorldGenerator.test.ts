@@ -5,6 +5,7 @@ describe('procedural world biome sampling', () => {
   it('starts in Greenfields and blends gradually into Whispering Woods', () => {
     expect(sampleBiome(0)).toEqual({ from: 'greenfields', to: 'greenfields', t: 0 });
 
+    // These distances describe the current visual-test tuning, not final game canon.
     const early = sampleBiome(60);
     const middle = sampleBiome(84);
     const late = sampleBiome(108);
