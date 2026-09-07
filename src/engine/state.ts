@@ -3,6 +3,7 @@ import { createInitialEquipmentState } from './gear/GearSystem';
 import type { GameState, MetaState, RunState } from './model';
 import { big } from './numbers';
 import { createDefaultSpellBuild } from './spell/SpellCompiler';
+import { createInitialSpellTreeState } from './spellTree/SpellTreeSystem';
 
 export function createInitialRunState(config: EngineConfig): RunState {
   return {
@@ -54,5 +55,6 @@ export function createInitialGameState(config: EngineConfig): GameState {
     run: createInitialRunState(config),
     meta: createInitialMetaState(),
     equipment: createInitialEquipmentState(),
+    spellTree: createInitialSpellTreeState(),
   };
 }
