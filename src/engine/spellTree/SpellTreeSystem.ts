@@ -7,11 +7,14 @@ import {
   SPELL_POINT_BASE_COST,
   SPELL_POINT_COST_GROWTH,
   SPELL_TREE_NODE_BY_ID,
+  SPELL_TREE_NODES,
   SPELL_TREE_ROOT_ID,
   SPELL_TREE_STARTER_POINTS,
   spellPointCost,
 } from './SpellTreeCatalog';
 import type { SpellTreeState } from './types';
+
+export const MAX_SPELL_TREE_POINTS = SPELL_TREE_NODES.filter((node) => node.id !== SPELL_TREE_ROOT_ID).length;
 
 export function createInitialSpellTreeState(): SpellTreeState {
   return {
@@ -64,6 +67,7 @@ export class SpellTreeSystem {
   constructor(private readonly emit: (event: GameEvent) => void) {}
 
   buyPoint(state: GameState): boolean {
+    if (totalSpellPoints(state.spellTree) >= MAX_SPELL_TREE_POINTS) return false;
     const cost = big(spellPointCost(state.spellTree.purchasedPoints));
     if (state.run.essence.cmp(cost) < 0) return false;
     state.run.essence = state.run.essence.sub(cost);
