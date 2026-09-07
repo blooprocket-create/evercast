@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { GearSlot } from './engine/gear/types';
 import type { SimulationSnapshot } from './engine/types';
 import { EvercastScene } from './game/EvercastScene';
 import { offlineSummary, saveGame, simulation } from './app/runtime';
@@ -44,6 +45,13 @@ export default function App() {
     };
   }, []);
 
+  const levelGear = (slot: GearSlot) => {
+    if (simulation.execute({ type: 'level_gear', slot })) {
+      setSnapshot(simulation.getSnapshot());
+      saveGame();
+    }
+  };
+
   return (
     <main className="app-shell">
       <canvas ref={canvasRef} className="game-canvas" aria-label="Evercast game world" />
@@ -51,6 +59,7 @@ export default function App() {
         snapshot={snapshot}
         offlineSummary={offlineSummary}
         onRetry={() => simulation.execute({ type: 'retry_frontier' })}
+        onLevelGear={levelGear}
       />
     </main>
   );

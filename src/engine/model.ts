@@ -1,4 +1,5 @@
 import Decimal from 'break_eternity.js';
+import type { EquipmentState } from './gear/types';
 import type { SpellBuild } from './spell/types';
 
 export type RunMode = 'push' | 'farm';
@@ -10,6 +11,7 @@ export interface MageState {
 }
 
 export interface EnemyState {
+  instanceId: number;
   definitionId: string;
   name: string;
   stage: number;
@@ -20,6 +22,16 @@ export interface EnemyState {
   attackInterval: number;
   attackCooldown: number;
   reward: Decimal;
+}
+
+export interface EncounterState {
+  stage: number;
+  totalEnemies: number;
+  spawnedEnemies: number;
+  spawnInterval: number;
+  spawnCooldown: number;
+  maxAlive: number;
+  bossStage: boolean;
 }
 
 export interface RunStatistics {
@@ -46,7 +58,9 @@ export interface RunState {
   castCooldown: number;
   essence: Decimal;
   mage: MageState;
-  enemy: EnemyState | null;
+  enemies: EnemyState[];
+  encounter: EncounterState | null;
+  nextEnemyInstanceId: number;
   spell: SpellBuild;
   stats: RunStatistics;
 }
@@ -63,4 +77,5 @@ export interface MetaState {
 export interface GameState {
   run: RunState;
   meta: MetaState;
+  equipment: EquipmentState;
 }

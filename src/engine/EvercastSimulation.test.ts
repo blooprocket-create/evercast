@@ -32,6 +32,31 @@ describe('EvercastSimulation', () => {
     expect(strong.getSnapshot().stage).toBeGreaterThan(weak.getSnapshot().stage);
   });
 
+  it('spawns later enemies on a timer even while earlier enemies remain alive', () => {
+    const sim = new EvercastSimulation({
+      config: {
+        travelSeconds: 0.1,
+        enemySpawnInterval: 0.2,
+        baseMageHealth: 10_000,
+      },
+    });
+    const build = createDefaultSpellBuild();
+    build.baseDamage = '0.01';
+    build.castInterval = 10;
+    sim.execute({ type: 'set_spell_build', build });
+
+    // Clear stage 1 very slowly is not useful for this test; jump the run to stage 3 before the encounter starts.
+    sim.getState().run.frontierStage = 3;
+    sim.getState().run.highestStageThisRun = 3;
+    sim.advance(0.55, { presentationEvents: false });
+    const snapshot = sim.getSnapshot();
+
+    expect(snapshot.encounterTotalEnemies).toBe(3);
+    expect(snapshot.encounterSpawnedEnemies).toBe(3);
+    expect(snapshot.encounterAliveEnemies).toBe(3);
+    expect(snapshot.enemies).toHaveLength(3);
+  });
+
   it('falls back to farming when the frontier becomes lethal', () => {
     const sim = new EvercastSimulation({
       config: { autoRetryFarmKills: 999 },

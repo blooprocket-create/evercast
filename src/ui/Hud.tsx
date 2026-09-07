@@ -1,13 +1,16 @@
 import type { OfflineSummary } from '../engine/offline/OfflineProgressor';
+import type { GearSlot } from '../engine/gear/types';
 import type { SimulationSnapshot } from '../engine/types';
+import { GameMenu } from './GameMenu';
 
 interface HudProps {
   snapshot: SimulationSnapshot;
   offlineSummary: OfflineSummary | null;
   onRetry: () => void;
+  onLevelGear: (slot: GearSlot) => void;
 }
 
-export function Hud({ snapshot, offlineSummary, onRetry }: HudProps) {
+export function Hud({ snapshot, offlineSummary, onRetry, onLevelGear }: HudProps) {
   return (
     <div className="hud">
       <header className="topbar">
@@ -16,10 +19,10 @@ export function Hud({ snapshot, offlineSummary, onRetry }: HudProps) {
           <strong>{snapshot.zoneName} · Frontier {snapshot.stage}</strong>
           <small className={`mode-pill ${snapshot.mode}`}>{snapshot.mode === 'push' ? 'Pushing' : `Farming ${snapshot.farmStage}`}</small>
         </div>
-        <div className="resource">
-          <span>Arcane Essence</span>
-          <strong>{snapshot.essence.display}</strong>
-          {snapshot.rebirths > 0 && <small>{snapshot.knowledge.display} Knowledge</small>}
+        <div className="resource-stack">
+          <div className="resource"><span>Gold</span><strong>{snapshot.gold.display}</strong></div>
+          <div className="resource"><span>Arcane Essence</span><strong>{snapshot.essence.display}</strong></div>
+          {snapshot.mode === 'farm' && <button className="retry-button" type="button" onClick={onRetry}>Retry Frontier</button>}
         </div>
       </header>
 
@@ -30,6 +33,10 @@ export function Hud({ snapshot, offlineSummary, onRetry }: HudProps) {
             <span>{snapshot.enemyHp.display} / {snapshot.enemyMaxHp.display} HP</span>
           </div>
           <div className="health-track"><div className="health-fill" style={{ width: `${snapshot.enemyHpPercent}%` }} /></div>
+          <div className="mage-row">
+            <span>Wave · {snapshot.encounterAliveEnemies} alive · {snapshot.encounterSpawnedEnemies}/{snapshot.encounterTotalEnemies} spawned</span>
+            <span>{snapshot.spawnInterval.toFixed(2)}s cadence</span>
+          </div>
           <div className="mage-row"><span>Mage</span><span>{snapshot.mageHp.display} / {snapshot.mageMaxHp.display}</span></div>
           <div className="health-track mage"><div className="health-fill" style={{ width: `${snapshot.mageHpPercent}%` }} /></div>
         </div>
@@ -41,19 +48,9 @@ export function Hud({ snapshot, offlineSummary, onRetry }: HudProps) {
         </div>
       )}
 
-      <footer className="bottom-panel">
-        <div className="stat"><span>Spell</span><strong>Arcane Bolt</strong></div>
-        <div className="stat"><span>Damage</span><strong>{snapshot.damagePerProjectile.display}</strong></div>
-        <div className="stat"><span>Cast</span><strong>{snapshot.castInterval.toFixed(2)}s</strong></div>
-        <div className="stat"><span>Kills / Deaths</span><strong>{snapshot.kills} / {snapshot.deaths}</strong></div>
-        {snapshot.mode === 'farm' ? (
-          <button type="button" onClick={onRetry}>Retry Frontier</button>
-        ) : (
-          <button type="button" disabled title="Skill tree comes after the core loop is locked">Spell Tree — Soon</button>
-        )}
-      </footer>
-
+      <div className="prototype-hint">Prototype: press N to jump to the next biome</div>
       <div className="event-line">{snapshot.lastEvent}</div>
+      <GameMenu snapshot={snapshot} onLevelGear={onLevelGear} />
     </div>
   );
 }

@@ -1,5 +1,30 @@
+import type { GearSlot } from './gear/types';
 import type { QuantitySnapshot } from './numbers';
 import type { RunMode } from './model';
+
+export interface GearSnapshot {
+  slot: GearSlot;
+  name: string;
+  level: number;
+  evolutionTier: number;
+  description: string;
+  primaryStatLabel: string;
+  contribution: QuantitySnapshot;
+  perLevel: number;
+  nextLevelCost: QuantitySnapshot;
+  nextEvolutionLevel: number | null;
+  unlockedTreeTier: number;
+  treeNodes: string[];
+}
+
+export interface EnemySnapshot {
+  instanceId: number;
+  name: string;
+  boss: boolean;
+  hp: QuantitySnapshot;
+  maxHp: QuantitySnapshot;
+  hpPercent: number;
+}
 
 export interface SimulationSnapshot {
   elapsedSeconds: number;
@@ -12,6 +37,7 @@ export interface SimulationSnapshot {
   farmKillsSinceFailure: number;
   essence: QuantitySnapshot;
   knowledge: QuantitySnapshot;
+  gold: QuantitySnapshot;
   mageHp: QuantitySnapshot;
   mageMaxHp: QuantitySnapshot;
   mageHpPercent: number;
@@ -19,6 +45,11 @@ export interface SimulationSnapshot {
   enemyMaxHp: QuantitySnapshot;
   enemyHpPercent: number;
   enemyName: string;
+  enemies: EnemySnapshot[];
+  encounterTotalEnemies: number;
+  encounterSpawnedEnemies: number;
+  encounterAliveEnemies: number;
+  spawnInterval: number;
   phase: 'travel' | 'combat';
   boss: boolean;
   casts: number;
@@ -26,15 +57,20 @@ export interface SimulationSnapshot {
   deaths: number;
   projectileCount: number;
   damagePerProjectile: QuantitySnapshot;
+  spellBaseDamage: QuantitySnapshot;
+  gearDamageBonus: QuantitySnapshot;
+  gearHealthBonus: QuantitySnapshot;
   castInterval: number;
   progressToNextEncounter: number;
   highestStageEver: number;
   rebirths: number;
   canRebirth: boolean;
+  gear: GearSnapshot[];
   lastEvent: string;
 }
 
 export type EngineCommand =
   | { type: 'retry_frontier' }
   | { type: 'set_spell_build'; build: import('./spell/types').SpellBuild }
+  | { type: 'level_gear'; slot: GearSlot }
   | { type: 'rebirth' };

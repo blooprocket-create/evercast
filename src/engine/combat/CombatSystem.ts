@@ -1,13 +1,15 @@
 import type { EngineConfig } from '../config';
 import type { GameEvent } from '../events/GameEvent';
-import type { RunState } from '../model';
+import { compileGearStats } from '../gear/GearSystem';
+import type { EquipmentState } from '../gear/types';
+import type { EnemyState, RunState } from '../model';
 import { big } from '../numbers';
 import { random01 } from '../random/DeterministicRandom';
 import { resolveEffects } from '../spell/EffectResolver';
 import { compileSpell } from '../spell/SpellCompiler';
 
 export interface CombatResult {
-  enemyKilled: boolean;
+  killedEnemyIds: number[];
   mageDefeated: boolean;
 }
 
@@ -17,10 +19,10 @@ export class CombatSystem {
     private readonly emit: (event: GameEvent) => void,
   ) {}
 
-  cast(run: RunState): CombatResult {
-    const enemy = run.enemy;
-    if (!enemy) return { enemyKilled: false, mageDefeated: false };
+  cast(run: RunState, equipment: EquipmentState): CombatResult {
     const spell = compileSpell(run.spell);
+    const gear = compileGearStats(equipment);
+    const baseDamage = big(spell.damage).add(gear.baseDamageBonus).toString();
     const castId = run.stats.casts + 1;
     run.stats.casts = castId;
     this.emit({
@@ -30,31 +32,34 @@ export class CombatSystem {
       projectiles: spell.projectileCount,
     });
 
+    const killed = new Set<number>();
     for (let projectileIndex = 0; projectileIndex < spell.projectileCount; projectileIndex += 1) {
-      if (enemy.hp.cmp(0) <= 0) break;
-      this.hit(run, spell.damage, castId, projectileIndex, spell.critChance, spell.critMultiplier, true);
+      const target = firstLivingEnemy(run);
+      if (!target) break;
+      this.hit(run, target, baseDamage, castId, projectileIndex, spell.critChance, spell.critMultiplier, true);
+      if (target.hp.cmp(0) <= 0) killed.add(target.instanceId);
     }
 
-    return { enemyKilled: enemy.hp.cmp(0) <= 0, mageDefeated: false };
+    return { killedEnemyIds: [...killed], mageDefeated: false };
   }
 
-  enemyAttack(run: RunState): CombatResult {
-    const enemy = run.enemy;
-    if (!enemy) return { enemyKilled: false, mageDefeated: false };
+  enemyAttack(run: RunState, enemy: EnemyState): CombatResult {
     run.mage.hp = run.mage.hp.sub(enemy.attackDamage);
     this.emit({
       type: 'enemy_attack',
       time: run.elapsedSeconds,
+      instanceId: enemy.instanceId,
       damage: enemy.attackDamage.toString(),
     });
     return {
-      enemyKilled: enemy.hp.cmp(0) <= 0,
+      killedEnemyIds: [],
       mageDefeated: run.mage.hp.cmp(0) <= 0,
     };
   }
 
   private hit(
     run: RunState,
+    enemy: EnemyState,
     baseDamage: string,
     castId: number,
     projectileIndex: number,
@@ -63,14 +68,12 @@ export class CombatSystem {
     allowTriggers: boolean,
     damageMultiplier = 1,
   ): void {
-    const enemy = run.enemy;
-    if (!enemy) return;
-
     const critical = random01(
       this.config.seed,
       run.encounterStage,
       castId,
       projectileIndex,
+      enemy.instanceId,
       run.stats.projectileHits,
     ) < critChance;
 
@@ -85,6 +88,7 @@ export class CombatSystem {
       time: run.elapsedSeconds,
       castId,
       projectileIndex,
+      instanceId: enemy.instanceId,
       damage: damage.toString(),
       critical,
     });
@@ -106,6 +110,7 @@ export class CombatSystem {
         for (let i = 0; i < repeat.count && enemy.hp.cmp(0) > 0; i += 1) {
           this.hit(
             run,
+            enemy,
             baseDamage,
             castId,
             repeatIndex,
@@ -119,6 +124,10 @@ export class CombatSystem {
       }
     }
   }
+}
+
+function firstLivingEnemy(run: RunState): EnemyState | undefined {
+  return run.enemies.find((enemy) => enemy.hp.cmp(0) > 0);
 }
 
 function decimalMaxZero(value: ReturnType<typeof big>) {

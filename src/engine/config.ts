@@ -8,6 +8,10 @@ export interface EngineConfig {
   maxOfflineSeconds: number;
   rebirthUnlockStage: number;
   baseMageHealth: number;
+  enemySpawnInterval: number;
+  maxAliveEnemies: number;
+  maxNormalWaveEnemies: number;
+  bossAddCount: number;
 }
 
 export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
@@ -20,4 +24,9 @@ export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
   maxOfflineSeconds: 60 * 60 * 24,
   rebirthUnlockStage: 50,
   baseMageHealth: 25,
+  // Prototype combat-shape tuning. These are intentionally centralized.
+  enemySpawnInterval: 0.85,
+  maxAliveEnemies: 6,
+  maxNormalWaveEnemies: 6,
+  bossAddCount: 4,
 };

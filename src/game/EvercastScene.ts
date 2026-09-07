@@ -15,14 +15,27 @@ import {
   Vector3,
 } from '@babylonjs/core';
 import type { GameEvent } from '../engine/events/GameEvent';
+import type { GearSlot } from '../engine/gear/types';
 import type { SimulationSnapshot } from '../engine/types';
+import {
+  earnedJourneyStages,
+  initialJourneyTravelSeconds,
+  WORLD_TRAVEL_SECONDS_PER_STAGE,
+} from './world/JourneyProgress';
+import { WorldGenerator } from './world/WorldGenerator';
 
 export class EvercastScene {
   private readonly engine: Engine;
   private readonly scene: Scene;
   private readonly mage: Mesh;
-  private readonly enemy: Mesh;
+  private readonly world: WorldGenerator;
+  private readonly enemyMeshes = new Map<number, Mesh>();
+  private readonly gearMeshes = new Map<GearSlot, Mesh>();
+  private readonly gearTiers = new Map<GearSlot, number>();
   private travelPhase = 0;
+  private journeyInitialized = false;
+  private visualFrontierStage = 1;
+  private pendingWorldTravelSeconds = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.engine = new Engine(canvas, true, { preserveDrawingBuffer: false, stencil: true });
@@ -37,80 +50,91 @@ export class EvercastScene {
     const skyLight = new HemisphericLight('sky', new Vector3(0, 1, 0), this.scene);
     skyLight.intensity = 0.65;
     const sun = new DirectionalLight('sun', new Vector3(-0.7, -1, -0.4), this.scene);
-    sun.position = new Vector3(8, 12, 6);
+    sun.position = new Vector3(8, 12, -4);
     sun.intensity = 2.2;
 
-    new GlowLayer('glow', this.scene, { blurKernelSize: 32 }).intensity = 0.65;
-
-    this.createWorld();
+    new GlowLayer('glow', this.scene, { blurKernelSize: 32 }).intensity = 0.7;
+    this.world = new WorldGenerator(this.scene, skyLight, sun);
     this.mage = this.createMage();
-    this.enemy = this.createEnemy();
 
     this.engine.runRenderLoop(() => this.scene.render());
     window.addEventListener('resize', this.resize);
+    window.addEventListener('keydown', this.keydown);
   }
 
   sync(snapshot: SimulationSnapshot, deltaSeconds: number, events: readonly GameEvent[]): void {
     this.travelPhase += deltaSeconds;
     const walking = snapshot.phase === 'travel';
+    this.syncJourney(snapshot, deltaSeconds, walking);
+    this.syncGearVisuals(snapshot);
+
+    for (const event of events) {
+      if (event.type === 'enemy_killed') {
+        const mesh = this.enemyMeshes.get(event.instanceId);
+        if (mesh) this.spawnBurst(mesh.position.clone());
+      }
+    }
+
+    this.syncEnemyVisuals(snapshot);
     this.mage.position.y = 0.65 + (walking ? Math.sin(this.travelPhase * 8) * 0.035 : 0);
-    this.enemy.setEnabled(!walking);
-    this.enemy.scaling.setAll(snapshot.boss ? 1.5 : 1);
+    this.mage.rotation.z = walking ? Math.sin(this.travelPhase * 8) * 0.01 : 0;
 
     for (const event of events) {
       if (event.type === 'spell_cast') this.spawnArcaneBolt();
-      if (event.type === 'enemy_killed') this.spawnBurst(this.enemy.position.clone());
-      if (event.type === 'mage_defeated') this.spawnBurst(this.mage.position.clone());
+      if (event.type === 'mage_defeated' || event.type === 'gear_evolved') this.spawnBurst(this.mage.position.clone());
     }
   }
 
   dispose(): void {
     window.removeEventListener('resize', this.resize);
+    window.removeEventListener('keydown', this.keydown);
+    for (const mesh of this.enemyMeshes.values()) mesh.dispose(false, true);
+    this.enemyMeshes.clear();
+    this.world.dispose();
     this.scene.dispose();
     this.engine.dispose();
   }
 
   private readonly resize = (): void => this.engine.resize();
 
-  private createWorld(): void {
-    const ground = MeshBuilder.CreateGround('ground', { width: 30, height: 7 }, this.scene);
-    const groundMat = new PBRMaterial('groundMat', this.scene);
-    groundMat.albedoColor = new Color3(0.055, 0.11, 0.085);
-    groundMat.roughness = 0.96;
-    ground.material = groundMat;
+  private readonly keydown = (event: KeyboardEvent): void => {
+    if (event.key.toLowerCase() === 'n') this.world.jumpToNextBiome();
+  };
 
-    for (let i = 0; i < 18; i += 1) {
-      const rock = MeshBuilder.CreatePolyhedron(`rock-${i}`, { type: 1, size: 0.35 + (i % 4) * 0.08 }, this.scene);
-      rock.position = new Vector3(-12 + i * 1.5, 0.25, i % 2 === 0 ? 2.2 : -2.1);
-      rock.scaling = new Vector3(1, 0.7, 1.4);
-      const mat = new PBRMaterial(`rockMat-${i}`, this.scene);
-      mat.albedoColor = new Color3(0.15, 0.19, 0.18);
-      mat.roughness = 0.9;
-      rock.material = mat;
+  private syncJourney(snapshot: SimulationSnapshot, deltaSeconds: number, walking: boolean): void {
+    if (!this.journeyInitialized) {
+      this.visualFrontierStage = Math.max(1, snapshot.stage);
+      const initialTravel = initialJourneyTravelSeconds(this.visualFrontierStage);
+      if (initialTravel > 0) this.world.update(initialTravel, true);
+      this.journeyInitialized = true;
     }
 
-    for (let i = 0; i < 7; i += 1) {
-      const trunk = MeshBuilder.CreateCylinder(`trunk-${i}`, { height: 2.8, diameterTop: 0.25, diameterBottom: 0.42, tessellation: 7 }, this.scene);
-      trunk.position = new Vector3(-9 + i * 3.2, 1.4, 2.8);
-      const crown = MeshBuilder.CreatePolyhedron(`crown-${i}`, { type: 2, size: 1.2 }, this.scene);
-      crown.position = trunk.position.add(new Vector3(0, 1.7, 0));
-      const trunkMat = new StandardMaterial(`trunkMat-${i}`, this.scene);
-      trunkMat.diffuseColor = new Color3(0.15, 0.09, 0.055);
-      const crownMat = new StandardMaterial(`crownMat-${i}`, this.scene);
-      crownMat.diffuseColor = new Color3(0.09, 0.23, 0.15);
-      trunk.material = trunkMat;
-      crown.material = crownMat;
+    const newlyEarnedStages = earnedJourneyStages({
+      mode: snapshot.mode,
+      frontierStage: snapshot.stage,
+      visualFrontierStage: this.visualFrontierStage,
+    });
+
+    if (newlyEarnedStages > 0) {
+      this.pendingWorldTravelSeconds += newlyEarnedStages * WORLD_TRAVEL_SECONDS_PER_STAGE;
+      this.visualFrontierStage = snapshot.stage;
     }
+
+    if (snapshot.mode === 'push' && walking && this.pendingWorldTravelSeconds > 0) {
+      const travelStep = Math.min(deltaSeconds, this.pendingWorldTravelSeconds);
+      this.world.update(travelStep, true);
+      this.pendingWorldTravelSeconds -= travelStep;
+      return;
+    }
+
+    this.world.update(0, false);
   }
 
   private createMage(): Mesh {
     const body = MeshBuilder.CreateCylinder('mage', { height: 1.25, diameterTop: 0.42, diameterBottom: 0.9, tessellation: 10 }, this.scene);
     body.position = new Vector3(-3.2, 0.65, 0);
-    const mat = new PBRMaterial('mageMat', this.scene);
-    mat.albedoColor = new Color3(0.16, 0.13, 0.34);
-    mat.metallic = 0.05;
-    mat.roughness = 0.72;
-    body.material = mat;
+    body.material = this.gearMaterial('robeMat', new Color3(0.16, 0.13, 0.34));
+    this.gearMeshes.set('robe', body);
 
     const head = MeshBuilder.CreateSphere('mageHead', { diameter: 0.48, segments: 12 }, this.scene);
     head.parent = body;
@@ -124,24 +148,112 @@ export class EvercastScene {
     hat.parent = body;
     hat.position.y = 1.25;
     hat.rotation.z = -0.15;
-    hat.material = mat;
+    hat.material = this.gearMaterial('helmMat', new Color3(0.13, 0.11, 0.28));
+    this.gearMeshes.set('helm', hat);
 
+    const staff = MeshBuilder.CreateCylinder('staff', { height: 1.8, diameter: 0.075, tessellation: 8 }, this.scene);
+    staff.parent = body;
+    staff.position = new Vector3(0.62, 0.12, -0.05);
+    staff.rotation.z = -0.18;
+    staff.material = this.gearMaterial('staffMat', new Color3(0.28, 0.18, 0.09));
+    const staffGem = MeshBuilder.CreatePolyhedron('staffGem', { type: 2, size: 0.16 }, this.scene);
+    staffGem.parent = staff;
+    staffGem.position.y = 1.02;
+    staffGem.material = this.gearMaterial('staffGemMat', new Color3(0.25, 0.2, 0.55));
+    this.gearMeshes.set('staff', staff);
+
+    const book = MeshBuilder.CreateBox('spellbook', { width: 0.42, height: 0.52, depth: 0.12 }, this.scene);
+    book.parent = body;
+    book.position = new Vector3(-0.48, 0.25, -0.22);
+    book.rotation.z = 0.12;
+    book.material = this.gearMaterial('spellbookMat', new Color3(0.25, 0.08, 0.12));
+    this.gearMeshes.set('spellbook', book);
+
+    const boots = MeshBuilder.CreateBox('boots', { width: 0.56, height: 0.18, depth: 0.46 }, this.scene);
+    boots.parent = body;
+    boots.position = new Vector3(0, -0.69, 0.02);
+    boots.material = this.gearMaterial('bootsMat', new Color3(0.14, 0.08, 0.05));
+    this.gearMeshes.set('boots', boots);
+
+    const necklace = MeshBuilder.CreateTorus('necklace', { diameter: 0.28, thickness: 0.035, tessellation: 12 }, this.scene);
+    necklace.parent = body;
+    necklace.position = new Vector3(0, 0.55, -0.24);
+    necklace.rotation.x = Math.PI / 2;
+    necklace.material = this.gearMaterial('necklaceMat', new Color3(0.42, 0.34, 0.12));
+    this.gearMeshes.set('necklace', necklace);
+
+    const ringLeft = MeshBuilder.CreateSphere('ringLeft', { diameter: 0.09, segments: 6 }, this.scene);
+    ringLeft.parent = body;
+    ringLeft.position = new Vector3(-0.53, 0.08, -0.15);
+    ringLeft.material = this.gearMaterial('ringLeftMat', new Color3(0.34, 0.31, 0.18));
+    this.gearMeshes.set('ringLeft', ringLeft);
+
+    const ringRight = MeshBuilder.CreateSphere('ringRight', { diameter: 0.09, segments: 6 }, this.scene);
+    ringRight.parent = body;
+    ringRight.position = new Vector3(0.49, 0.08, -0.16);
+    ringRight.material = this.gearMaterial('ringRightMat', new Color3(0.34, 0.31, 0.18));
+    this.gearMeshes.set('ringRight', ringRight);
     return body;
   }
 
-  private createEnemy(): Mesh {
-    const enemy = MeshBuilder.CreatePolyhedron('enemy', { type: 2, size: 0.75 }, this.scene);
-    enemy.position = new Vector3(4, 0.68, 0);
-    const material = new PBRMaterial('enemyMat', this.scene);
-    material.albedoColor = new Color3(0.2, 0.48, 0.2);
+  private gearMaterial(name: string, color: Color3): PBRMaterial {
+    const material = new PBRMaterial(name, this.scene);
+    material.albedoColor = color;
+    material.metallic = 0.05;
+    material.roughness = 0.72;
+    return material;
+  }
+
+  private syncGearVisuals(snapshot: SimulationSnapshot): void {
+    for (const piece of snapshot.gear) {
+      if (this.gearTiers.get(piece.slot) === piece.evolutionTier) continue;
+      this.gearTiers.set(piece.slot, piece.evolutionTier);
+      const mesh = this.gearMeshes.get(piece.slot);
+      if (!mesh) continue;
+      if (mesh.material instanceof PBRMaterial) {
+        const tier = piece.evolutionTier;
+        mesh.material.metallic = Math.min(0.65, 0.05 + tier * 0.11);
+        mesh.material.roughness = Math.max(0.28, 0.72 - tier * 0.07);
+        mesh.material.emissiveColor = new Color3(0.06 * tier, 0.045 * tier, 0.1 * tier);
+      }
+      if (piece.slot !== 'robe') mesh.scaling.setAll(1 + piece.evolutionTier * 0.08);
+    }
+  }
+
+  private syncEnemyVisuals(snapshot: SimulationSnapshot): void {
+    const livingIds = new Set(snapshot.enemies.map((enemy) => enemy.instanceId));
+    for (const [id, mesh] of this.enemyMeshes) {
+      if (!livingIds.has(id)) {
+        mesh.dispose(false, true);
+        this.enemyMeshes.delete(id);
+      }
+    }
+
+    snapshot.enemies.forEach((enemy, index) => {
+      let mesh = this.enemyMeshes.get(enemy.instanceId);
+      if (!mesh) {
+        mesh = this.createEnemy(enemy.instanceId, enemy.boss);
+        this.enemyMeshes.set(enemy.instanceId, mesh);
+      }
+      const column = index % 3;
+      const row = Math.floor(index / 3);
+      mesh.position = new Vector3(3.05 + column * 0.72, 0.68, (row - 0.5) * 0.85);
+      mesh.scaling.setAll(enemy.boss ? 1.45 : 1);
+    });
+  }
+
+  private createEnemy(instanceId: number, boss: boolean): Mesh {
+    const enemy = MeshBuilder.CreatePolyhedron(`enemy-${instanceId}`, { type: 2, size: 0.75 }, this.scene);
+    const material = new PBRMaterial(`enemyMat-${instanceId}`, this.scene);
+    material.albedoColor = boss ? new Color3(0.42, 0.22, 0.18) : new Color3(0.2, 0.48, 0.2);
     material.roughness = 0.75;
     enemy.material = material;
-    enemy.setEnabled(false);
     return enemy;
   }
 
   private spawnArcaneBolt(): void {
-    if (!this.enemy.isEnabled()) return;
+    const target = this.enemyMeshes.values().next().value as Mesh | undefined;
+    if (!target) return;
     const bolt = MeshBuilder.CreateSphere(`bolt-${performance.now()}`, { diameter: 0.22, segments: 8 }, this.scene);
     bolt.position = this.mage.position.add(new Vector3(0.55, 0.35, 0));
     const material = new StandardMaterial(`boltMat-${performance.now()}`, this.scene);
@@ -150,10 +262,9 @@ export class EvercastScene {
     bolt.material = material;
 
     const start = bolt.position.clone();
-    const end = this.enemy.position.clone();
+    const end = target.position.clone();
     const duration = 220;
     const started = performance.now();
-
     const observer = this.scene.onBeforeRenderObservable.add(() => {
       const t = Math.min((performance.now() - started) / duration, 1);
       bolt.position = Vector3.Lerp(start, end, t);
