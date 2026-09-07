@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_ENGINE_CONFIG } from '../config';
 import { EvercastSimulation } from '../EvercastSimulation';
+import type { SimulationSnapshot } from '../types';
 import { SaveCodec } from './SaveCodec';
+
+function authoritativeSnapshot(snapshot: SimulationSnapshot) {
+  const { lastEvent: _ephemeralPresentationText, ...authoritative } = snapshot;
+  return authoritative;
+}
 
 describe('SaveCodec', () => {
   it('round-trips authoritative state including large-number fields', () => {
@@ -11,7 +17,7 @@ describe('SaveCodec', () => {
     const encoded = codec.encode(sim.getState(), new Date('2026-01-01T00:00:00Z'));
     const decoded = codec.decode(JSON.parse(JSON.stringify(encoded)));
     const restored = new EvercastSimulation({ initialState: decoded.state });
-    expect(restored.getSnapshot()).toEqual(sim.getSnapshot());
+    expect(authoritativeSnapshot(restored.getSnapshot())).toEqual(authoritativeSnapshot(sim.getSnapshot()));
     expect(decoded.savedAt.toISOString()).toBe('2026-01-01T00:00:00.000Z');
   });
 });

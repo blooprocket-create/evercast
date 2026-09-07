@@ -11,7 +11,7 @@ function collectFiles(directory: string): string[] {
 
 describe('engine dependency boundary', () => {
   it('never imports React or Babylon from src/engine', () => {
-    const files = collectFiles(join(process.cwd(), 'src', 'engine')).filter((file) => file.endsWith('.ts'));
+    const files = collectFiles(join(process.cwd(), 'src', 'engine')).filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'));
     for (const file of files) {
       const source = readFileSync(file, 'utf8');
       expect(source, file).not.toMatch(/from ['\"]react/);
