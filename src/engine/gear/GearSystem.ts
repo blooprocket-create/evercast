@@ -13,9 +13,16 @@ export interface CompiledGearStats {
 export function createInitialEquipmentState(): EquipmentState {
   return {
     gold: big(0),
-    pieces: Object.fromEntries(
-      GEAR_SLOT_ORDER.map((slot) => [slot, { slot, level: 1, treeNodes: [] }]),
-    ) as EquipmentState['pieces'],
+    pieces: {
+      helm: { slot: 'helm', level: 1, treeNodes: [] },
+      staff: { slot: 'staff', level: 1, treeNodes: [] },
+      spellbook: { slot: 'spellbook', level: 1, treeNodes: [] },
+      robe: { slot: 'robe', level: 1, treeNodes: [] },
+      boots: { slot: 'boots', level: 1, treeNodes: [] },
+      necklace: { slot: 'necklace', level: 1, treeNodes: [] },
+      ringLeft: { slot: 'ringLeft', level: 1, treeNodes: [] },
+      ringRight: { slot: 'ringRight', level: 1, treeNodes: [] },
+    },
   };
 }
 
