@@ -6,7 +6,7 @@ import {
   SPELL_TREE_ROOT_ID,
   adjacentNodeIds,
 } from '../engine/spellTree/SpellTreeCatalog';
-import { canActivateSpellNode } from '../engine/spellTree/SpellTreeSystem';
+import { canActivateSpellNode, MAX_SPELL_TREE_POINTS } from '../engine/spellTree/SpellTreeSystem';
 import type { SpellTreeState } from '../engine/spellTree/types';
 
 interface SpellTreeViewProps {
@@ -26,6 +26,7 @@ export function SpellTreeView({ snapshot, onBuyPoint, onActivateNode, onRespec }
   const active = useMemo(() => new Set([SPELL_TREE_ROOT_ID, ...snapshot.activeSpellNodeIds]), [snapshot.activeSpellNodeIds]);
   const revealed = useMemo(() => revealedNodes(active), [active]);
   const canActivateSelected = canActivateSpellNode(state, selected.id);
+  const treeFullyFunded = snapshot.spellTreeTotalPoints >= MAX_SPELL_TREE_POINTS;
 
   return (
     <div className="spell-tree-layout">
@@ -35,8 +36,10 @@ export function SpellTreeView({ snapshot, onBuyPoint, onActivateNode, onRespec }
           <strong>{snapshot.spellTreeUnspentPoints} unspent / {snapshot.spellTreeTotalPoints} total</strong>
           <small>{snapshot.essence.display} Arcane Essence available</small>
         </div>
-        <button className="buy-spell-point" type="button" onClick={onBuyPoint}>
-          Awaken Spell Point · {snapshot.nextSpellPointCost.display} Essence
+        <button className="buy-spell-point" type="button" onClick={onBuyPoint} disabled={treeFullyFunded}>
+          {treeFullyFunded
+            ? 'All Spell Points Awakened'
+            : `Awaken Spell Point · ${snapshot.nextSpellPointCost.display} Essence`}
         </button>
         <button className="respec-tree-button" type="button" onClick={onRespec} disabled={snapshot.activeSpellNodeIds.length === 0}>
           Free Respec
