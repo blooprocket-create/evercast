@@ -1,5 +1,7 @@
 import type { EngineConfig } from '../config';
 import type { GameEvent } from '../events/GameEvent';
+import { compileGearStats } from '../gear/GearSystem';
+import type { EquipmentState } from '../gear/types';
 import type { RunState } from '../model';
 import { big } from '../numbers';
 import { random01 } from '../random/DeterministicRandom';
@@ -17,10 +19,12 @@ export class CombatSystem {
     private readonly emit: (event: GameEvent) => void,
   ) {}
 
-  cast(run: RunState): CombatResult {
+  cast(run: RunState, equipment: EquipmentState): CombatResult {
     const enemy = run.enemy;
     if (!enemy) return { enemyKilled: false, mageDefeated: false };
     const spell = compileSpell(run.spell);
+    const gear = compileGearStats(equipment);
+    const baseDamage = big(spell.damage).add(gear.baseDamageBonus).toString();
     const castId = run.stats.casts + 1;
     run.stats.casts = castId;
     this.emit({
@@ -32,7 +36,7 @@ export class CombatSystem {
 
     for (let projectileIndex = 0; projectileIndex < spell.projectileCount; projectileIndex += 1) {
       if (enemy.hp.cmp(0) <= 0) break;
-      this.hit(run, spell.damage, castId, projectileIndex, spell.critChance, spell.critMultiplier, true);
+      this.hit(run, baseDamage, castId, projectileIndex, spell.critChance, spell.critMultiplier, true);
     }
 
     return { enemyKilled: enemy.hp.cmp(0) <= 0, mageDefeated: false };
