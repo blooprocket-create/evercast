@@ -1,4 +1,5 @@
 import type { EngineConfig } from './config';
+import { createInitialEquipmentState } from './gear/GearSystem';
 import type { GameState, MetaState, RunState } from './model';
 import { big } from './numbers';
 import { createDefaultSpellBuild } from './spell/SpellCompiler';
@@ -50,5 +51,6 @@ export function createInitialGameState(config: EngineConfig): GameState {
   return {
     run: createInitialRunState(config),
     meta: createInitialMetaState(),
+    equipment: createInitialEquipmentState(),
   };
 }
