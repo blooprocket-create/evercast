@@ -33,6 +33,10 @@ export function Hud({ snapshot, offlineSummary, onRetry, onLevelGear }: HudProps
             <span>{snapshot.enemyHp.display} / {snapshot.enemyMaxHp.display} HP</span>
           </div>
           <div className="health-track"><div className="health-fill" style={{ width: `${snapshot.enemyHpPercent}%` }} /></div>
+          <div className="mage-row">
+            <span>Wave · {snapshot.encounterAliveEnemies} alive · {snapshot.encounterSpawnedEnemies}/{snapshot.encounterTotalEnemies} spawned</span>
+            <span>{snapshot.spawnInterval.toFixed(2)}s cadence</span>
+          </div>
           <div className="mage-row"><span>Mage</span><span>{snapshot.mageHp.display} / {snapshot.mageMaxHp.display}</span></div>
           <div className="health-track mage"><div className="health-fill" style={{ width: `${snapshot.mageHpPercent}%` }} /></div>
         </div>
