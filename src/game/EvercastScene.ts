@@ -17,6 +17,11 @@ import {
 import type { GameEvent } from '../engine/events/GameEvent';
 import type { GearSlot } from '../engine/gear/types';
 import type { SimulationSnapshot } from '../engine/types';
+import {
+  earnedJourneyStages,
+  initialJourneyTravelSeconds,
+  WORLD_TRAVEL_SECONDS_PER_STAGE,
+} from './world/JourneyProgress';
 import { WorldGenerator } from './world/WorldGenerator';
 
 export class EvercastScene {
@@ -28,6 +33,9 @@ export class EvercastScene {
   private readonly gearMeshes = new Map<GearSlot, Mesh>();
   private readonly gearTiers = new Map<GearSlot, number>();
   private travelPhase = 0;
+  private journeyInitialized = false;
+  private visualFrontierStage = 1;
+  private pendingWorldTravelSeconds = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.engine = new Engine(canvas, true, { preserveDrawingBuffer: false, stencil: true });
@@ -59,7 +67,7 @@ export class EvercastScene {
   sync(snapshot: SimulationSnapshot, deltaSeconds: number, events: readonly GameEvent[]): void {
     this.travelPhase += deltaSeconds;
     const walking = snapshot.phase === 'travel';
-    this.world.update(deltaSeconds, walking);
+    this.syncJourney(snapshot, deltaSeconds, walking);
     this.syncGearVisuals(snapshot);
 
     this.mage.position.y = 0.65 + (walking ? Math.sin(this.travelPhase * 8) * 0.035 : 0);
@@ -87,6 +95,39 @@ export class EvercastScene {
   private readonly keydown = (event: KeyboardEvent): void => {
     if (event.key.toLowerCase() === 'n') this.world.jumpToNextBiome();
   };
+
+  private syncJourney(snapshot: SimulationSnapshot, deltaSeconds: number, walking: boolean): void {
+    if (!this.journeyInitialized) {
+      this.visualFrontierStage = Math.max(1, snapshot.stage);
+      const initialTravel = initialJourneyTravelSeconds(this.visualFrontierStage);
+      if (initialTravel > 0) this.world.update(initialTravel, true);
+      this.journeyInitialized = true;
+    }
+
+    const newlyEarnedStages = earnedJourneyStages({
+      mode: snapshot.mode,
+      frontierStage: snapshot.stage,
+      visualFrontierStage: this.visualFrontierStage,
+    });
+
+    if (newlyEarnedStages > 0) {
+      this.pendingWorldTravelSeconds += newlyEarnedStages * WORLD_TRAVEL_SECONDS_PER_STAGE;
+      this.visualFrontierStage = snapshot.stage;
+    }
+
+    // World position is earned by clearing frontier stages. Farming and same-stage retries
+    // deliberately contribute no distance, so a boss wall cannot drift into a new biome.
+    if (snapshot.mode === 'push' && walking && this.pendingWorldTravelSeconds > 0) {
+      const travelStep = Math.min(deltaSeconds, this.pendingWorldTravelSeconds);
+      this.world.update(travelStep, true);
+      this.pendingWorldTravelSeconds -= travelStep;
+      return;
+    }
+
+    // Keep the journey anchored while stuck. The renderer still renders combat/VFX; this call
+    // avoids the WorldGenerator's old time-based background creep from advancing the biome.
+    this.world.update(0, false);
+  }
 
   private createMage(): Mesh {
     const body = MeshBuilder.CreateCylinder('mage', { height: 1.25, diameterTop: 0.42, diameterBottom: 0.9, tessellation: 10 }, this.scene);
