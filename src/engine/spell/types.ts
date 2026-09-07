@@ -7,6 +7,13 @@ export type SpellStat =
   | 'critChance'
   | 'critMultiplier';
 
+export type SpellCombatAction =
+  | { kind: 'pierce'; count: number }
+  | { kind: 'splash'; targets: number; damageMultiplier: number }
+  | { kind: 'chain'; count: number; damageMultiplier: number }
+  | { kind: 'control'; delaySeconds: number }
+  | { kind: 'leech'; fraction: number };
+
 export type SpellModifier =
   | {
       id: string;
@@ -23,6 +30,11 @@ export type SpellModifier =
         | { kind: 'bonusDamage'; multiplier: number; retrigger?: boolean }
         | { kind: 'repeatProjectile'; count: number; damageMultiplier: number }
         | { kind: 'essenceMultiplier'; multiplier: number };
+    }
+  | {
+      id: string;
+      kind: 'combat';
+      action: SpellCombatAction;
     };
 
 export interface SpellBuild {
@@ -40,5 +52,12 @@ export interface CompiledSpell {
   projectileCount: number;
   critChance: number;
   critMultiplier: number;
+  pierceTargets: number;
+  splashTargets: number;
+  splashDamageMultiplier: number;
+  chainTargets: number;
+  chainDamageMultiplier: number;
+  controlDelaySeconds: number;
+  leechFraction: number;
   triggerModifiers: ReadonlyMap<SpellTrigger, readonly Extract<SpellModifier, { kind: 'trigger' }>[]>;
 }
