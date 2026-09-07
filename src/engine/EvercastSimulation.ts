@@ -1,95 +1,252 @@
-import type { SimulationSnapshot } from './types';
+import type { ContentCatalog } from '../content/types';
+import { createDefaultCatalog, validateCatalog } from '../content/catalog';
+import { CombatSystem } from './combat/CombatSystem';
+import type { EngineConfig } from './config';
+import { DEFAULT_ENGINE_CONFIG } from './config';
+import { EncounterSystem } from './encounters/EncounterSystem';
+import { EventBus } from './events/EventBus';
+import type { GameEvent } from './events/GameEvent';
+import type { GameState } from './model';
+import { big, quantity } from './numbers';
+import { ProgressionSystem } from './progression/ProgressionSystem';
+import { RebirthSystem } from './prestige/RebirthSystem';
+import { compileSpell } from './spell/SpellCompiler';
+import { createInitialGameState } from './state';
+import type { EngineCommand, SimulationSnapshot } from './types';
 
-const TICK_SECONDS = 0.1;
+const EPSILON = 1e-9;
+
+export interface SimulationOptions {
+  config?: Partial<EngineConfig>;
+  catalog?: ContentCatalog;
+  initialState?: GameState;
+}
 
 export class EvercastSimulation {
-  private accumulator = 0;
-  private castCooldown = 0;
-  private travelTimer = 0;
-  private state: SimulationSnapshot = {
-    elapsedSeconds: 0,
-    stage: 1,
-    zone: 1,
-    essence: 0,
-    mageHp: 25,
-    mageMaxHp: 25,
-    enemyHp: 0,
-    enemyMaxHp: 0,
-    enemyName: 'Road ahead',
-    phase: 'travel',
-    casts: 0,
-    kills: 0,
-    projectilesPerCast: 1,
-    damagePerProjectile: 2,
-    castInterval: 1.35,
-    progressToNextEncounter: 0,
-    lastEvent: 'The Evercast stirs.',
-  };
+  readonly config: EngineConfig;
+  private state: GameState;
+  private readonly catalog: ContentCatalog;
+  private readonly eventBus: EventBus<GameEvent>;
+  private readonly presentationEvents: GameEvent[] = [];
+  private readonly encounterSystem: EncounterSystem;
+  private readonly combatSystem: CombatSystem;
+  private readonly progressionSystem: ProgressionSystem;
+  private readonly rebirthSystem: RebirthSystem;
+  private recordPresentationEvents = true;
+  private lastEvent = 'The Evercast stirs.';
+
+  constructor(options: SimulationOptions = {}) {
+    this.config = { ...DEFAULT_ENGINE_CONFIG, ...options.config };
+    this.catalog = options.catalog ?? createDefaultCatalog();
+    const contentErrors = validateCatalog(this.catalog);
+    if (contentErrors.length > 0) throw new Error(contentErrors.join('\n'));
+    this.state = options.initialState ?? createInitialGameState(this.config);
+    this.eventBus = new EventBus<GameEvent>(this.config.maxEventsPerAdvance);
+    this.eventBus.subscribe((event) => this.captureEvent(event));
+    const emit = (event: GameEvent) => this.eventBus.emit(event);
+    this.encounterSystem = new EncounterSystem(this.catalog, this.config);
+    this.combatSystem = new CombatSystem(this.config, emit);
+    this.progressionSystem = new ProgressionSystem(this.config, emit);
+    this.rebirthSystem = new RebirthSystem(this.config, emit);
+  }
 
   update(deltaSeconds: number): void {
-    this.accumulator += Math.min(deltaSeconds, 1);
-    while (this.accumulator >= TICK_SECONDS) {
-      this.tick(TICK_SECONDS);
-      this.accumulator -= TICK_SECONDS;
+    this.advance(Math.min(Math.max(deltaSeconds, 0), 1));
+  }
+
+  advance(seconds: number, options: { presentationEvents?: boolean } = {}): void {
+    if (!Number.isFinite(seconds) || seconds <= 0) return;
+    const previousRecording = this.recordPresentationEvents;
+    this.recordPresentationEvents = options.presentationEvents ?? true;
+    let remaining = seconds;
+    let eventCount = 0;
+
+    try {
+      while (remaining > EPSILON) {
+        eventCount += 1;
+        if (eventCount > this.config.maxEventsPerAdvance) {
+          throw new Error(`Simulation safety limit exceeded while advancing ${seconds}s.`);
+        }
+
+        if (this.state.run.phase === 'travel') {
+          const consumed = this.advanceTravel(remaining);
+          remaining -= consumed;
+          continue;
+        }
+
+        const consumed = this.advanceCombat(remaining);
+        remaining -= consumed;
+      }
+    } finally {
+      this.recordPresentationEvents = previousRecording;
+    }
+  }
+
+  execute(command: EngineCommand): boolean {
+    switch (command.type) {
+      case 'retry_frontier':
+        this.progressionSystem.retryFrontier(this.state);
+        return true;
+      case 'set_spell_build':
+        this.state.run.spell = structuredClone(command.build);
+        this.state.run.castCooldown = Math.min(
+          this.state.run.castCooldown,
+          compileSpell(this.state.run.spell).castInterval,
+        );
+        return true;
+      case 'rebirth':
+        return this.rebirthSystem.perform(this.state);
     }
   }
 
   getSnapshot(): SimulationSnapshot {
-    return { ...this.state };
+    const run = this.state.run;
+    const enemy = run.enemy;
+    const compiledSpell = compileSpell(run.spell);
+    const enemyHpPercent = enemy && enemy.maxHp.cmp(0) > 0
+      ? Math.max(0, Math.min(1, enemy.hp.div(enemy.maxHp).toNumber())) * 100
+      : 0;
+    const mageHpPercent = run.mage.maxHp.cmp(0) > 0
+      ? Math.max(0, Math.min(1, run.mage.hp.div(run.mage.maxHp).toNumber())) * 100
+      : 0;
+
+    return {
+      elapsedSeconds: run.elapsedSeconds,
+      stage: run.frontierStage,
+      encounterStage: run.encounterStage,
+      zone: run.zoneNumber,
+      zoneName: run.zoneName,
+      mode: run.mode,
+      farmStage: run.farmStage,
+      farmKillsSinceFailure: run.farmKillsSinceFailure,
+      essence: quantity(run.essence),
+      knowledge: quantity(this.state.meta.knowledge),
+      mageHp: quantity(run.mage.hp),
+      mageMaxHp: quantity(run.mage.maxHp),
+      mageHpPercent,
+      enemyHp: quantity(enemy?.hp ?? big(0)),
+      enemyMaxHp: quantity(enemy?.maxHp ?? big(0)),
+      enemyHpPercent,
+      enemyName: enemy?.name ?? 'Road ahead',
+      phase: run.phase,
+      boss: enemy?.boss ?? false,
+      casts: run.stats.casts,
+      kills: run.stats.kills,
+      deaths: run.stats.deaths,
+      projectileCount: compiledSpell.projectileCount,
+      damagePerProjectile: quantity(big(compiledSpell.damage)),
+      castInterval: compiledSpell.castInterval,
+      progressToNextEncounter: run.phase === 'travel'
+        ? Math.min(1, run.travelElapsed / this.config.travelSeconds)
+        : 1,
+      highestStageEver: this.state.meta.highestStageEver,
+      rebirths: this.state.meta.rebirths,
+      canRebirth: this.rebirthSystem.canRebirth(this.state),
+      lastEvent: this.lastEvent,
+    };
   }
 
-  private tick(dt: number): void {
-    this.state.elapsedSeconds += dt;
+  getState(): GameState {
+    return this.state;
+  }
 
-    if (this.state.phase === 'travel') {
-      this.travelTimer += dt;
-      this.state.progressToNextEncounter = Math.min(this.travelTimer / 1.8, 1);
-      if (this.travelTimer >= 1.8) this.spawnEncounter();
-      return;
+  drainPresentationEvents(): GameEvent[] {
+    return this.presentationEvents.splice(0, this.presentationEvents.length);
+  }
+
+  private advanceTravel(available: number): number {
+    const run = this.state.run;
+    const timeToEncounter = Math.max(0, this.config.travelSeconds - run.travelElapsed);
+    const consumed = Math.min(available, timeToEncounter);
+    run.travelElapsed += consumed;
+    run.elapsedSeconds += consumed;
+
+    if (run.travelElapsed + EPSILON >= this.config.travelSeconds) {
+      const descriptor = this.encounterSystem.createForRun(run);
+      run.enemy = descriptor.enemy;
+      run.encounterStage = descriptor.enemy.stage;
+      run.zoneNumber = descriptor.zoneNumber;
+      run.zoneName = descriptor.zoneName;
+      run.phase = 'combat';
+      run.travelElapsed = 0;
+      run.castCooldown = Math.min(0.15, compileSpell(run.spell).castInterval);
+      this.eventBus.emit({
+        type: 'encounter_started',
+        time: run.elapsedSeconds,
+        stage: descriptor.enemy.stage,
+        enemyId: descriptor.enemy.definitionId,
+        enemyName: descriptor.enemy.name,
+        boss: descriptor.enemy.boss,
+      });
     }
 
-    this.castCooldown -= dt;
-    if (this.castCooldown <= 0) {
-      this.castCooldown += this.state.castInterval;
-      this.cast();
+    return consumed || Math.min(available, EPSILON);
+  }
+
+  private advanceCombat(available: number): number {
+    const run = this.state.run;
+    const enemy = run.enemy;
+    if (!enemy) {
+      run.phase = 'travel';
+      return Math.min(available, EPSILON);
     }
-  }
 
-  private spawnEncounter(): void {
-    this.travelTimer = 0;
-    this.state.progressToNextEncounter = 0;
-    const isBoss = this.state.stage % 10 === 0;
-    const hp = Math.max(4, Math.floor(4 * Math.pow(1.16, this.state.stage - 1) * (isBoss ? 7 : 1)));
-    this.state.enemyMaxHp = hp;
-    this.state.enemyHp = hp;
-    this.state.enemyName = isBoss ? `Road Warden ${this.state.stage / 10}` : this.enemyNameForStage();
-    this.state.phase = isBoss ? 'boss' : 'combat';
-    this.state.lastEvent = isBoss ? `${this.state.enemyName} blocks the road.` : `${this.state.enemyName} approaches.`;
-    this.castCooldown = 0.15;
-  }
+    const nextAction = Math.max(0, Math.min(run.castCooldown, enemy.attackCooldown));
+    const consumed = Math.min(available, nextAction);
+    run.elapsedSeconds += consumed;
+    run.castCooldown -= consumed;
+    enemy.attackCooldown -= consumed;
 
-  private cast(): void {
-    const damage = this.state.damagePerProjectile * this.state.projectilesPerCast;
-    this.state.casts += 1;
-    this.state.enemyHp = Math.max(0, this.state.enemyHp - damage);
-    this.state.lastEvent = `Arcane Bolt hits for ${damage}.`;
+    if (consumed + EPSILON < nextAction) return consumed;
 
-    if (this.state.enemyHp <= 0) {
-      const reward = Math.max(1, Math.floor(Math.pow(1.12, this.state.stage - 1)));
-      this.state.essence += reward;
-      this.state.kills += 1;
-      this.state.lastEvent = `${this.state.enemyName} falls. +${reward} Essence.`;
-      this.state.stage += 1;
-      this.state.zone = Math.floor((this.state.stage - 1) / 25) + 1;
-      this.state.phase = 'travel';
-      this.state.enemyName = 'Road ahead';
-      this.state.enemyHp = 0;
-      this.state.enemyMaxHp = 0;
+    // Player wins ties; it feels better and keeps the ordering deterministic.
+    if (run.castCooldown <= EPSILON) {
+      const result = this.combatSystem.cast(run);
+      run.castCooldown += compileSpell(run.spell).castInterval;
+      if (result.enemyKilled) {
+        this.progressionSystem.handleVictory(this.state);
+        return consumed || Math.min(available, EPSILON);
+      }
     }
+
+    if (run.phase === 'combat' && run.enemy && run.enemy.attackCooldown <= EPSILON) {
+      const result = this.combatSystem.enemyAttack(run);
+      if (run.enemy) run.enemy.attackCooldown += run.enemy.attackInterval;
+      if (result.mageDefeated) {
+        this.progressionSystem.handleDefeat(this.state);
+      }
+    }
+
+    return consumed || Math.min(available, EPSILON);
   }
 
-  private enemyNameForStage(): string {
-    const names = ['Moss Slime', 'Briarling', 'Road Imp', 'Ash Beetle', 'Hollow Crow'];
-    return names[(this.state.stage - 1) % names.length];
+  private captureEvent(event: GameEvent): void {
+    this.lastEvent = describeEvent(event);
+    if (this.recordPresentationEvents) this.presentationEvents.push(event);
+  }
+}
+
+function describeEvent(event: GameEvent): string {
+  switch (event.type) {
+    case 'encounter_started':
+      return `${event.enemyName} approaches.`;
+    case 'spell_cast':
+      return `Arcane Bolt cast (${event.projectiles} projectile${event.projectiles === 1 ? '' : 's'}).`;
+    case 'projectile_hit':
+      return `${event.critical ? 'Critical! ' : ''}Arcane Bolt hits for ${event.damage}.`;
+    case 'enemy_attack':
+      return `The enemy hits for ${event.damage}.`;
+    case 'enemy_killed':
+      return `Enemy falls. +${event.reward} Essence.`;
+    case 'mage_defeated':
+      return `The mage falls at stage ${event.stage}.`;
+    case 'resource_gained':
+      return `+${event.amount} ${event.resource}.`;
+    case 'stage_advanced':
+      return `Frontier advanced to stage ${event.stage}.`;
+    case 'mode_changed':
+      return `${event.mode === 'farm' ? 'Farming' : 'Pushing'}: ${event.reason}.`;
+    case 'rebirth_performed':
+      return `Rebirth ${event.rebirths}: +${event.knowledgeGained} Knowledge.`;
   }
 }

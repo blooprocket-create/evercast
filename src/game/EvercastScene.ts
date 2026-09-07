@@ -14,6 +14,7 @@ import {
   StandardMaterial,
   Vector3,
 } from '@babylonjs/core';
+import type { GameEvent } from '../engine/events/GameEvent';
 import type { SimulationSnapshot } from '../engine/types';
 
 export class EvercastScene {
@@ -21,9 +22,6 @@ export class EvercastScene {
   private readonly scene: Scene;
   private readonly mage: Mesh;
   private readonly enemy: Mesh;
-  private readonly enemyMaterial: PBRMaterial;
-  private lastCastCount = 0;
-  private lastKillCount = 0;
   private travelPhase = 0;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -46,28 +44,23 @@ export class EvercastScene {
 
     this.createWorld();
     this.mage = this.createMage();
-    this.enemyMaterial = this.createEnemyMaterial();
     this.enemy = this.createEnemy();
 
     this.engine.runRenderLoop(() => this.scene.render());
     window.addEventListener('resize', this.resize);
   }
 
-  sync(snapshot: SimulationSnapshot, deltaSeconds: number): void {
+  sync(snapshot: SimulationSnapshot, deltaSeconds: number, events: readonly GameEvent[]): void {
     this.travelPhase += deltaSeconds;
     const walking = snapshot.phase === 'travel';
     this.mage.position.y = 0.65 + (walking ? Math.sin(this.travelPhase * 8) * 0.035 : 0);
     this.enemy.setEnabled(!walking);
-    this.enemy.scaling.setAll(snapshot.phase === 'boss' ? 1.5 : 1);
+    this.enemy.scaling.setAll(snapshot.boss ? 1.5 : 1);
 
-    if (snapshot.casts !== this.lastCastCount) {
-      this.lastCastCount = snapshot.casts;
-      this.spawnArcaneBolt();
-    }
-
-    if (snapshot.kills !== this.lastKillCount) {
-      this.lastKillCount = snapshot.kills;
-      this.spawnBurst(this.enemy.position.clone());
+    for (const event of events) {
+      if (event.type === 'spell_cast') this.spawnArcaneBolt();
+      if (event.type === 'enemy_killed') this.spawnBurst(this.enemy.position.clone());
+      if (event.type === 'mage_defeated') this.spawnBurst(this.mage.position.clone());
     }
   }
 
@@ -136,22 +129,19 @@ export class EvercastScene {
     return body;
   }
 
-  private createEnemyMaterial(): PBRMaterial {
-    const material = new PBRMaterial('enemyMat', this.scene);
-    material.albedoColor = new Color3(0.2, 0.48, 0.2);
-    material.roughness = 0.75;
-    return material;
-  }
-
   private createEnemy(): Mesh {
     const enemy = MeshBuilder.CreatePolyhedron('enemy', { type: 2, size: 0.75 }, this.scene);
     enemy.position = new Vector3(4, 0.68, 0);
-    enemy.material = this.enemyMaterial;
+    const material = new PBRMaterial('enemyMat', this.scene);
+    material.albedoColor = new Color3(0.2, 0.48, 0.2);
+    material.roughness = 0.75;
+    enemy.material = material;
     enemy.setEnabled(false);
     return enemy;
   }
 
   private spawnArcaneBolt(): void {
+    if (!this.enemy.isEnabled()) return;
     const bolt = MeshBuilder.CreateSphere(`bolt-${performance.now()}`, { diameter: 0.22, segments: 8 }, this.scene);
     bolt.position = this.mage.position.add(new Vector3(0.55, 0.35, 0));
     const material = new StandardMaterial(`boltMat-${performance.now()}`, this.scene);
