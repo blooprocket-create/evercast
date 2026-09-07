@@ -1,6 +1,6 @@
 import type { EngineConfig } from '../engine/config';
 import type { GameState } from '../engine/model';
-import { SaveCodec, type SaveEnvelopeV3 } from '../engine/save/SaveCodec';
+import { SaveCodec, type SaveEnvelopeV4 } from '../engine/save/SaveCodec';
 
 export interface LoadedSave {
   state: GameState;
@@ -29,7 +29,7 @@ export class BrowserSaveStore {
   }
 
   save(state: GameState): void {
-    const envelope: SaveEnvelopeV3 = this.codec.encode(state);
+    const envelope: SaveEnvelopeV4 = this.codec.encode(state);
     localStorage.setItem(this.key, JSON.stringify(envelope));
   }
 
