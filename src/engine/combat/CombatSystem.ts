@@ -73,6 +73,7 @@ export class CombatSystem {
 
       const chainExcluded = new Set([target.instanceId, ...pierced.map((enemy) => enemy.instanceId)]);
       const chained = livingEnemiesExcluding(run, chainExcluded).slice(0, spell.chainTargets);
+      let previousChainTargetId = target.instanceId;
       chained.forEach((enemy, index) => {
         this.hit(
           run,
@@ -86,9 +87,10 @@ export class CombatSystem {
           spell.chainDamageMultiplier,
           spell,
           'chain',
-          target.instanceId,
+          previousChainTargetId,
           index + 1,
         );
+        previousChainTargetId = enemy.instanceId;
       });
 
       const splashed = livingEnemiesExcluding(run, new Set([target.instanceId])).slice(0, spell.splashTargets);
