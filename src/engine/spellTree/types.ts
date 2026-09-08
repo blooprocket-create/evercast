@@ -20,8 +20,6 @@ export interface SpellTreeNodeDefinition {
   description: string;
   region: SpellTreeRegion;
   kind: SpellTreeNodeKind;
-  x: number;
-  y: number;
   requires: string[];
   modifiers: SpellModifier[];
 }
