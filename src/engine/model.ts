@@ -22,7 +22,6 @@ export interface EnemyState {
   attackDamage: Decimal;
   attackInterval: number;
   attackCooldown: number;
-  reward: Decimal;
 }
 
 export interface EncounterState {
