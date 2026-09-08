@@ -42,10 +42,10 @@ describe('CombatSystem', () => {
     state.run.spell.projectileCount = 1;
     state.run.spell.modifiers = [
       { id: 'pierce', kind: 'combat', action: { kind: 'pierce', count: 1 } },
-      { id: 'chain', kind: 'combat', action: { kind: 'chain', count: 1, damageMultiplier: 0.5 } },
+      { id: 'chain', kind: 'combat', action: { kind: 'chain', count: 2, damageMultiplier: 0.5 } },
       { id: 'splash', kind: 'combat', action: { kind: 'splash', targets: 1, damageMultiplier: 0.25 } },
     ];
-    state.run.enemies = [1, 2, 3, 4].map((instanceId) => ({
+    state.run.enemies = [1, 2, 3, 4, 5].map((instanceId) => ({
       instanceId,
       definitionId: `target_${instanceId}`,
       name: `Target ${instanceId}`,
@@ -63,9 +63,11 @@ describe('CombatSystem', () => {
     combat.cast(state.run, state.equipment);
 
     const hits = events.filter((event): event is Extract<GameEvent, { type: 'projectile_hit' }> => event.type === 'projectile_hit');
-    expect(hits.map((event) => event.source)).toEqual(['direct', 'pierce', 'chain', 'splash']);
+    expect(hits.map((event) => event.source)).toEqual(['direct', 'pierce', 'chain', 'chain', 'splash']);
     expect(hits[1].sourceInstanceId).toBe(1);
     expect(hits[2].sourceInstanceId).toBe(1);
-    expect(hits[3].sourceInstanceId).toBe(1);
+    expect(hits[3].sourceInstanceId).toBe(3);
+    expect(hits[4].sourceInstanceId).toBe(1);
+    expect(hits.map((event) => event.sequence)).toEqual([0, 1, 1, 2, 1]);
   });
 });
