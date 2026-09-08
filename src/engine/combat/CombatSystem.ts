@@ -1,5 +1,5 @@
 import type { EngineConfig } from '../config';
-import type { GameEvent } from '../events/GameEvent';
+import type { GameEvent, ProjectileHitSource } from '../events/GameEvent';
 import { compileGearStats } from '../gear/GearSystem';
 import type { EquipmentState } from '../gear/types';
 import type { EnemyState, RunState } from '../model';
@@ -36,23 +36,81 @@ export class CombatSystem {
     for (let projectileIndex = 0; projectileIndex < spell.projectileCount; projectileIndex += 1) {
       const target = firstLivingEnemy(run);
       if (!target) break;
-      this.hit(run, target, baseDamage, castId, projectileIndex, spell.critChance, spell.critMultiplier, true, 1, spell);
+      this.hit(
+        run,
+        target,
+        baseDamage,
+        castId,
+        projectileIndex,
+        spell.critChance,
+        spell.critMultiplier,
+        true,
+        1,
+        spell,
+        'direct',
+        undefined,
+        0,
+      );
 
       const pierced = livingEnemiesExcluding(run, new Set([target.instanceId])).slice(0, spell.pierceTargets);
-      for (const enemy of pierced) {
-        this.hit(run, enemy, baseDamage, castId, projectileIndex, 0, spell.critMultiplier, false, 1, spell);
-      }
+      pierced.forEach((enemy, index) => {
+        this.hit(
+          run,
+          enemy,
+          baseDamage,
+          castId,
+          projectileIndex,
+          0,
+          spell.critMultiplier,
+          false,
+          1,
+          spell,
+          'pierce',
+          target.instanceId,
+          index + 1,
+        );
+      });
 
       const chainExcluded = new Set([target.instanceId, ...pierced.map((enemy) => enemy.instanceId)]);
       const chained = livingEnemiesExcluding(run, chainExcluded).slice(0, spell.chainTargets);
-      for (const enemy of chained) {
-        this.hit(run, enemy, baseDamage, castId, projectileIndex, 0, spell.critMultiplier, false, spell.chainDamageMultiplier, spell);
-      }
+      let previousChainTargetId = target.instanceId;
+      chained.forEach((enemy, index) => {
+        this.hit(
+          run,
+          enemy,
+          baseDamage,
+          castId,
+          projectileIndex,
+          0,
+          spell.critMultiplier,
+          false,
+          spell.chainDamageMultiplier,
+          spell,
+          'chain',
+          previousChainTargetId,
+          index + 1,
+        );
+        previousChainTargetId = enemy.instanceId;
+      });
 
       const splashed = livingEnemiesExcluding(run, new Set([target.instanceId])).slice(0, spell.splashTargets);
-      for (const enemy of splashed) {
-        this.hit(run, enemy, baseDamage, castId, projectileIndex, 0, spell.critMultiplier, false, spell.splashDamageMultiplier, spell);
-      }
+      splashed.forEach((enemy, index) => {
+        this.hit(
+          run,
+          enemy,
+          baseDamage,
+          castId,
+          projectileIndex,
+          0,
+          spell.critMultiplier,
+          false,
+          spell.splashDamageMultiplier,
+          spell,
+          'splash',
+          target.instanceId,
+          index + 1,
+        );
+      });
     }
 
     return {
@@ -86,6 +144,9 @@ export class CombatSystem {
     allowTriggers: boolean,
     damageMultiplier: number,
     spell: CompiledSpell,
+    source: ProjectileHitSource,
+    sourceInstanceId: number | undefined,
+    sequence: number,
   ): void {
     if (enemy.hp.cmp(0) <= 0 || damageMultiplier <= 0) return;
 
@@ -120,8 +181,11 @@ export class CombatSystem {
       castId,
       projectileIndex,
       instanceId: enemy.instanceId,
-      damage: damage.toString(),
+      damage: actualDamage.toString(),
       critical,
+      source,
+      sourceInstanceId,
+      sequence,
     });
 
     if (!allowTriggers || enemy.hp.cmp(0) <= 0) return;
@@ -149,6 +213,9 @@ export class CombatSystem {
             false,
             repeat.damageMultiplier,
             spell,
+            'repeat',
+            enemy.instanceId,
+            i + 1,
           );
           repeatIndex += 1;
         }

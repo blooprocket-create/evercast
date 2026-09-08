@@ -1,8 +1,28 @@
 import { describe, expect, it } from 'vitest';
 import { EvercastSimulation } from './EvercastSimulation';
 import { createDefaultSpellBuild } from './spell/SpellCompiler';
+import { createDefaultCatalog } from '../content/catalog';
 
 describe('EvercastSimulation', () => {
+  it('preserves the active catalog model keys through the extracted snapshot builder', () => {
+    const defaults = createDefaultCatalog();
+    const catalog = {
+      ...defaults,
+      enemies: new Map([...defaults.enemies].map(([id, definition]) => [
+        id, { ...definition, modelKey: `custom/${id}` },
+      ])),
+    };
+    const sim = new EvercastSimulation({ catalog, config: { travelSeconds: 0.1 } });
+    sim.advance(0.11, { presentationEvents: false });
+    const enemies = sim.getSnapshot().enemies;
+    expect(enemies.length).toBeGreaterThan(0);
+    const states = sim.getState().run.enemies;
+    for (const enemy of enemies) {
+      const state = states.find((item) => item.instanceId === enemy.instanceId)!;
+      expect(enemy.modelKey).toBe(`custom/${state.definitionId}`);
+    }
+  });
+
   it('advances without depending on a renderer', () => {
     const sim = new EvercastSimulation();
     sim.advance(120, { presentationEvents: false });

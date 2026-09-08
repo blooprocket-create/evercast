@@ -55,7 +55,7 @@ export function Hud({
 
       {offlineSummary && offlineSummary.secondsApplied >= 5 && (
         <div className="offline-card">
-          Away progress: +{offlineSummary.essenceGained.display} Essence · {offlineSummary.kills} kills · stage {offlineSummary.stageBefore} → {offlineSummary.stageAfter}
+          Away progress: +{offlineSummary.goldGained.display} Gold · +{offlineSummary.essenceGained.display} Essence · {offlineSummary.kills} kills · stage {offlineSummary.stageBefore} → {offlineSummary.stageAfter}
         </div>
       )}
 

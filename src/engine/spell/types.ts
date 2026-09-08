@@ -28,8 +28,7 @@ export type SpellModifier =
       trigger: SpellTrigger;
       action:
         | { kind: 'bonusDamage'; multiplier: number; retrigger?: boolean }
-        | { kind: 'repeatProjectile'; count: number; damageMultiplier: number }
-        | { kind: 'essenceMultiplier'; multiplier: number };
+        | { kind: 'repeatProjectile'; count: number; damageMultiplier: number };
     }
   | {
       id: string;

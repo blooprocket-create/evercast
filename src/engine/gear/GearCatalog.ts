@@ -1,18 +1,9 @@
-import type { GearPrimaryStat, GearSlot } from './types';
+import { GEAR_DEFINITIONS } from '../../content/gear';
+import type { GearSlot } from './types';
+
+export { GEAR_DEFINITIONS };
 
 export const GEAR_EVOLUTION_MILESTONES = [1, 50, 100, 200, 500, 1000] as const;
-
-export interface GearDefinition {
-  slot: GearSlot;
-  baseName: string;
-  description: string;
-  primaryStat: GearPrimaryStat;
-  primaryStatLabel: string;
-  statPerLevel: number;
-  baseLevelCost: number;
-  costGrowth: number;
-  evolutionNames: readonly [string, string, string, string, string, string];
-}
 
 export const GEAR_SLOT_ORDER: readonly GearSlot[] = [
   'helm',
@@ -24,97 +15,6 @@ export const GEAR_SLOT_ORDER: readonly GearSlot[] = [
   'ringLeft',
   'ringRight',
 ] as const;
-
-export const GEAR_DEFINITIONS: Record<GearSlot, GearDefinition> = {
-  helm: {
-    slot: 'helm',
-    baseName: 'Standard Helm',
-    description: 'Basic head protection for a mage beginning the long road.',
-    primaryStat: 'maxHp',
-    primaryStatLabel: 'Max HP',
-    statPerLevel: 1,
-    baseLevelCost: 10,
-    costGrowth: 3,
-    evolutionNames: ['Standard Helm', 'Runed Helm', 'Arcanist Helm', 'Astral Helm', 'Mythic Helm', 'Evercast Crown'],
-  },
-  staff: {
-    slot: 'staff',
-    baseName: 'Standard Staff',
-    description: 'A simple magical focus that strengthens the base force of the Evercast.',
-    primaryStat: 'baseDamage',
-    primaryStatLabel: 'Base Damage',
-    statPerLevel: 1,
-    baseLevelCost: 12,
-    costGrowth: 4,
-    evolutionNames: ['Standard Staff', 'Runed Staff', 'Arcanist Staff', 'Astral Staff', 'Mythic Staff', 'Evercast Staff'],
-  },
-  spellbook: {
-    slot: 'spellbook',
-    baseName: 'Standard Spellbook',
-    description: 'A record of the Evercast and the principles that shape how it behaves.',
-    primaryStat: 'baseDamage',
-    primaryStatLabel: 'Base Damage',
-    statPerLevel: 0.5,
-    baseLevelCost: 11,
-    costGrowth: 3.5,
-    evolutionNames: ['Standard Spellbook', 'Runed Spellbook', 'Arcanist Grimoire', 'Astral Grimoire', 'Mythic Codex', 'Evercast Codex'],
-  },
-  robe: {
-    slot: 'robe',
-    baseName: 'Standard Robe',
-    description: 'Simple traveling robes reinforced over time with increasingly powerful magic.',
-    primaryStat: 'maxHp',
-    primaryStatLabel: 'Max HP',
-    statPerLevel: 2,
-    baseLevelCost: 12,
-    costGrowth: 4,
-    evolutionNames: ['Standard Robe', 'Runed Robe', 'Arcanist Robe', 'Astral Vestments', 'Mythic Vestments', 'Evercast Regalia'],
-  },
-  boots: {
-    slot: 'boots',
-    baseName: 'Standard Boots',
-    description: 'Reliable road-worn boots that keep the mage standing through harder fights.',
-    primaryStat: 'maxHp',
-    primaryStatLabel: 'Max HP',
-    statPerLevel: 1,
-    baseLevelCost: 9,
-    costGrowth: 2.75,
-    evolutionNames: ['Standard Boots', 'Runed Boots', 'Arcanist Boots', 'Astral Treads', 'Mythic Treads', 'Evercast Steps'],
-  },
-  necklace: {
-    slot: 'necklace',
-    baseName: 'Standard Necklace',
-    description: 'A small magical focus worn close to the heart.',
-    primaryStat: 'baseDamage',
-    primaryStatLabel: 'Base Damage',
-    statPerLevel: 0.25,
-    baseLevelCost: 9,
-    costGrowth: 3,
-    evolutionNames: ['Standard Necklace', 'Runed Necklace', 'Arcanist Pendant', 'Astral Pendant', 'Mythic Amulet', 'Evercast Amulet'],
-  },
-  ringLeft: {
-    slot: 'ringLeft',
-    baseName: 'Standard Ring',
-    description: 'A flexible magical focus. Its tree can eventually specialize independently from the other ring.',
-    primaryStat: 'baseDamage',
-    primaryStatLabel: 'Base Damage',
-    statPerLevel: 0.25,
-    baseLevelCost: 8,
-    costGrowth: 2.5,
-    evolutionNames: ['Standard Ring', 'Runed Ring', 'Arcanist Ring', 'Astral Ring', 'Mythic Ring', 'Evercast Signet'],
-  },
-  ringRight: {
-    slot: 'ringRight',
-    baseName: 'Standard Ring',
-    description: 'A second independent ring slot for a separate gear-tree specialization.',
-    primaryStat: 'baseDamage',
-    primaryStatLabel: 'Base Damage',
-    statPerLevel: 0.25,
-    baseLevelCost: 8,
-    costGrowth: 2.5,
-    evolutionNames: ['Standard Ring', 'Runed Ring', 'Arcanist Ring', 'Astral Ring', 'Mythic Ring', 'Evercast Signet'],
-  },
-};
 
 export function evolutionTierForLevel(level: number): number {
   let tier = 0;

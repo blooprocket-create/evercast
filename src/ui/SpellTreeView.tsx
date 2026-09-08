@@ -1,13 +1,14 @@
 import { useMemo, useState } from 'react';
-import type { SimulationSnapshot } from '../engine/types';
 import {
   SPELL_TREE_NODE_BY_ID,
   SPELL_TREE_NODES,
   SPELL_TREE_ROOT_ID,
   adjacentNodeIds,
-} from '../engine/spellTree/SpellTreeCatalog';
+} from '../content/spellTree';
 import { canActivateSpellNode, MAX_SPELL_TREE_POINTS } from '../engine/spellTree/SpellTreeSystem';
 import type { SpellTreeState } from '../engine/spellTree/types';
+import type { SimulationSnapshot } from '../engine/types';
+import { layoutForSpellNode, SPELL_TREE_VIEWBOX } from './spellTree/SpellTreeLayout';
 
 interface SpellTreeViewProps {
   snapshot: SimulationSnapshot;
@@ -49,16 +50,26 @@ export function SpellTreeView({ snapshot, onBuyPoint, onActivateNode, onRespec }
       <div className="spell-tree-main">
         <div className="spell-tree-viewport">
           <div className="spell-tree-canvas">
-            <svg className="spell-tree-lines" viewBox="0 0 1000 760" preserveAspectRatio="none" aria-hidden="true">
+            <svg
+              className="spell-tree-lines"
+              viewBox={`0 0 ${SPELL_TREE_VIEWBOX.width} ${SPELL_TREE_VIEWBOX.height}`}
+              preserveAspectRatio="none"
+              aria-hidden="true"
+            >
               {SPELL_TREE_NODES.flatMap((node) => node.requires.map((parentId) => {
                 const parent = SPELL_TREE_NODE_BY_ID.get(parentId);
                 if (!parent || !revealed.has(node.id) || !revealed.has(parentId)) return null;
+                const parentLayout = layoutForSpellNode(parentId);
+                const nodeLayout = layoutForSpellNode(node.id);
                 const connected = active.has(node.id) && active.has(parentId);
                 const reachable = active.has(parentId) || active.has(node.id);
                 return (
                   <line
                     key={`${parentId}-${node.id}`}
-                    x1={parent.x} y1={parent.y} x2={node.x} y2={node.y}
+                    x1={parentLayout.x}
+                    y1={parentLayout.y}
+                    x2={nodeLayout.x}
+                    y2={nodeLayout.y}
                     className={connected ? 'active' : reachable ? 'reachable' : ''}
                   />
                 );
@@ -67,6 +78,7 @@ export function SpellTreeView({ snapshot, onBuyPoint, onActivateNode, onRespec }
 
             {SPELL_TREE_NODES.map((node) => {
               if (!revealed.has(node.id)) return null;
+              const nodeLayout = layoutForSpellNode(node.id);
               const isActive = active.has(node.id);
               const canActivate = canActivateSpellNode(state, node.id);
               const isAdjacent = node.requires.some((id) => active.has(id)) || adjacentNodeIds(node.id).some((id) => active.has(id));
@@ -75,7 +87,10 @@ export function SpellTreeView({ snapshot, onBuyPoint, onActivateNode, onRespec }
                   key={node.id}
                   type="button"
                   className={`spell-node region-${node.region} kind-${node.kind} ${isActive ? 'active' : ''} ${canActivate ? 'available' : ''} ${isAdjacent ? 'adjacent' : ''} ${selected.id === node.id ? 'selected' : ''}`}
-                  style={{ left: `${node.x / 10}%`, top: `${node.y / 7.6}%` }}
+                  style={{
+                    left: `${(nodeLayout.x / SPELL_TREE_VIEWBOX.width) * 100}%`,
+                    top: `${(nodeLayout.y / SPELL_TREE_VIEWBOX.height) * 100}%`,
+                  }}
                   onClick={() => setSelectedNodeId(node.id)}
                   title={node.name}
                 >

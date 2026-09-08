@@ -1,5 +1,5 @@
-import type { ContentCatalog } from '../../content/types';
 import { requireEnemy, resolveZone } from '../../content/catalog';
+import type { ContentCatalog } from '../../content/types';
 import type { EngineConfig } from '../config';
 import type { EncounterState, EnemyState, RunState } from '../model';
 import { big } from '../numbers';
@@ -64,7 +64,6 @@ export class EncounterSystem {
     const worldTierMultiplier = big(1.75).pow(resolvedZone.worldTier);
     const bossHealthMultiplier = isBoss ? big(4.5) : big(1);
     const bossAttackMultiplier = isBoss ? big(1.8) : big(1);
-    const bossRewardMultiplier = isBoss ? big(5) : big(1);
 
     const maxHp = big(definition.baseHealth)
       .mul(big(definition.healthGrowth).pow(stageExponent))
@@ -74,11 +73,6 @@ export class EncounterSystem {
       .mul(big(definition.attackGrowth).pow(stageExponent))
       .mul(big(1.35).pow(resolvedZone.worldTier))
       .mul(bossAttackMultiplier);
-    const reward = big(definition.rewardBase)
-      .mul(big(definition.rewardGrowth).pow(stageExponent))
-      .mul(big(1.5).pow(resolvedZone.worldTier))
-      .mul(bossRewardMultiplier)
-      .floor();
 
     const enemy: EnemyState = {
       instanceId: run.nextEnemyInstanceId++,
@@ -91,7 +85,6 @@ export class EncounterSystem {
       attackDamage,
       attackInterval: definition.attackInterval,
       attackCooldown: definition.attackInterval,
-      reward: reward.cmp(1) < 0 ? big(1) : reward,
     };
 
     run.enemies.push(enemy);
