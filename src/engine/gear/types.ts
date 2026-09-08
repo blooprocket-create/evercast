@@ -22,3 +22,15 @@ export interface EquipmentState {
 }
 
 export type GearPrimaryStat = 'baseDamage' | 'maxHp';
+
+export interface GearDefinition {
+  slot: GearSlot;
+  baseName: string;
+  description: string;
+  primaryStat: GearPrimaryStat;
+  primaryStatLabel: string;
+  statPerLevel: number;
+  baseLevelCost: number;
+  costGrowth: number;
+  evolutionNames: readonly [string, string, string, string, string, string];
+}

@@ -1,6 +1,6 @@
 import type { EngineConfig } from '../config';
-import { createInitialEquipmentState } from '../gear/GearSystem';
 import { GEAR_SLOT_ORDER } from '../gear/GearCatalog';
+import { createInitialEquipmentState } from '../gear/GearSystem';
 import type { EquipmentState, GearPieceState, GearSlot } from '../gear/types';
 import type { EnemyState, GameState } from '../model';
 import { big } from '../numbers';
@@ -12,11 +12,12 @@ import { createInitialGameState } from '../state';
 
 export const CURRENT_SAVE_VERSION = 5;
 
-type SerializedEnemy = Omit<EnemyState, 'hp' | 'maxHp' | 'attackDamage' | 'reward'> & {
+type SerializedEnemy = Omit<EnemyState, 'hp' | 'maxHp' | 'attackDamage'> & {
   hp: string;
   maxHp: string;
   attackDamage: string;
-  reward: string;
+  // v3-v5 saves may contain the old repeatable-Essence reward field. It is ignored on load.
+  reward?: string;
 };
 
 type SerializedRunV3 = Omit<GameState['run'], 'essence' | 'mage' | 'enemies'> & {
@@ -25,11 +26,11 @@ type SerializedRunV3 = Omit<GameState['run'], 'essence' | 'mage' | 'enemies'> & 
   enemies: SerializedEnemy[];
 };
 
-type LegacyEnemy = Omit<EnemyState, 'instanceId' | 'hp' | 'maxHp' | 'attackDamage' | 'reward'> & {
+type LegacyEnemy = Omit<EnemyState, 'instanceId' | 'hp' | 'maxHp' | 'attackDamage'> & {
   hp: string;
   maxHp: string;
   attackDamage: string;
-  reward: string;
+  reward?: string;
 };
 
 type LegacySerializedRun = Omit<GameState['run'], 'essence' | 'mage' | 'enemies' | 'encounter' | 'nextEnemyInstanceId'> & {
@@ -201,17 +202,16 @@ function serializeEnemy(enemy: EnemyState): SerializedEnemy {
     hp: enemy.hp.toString(),
     maxHp: enemy.maxHp.toString(),
     attackDamage: enemy.attackDamage.toString(),
-    reward: enemy.reward.toString(),
   };
 }
 
 function deserializeEnemy(enemy: SerializedEnemy): EnemyState {
+  const { reward: _legacyReward, ...current } = enemy;
   return {
-    ...enemy,
+    ...current,
     hp: big(enemy.hp),
     maxHp: big(enemy.maxHp),
     attackDamage: big(enemy.attackDamage),
-    reward: big(enemy.reward),
   };
 }
 

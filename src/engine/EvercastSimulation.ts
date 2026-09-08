@@ -1,20 +1,19 @@
-import type { ContentCatalog } from '../content/types';
 import { createDefaultCatalog, validateCatalog } from '../content/catalog';
+import type { ContentCatalog } from '../content/types';
 import { CombatSystem } from './combat/CombatSystem';
 import type { EngineConfig } from './config';
 import { DEFAULT_ENGINE_CONFIG } from './config';
 import { EncounterSystem } from './encounters/EncounterSystem';
 import { EventBus } from './events/EventBus';
 import type { GameEvent } from './events/GameEvent';
-import { GearSystem, compileGearStats, gearDisplayData } from './gear/GearSystem';
-import { GEAR_SLOT_ORDER } from './gear/GearCatalog';
-import type { EnemyState, GameState } from './model';
-import { big, quantity } from './numbers';
+import { describeGameEvent } from './events/describeGameEvent';
+import { GearSystem } from './gear/GearSystem';
+import type { GameState } from './model';
 import { ProgressionSystem } from './progression/ProgressionSystem';
 import { RebirthSystem } from './prestige/RebirthSystem';
 import { compileSpell } from './spell/SpellCompiler';
-import { spellPointCost } from './spellTree/SpellTreeCatalog';
-import { SpellTreeSystem, totalSpellPoints, unspentSpellPoints } from './spellTree/SpellTreeSystem';
+import { SpellTreeSystem } from './spellTree/SpellTreeSystem';
+import { buildSimulationSnapshot } from './snapshot/SimulationSnapshotBuilder';
 import { createInitialGameState } from './state';
 import type { EngineCommand, SimulationSnapshot } from './types';
 
@@ -125,92 +124,12 @@ export class EvercastSimulation {
   }
 
   getSnapshot(): SimulationSnapshot {
-    const run = this.state.run;
-    const target = run.enemies[0];
-    const compiledSpell = compileSpell(run.spell);
-    const gearStats = compileGearStats(this.state.equipment);
-    const finalDamage = big(compiledSpell.damage).add(gearStats.baseDamageBonus);
-    const enemyHpPercent = target && target.maxHp.cmp(0) > 0
-      ? Math.max(0, Math.min(1, target.hp.div(target.maxHp).toNumber())) * 100
-      : 0;
-    const mageHpPercent = run.mage.maxHp.cmp(0) > 0
-      ? Math.max(0, Math.min(1, run.mage.hp.div(run.mage.maxHp).toNumber())) * 100
-      : 0;
-
-    return {
-      elapsedSeconds: run.elapsedSeconds,
-      stage: run.frontierStage,
-      encounterStage: run.encounterStage,
-      zone: run.zoneNumber,
-      zoneName: run.zoneName,
-      mode: run.mode,
-      farmStage: run.farmStage,
-      farmKillsSinceFailure: run.farmKillsSinceFailure,
-      essence: quantity(run.essence),
-      knowledge: quantity(this.state.meta.knowledge),
-      gold: quantity(this.state.equipment.gold),
-      mageHp: quantity(run.mage.hp),
-      mageMaxHp: quantity(run.mage.maxHp),
-      mageHpPercent,
-      enemyHp: quantity(target?.hp ?? big(0)),
-      enemyMaxHp: quantity(target?.maxHp ?? big(0)),
-      enemyHpPercent,
-      enemyName: target?.name ?? (run.phase === 'combat' ? 'Incoming…' : 'Road ahead'),
-      enemies: run.enemies.map((enemy) => ({
-        instanceId: enemy.instanceId,
-        name: enemy.name,
-        boss: enemy.boss,
-        hp: quantity(enemy.hp),
-        maxHp: quantity(enemy.maxHp),
-        hpPercent: enemy.maxHp.cmp(0) > 0
-          ? Math.max(0, Math.min(1, enemy.hp.div(enemy.maxHp).toNumber())) * 100
-          : 0,
-      })),
-      encounterTotalEnemies: run.encounter?.totalEnemies ?? 0,
-      encounterSpawnedEnemies: run.encounter?.spawnedEnemies ?? 0,
-      encounterAliveEnemies: run.enemies.length,
-      spawnInterval: run.encounter?.spawnInterval ?? this.config.enemySpawnInterval,
-      phase: run.phase,
-      boss: run.encounter?.bossStage ?? false,
-      casts: run.stats.casts,
-      kills: run.stats.kills,
-      deaths: run.stats.deaths,
-      projectileCount: compiledSpell.projectileCount,
-      damagePerProjectile: quantity(finalDamage),
-      spellBaseDamage: quantity(big(compiledSpell.damage)),
-      gearDamageBonus: quantity(gearStats.baseDamageBonus),
-      gearHealthBonus: quantity(gearStats.maxHpBonus),
-      castInterval: compiledSpell.castInterval,
-      critChance: compiledSpell.critChance,
-      critMultiplier: compiledSpell.critMultiplier,
-      pierceTargets: compiledSpell.pierceTargets,
-      splashTargets: compiledSpell.splashTargets,
-      splashDamageMultiplier: compiledSpell.splashDamageMultiplier,
-      chainTargets: compiledSpell.chainTargets,
-      chainDamageMultiplier: compiledSpell.chainDamageMultiplier,
-      controlDelaySeconds: compiledSpell.controlDelaySeconds,
-      leechFraction: compiledSpell.leechFraction,
-      spellTreePurchasedPoints: this.state.spellTree.purchasedPoints,
-      spellTreeTotalPoints: totalSpellPoints(this.state.spellTree),
-      spellTreeUnspentPoints: unspentSpellPoints(this.state.spellTree),
-      nextSpellPointCost: quantity(big(spellPointCost(this.state.spellTree.purchasedPoints))),
-      activeSpellNodeIds: [...this.state.spellTree.activatedNodeIds],
-      progressToNextEncounter: run.phase === 'travel'
-        ? Math.min(1, run.travelElapsed / this.config.travelSeconds)
-        : 1,
-      highestStageEver: this.state.meta.highestStageEver,
-      rebirths: this.state.meta.rebirths,
+    return buildSimulationSnapshot({
+      state: this.state,
+      config: this.config,
       canRebirth: this.rebirthSystem.canRebirth(this.state),
-      gear: GEAR_SLOT_ORDER.map((slot) => {
-        const data = gearDisplayData(this.state.equipment, slot);
-        return {
-          ...data,
-          contribution: quantity(data.contribution),
-          nextLevelCost: quantity(data.nextLevelCost),
-        };
-      }),
       lastEvent: this.lastEvent,
-    };
+    });
   }
 
   getState(): GameState {
@@ -340,44 +259,7 @@ export class EvercastSimulation {
   }
 
   private captureEvent(event: GameEvent): void {
-    this.lastEvent = describeEvent(event);
+    this.lastEvent = describeGameEvent(event);
     if (this.recordPresentationEvents) this.presentationEvents.push(event);
-  }
-}
-
-function describeEvent(event: GameEvent): string {
-  switch (event.type) {
-    case 'encounter_started':
-      return `Stage ${event.stage}: ${event.totalEnemies} incoming.`;
-    case 'enemy_spawned':
-      return `${event.enemyName} enters (${event.spawned}/${event.total}).`;
-    case 'spell_cast':
-      return `Arcane Bolt cast (${event.projectiles} projectile${event.projectiles === 1 ? '' : 's'}).`;
-    case 'projectile_hit':
-      return `${event.critical ? 'Critical! ' : ''}Arcane Bolt hits for ${event.damage}.`;
-    case 'enemy_attack':
-      return `An enemy hits for ${event.damage}.`;
-    case 'enemy_killed':
-      return `Enemy falls. +${event.reward} Essence.`;
-    case 'mage_defeated':
-      return `The mage falls at stage ${event.stage}.`;
-    case 'resource_gained':
-      return `+${event.amount} ${event.resource}.`;
-    case 'stage_advanced':
-      return `Frontier advanced to stage ${event.stage}.`;
-    case 'mode_changed':
-      return `${event.mode === 'farm' ? 'Farming' : 'Pushing'}: ${event.reason}.`;
-    case 'gear_leveled':
-      return `${event.slot} reached gear level ${event.level}.`;
-    case 'gear_evolved':
-      return `${event.name} evolved at gear level ${event.level}.`;
-    case 'spell_point_purchased':
-      return `Evercast absorbs ${event.cost} Essence. +1 Spell Point.`;
-    case 'spell_node_activated':
-      return `${event.nodeName} awakened.`;
-    case 'spell_tree_respecced':
-      return `Evercast reshaped. ${event.refundedPoints} point${event.refundedPoints === 1 ? '' : 's'} returned.`;
-    case 'rebirth_performed':
-      return `Rebirth ${event.rebirths}: +${event.knowledgeGained} Knowledge.`;
   }
 }

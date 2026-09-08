@@ -6,6 +6,7 @@ export interface OfflineAdvanceable {
     stage: number;
     kills: number;
     essence: QuantitySnapshot;
+    gold: QuantitySnapshot;
   };
   advance(seconds: number, options?: { presentationEvents?: boolean }): void;
 }
@@ -15,6 +16,7 @@ export interface OfflineSummary {
   stageBefore: number;
   stageAfter: number;
   kills: number;
+  goldGained: QuantitySnapshot;
   essenceGained: QuantitySnapshot;
 }
 
@@ -26,13 +28,13 @@ export class OfflineProgressor {
     const before = simulation.getSnapshot();
     simulation.advance(secondsApplied, { presentationEvents: false });
     const after = simulation.getSnapshot();
-    const essenceGained = big(after.essence.raw).sub(before.essence.raw);
     return {
       secondsApplied,
       stageBefore: before.stage,
       stageAfter: after.stage,
       kills: after.kills - before.kills,
-      essenceGained: quantity(essenceGained),
+      goldGained: quantity(big(after.gold.raw).sub(before.gold.raw)),
+      essenceGained: quantity(big(after.essence.raw).sub(before.essence.raw)),
     };
   }
 }

@@ -6,8 +6,6 @@ export interface EnemyDefinition {
   baseAttack: string;
   attackGrowth: number;
   attackInterval: number;
-  rewardBase: string;
-  rewardGrowth: number;
   modelKey: string;
   tags: string[];
 }

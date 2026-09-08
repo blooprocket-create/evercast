@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_ENGINE_CONFIG } from '../config';
+import type { GameEvent } from '../events/GameEvent';
 import { big } from '../numbers';
 import { createInitialGameState } from '../state';
 import { CombatSystem } from './CombatSystem';
@@ -25,7 +26,6 @@ describe('CombatSystem', () => {
       attackDamage: big(0),
       attackInterval: 1,
       attackCooldown: 1,
-      reward: big(0),
     }];
 
     const combat = new CombatSystem(DEFAULT_ENGINE_CONFIG, () => {});
@@ -33,5 +33,41 @@ describe('CombatSystem', () => {
 
     expect(state.run.enemies[0].hp.toNumber()).toBe(0);
     expect(state.run.mage.hp.toNumber()).toBeCloseTo(1.1);
+  });
+
+  it('emits enough provenance for presentation to distinguish direct, pierce, chain and splash hits', () => {
+    const state = createInitialGameState(DEFAULT_ENGINE_CONFIG);
+    state.run.spell.baseDamage = '1';
+    state.run.spell.critChance = 0;
+    state.run.spell.projectileCount = 1;
+    state.run.spell.modifiers = [
+      { id: 'pierce', kind: 'combat', action: { kind: 'pierce', count: 1 } },
+      { id: 'chain', kind: 'combat', action: { kind: 'chain', count: 2, damageMultiplier: 0.5 } },
+      { id: 'splash', kind: 'combat', action: { kind: 'splash', targets: 1, damageMultiplier: 0.25 } },
+    ];
+    state.run.enemies = [1, 2, 3, 4, 5].map((instanceId) => ({
+      instanceId,
+      definitionId: `target_${instanceId}`,
+      name: `Target ${instanceId}`,
+      stage: 1,
+      boss: false,
+      hp: big(100),
+      maxHp: big(100),
+      attackDamage: big(0),
+      attackInterval: 10,
+      attackCooldown: 10,
+    }));
+
+    const events: GameEvent[] = [];
+    const combat = new CombatSystem(DEFAULT_ENGINE_CONFIG, (event) => events.push(event));
+    combat.cast(state.run, state.equipment);
+
+    const hits = events.filter((event): event is Extract<GameEvent, { type: 'projectile_hit' }> => event.type === 'projectile_hit');
+    expect(hits.map((event) => event.source)).toEqual(['direct', 'pierce', 'chain', 'chain', 'splash']);
+    expect(hits[1].sourceInstanceId).toBe(1);
+    expect(hits[2].sourceInstanceId).toBe(1);
+    expect(hits[3].sourceInstanceId).toBe(3);
+    expect(hits[4].sourceInstanceId).toBe(1);
+    expect(hits.map((event) => event.sequence)).toEqual([0, 1, 1, 2, 1]);
   });
 });

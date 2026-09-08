@@ -26,7 +26,6 @@ export class ProgressionSystem {
       stage: enemy.stage,
       instanceId: enemy.instanceId,
       enemyId: enemy.definitionId,
-      reward: '0',
       gold: gold.toString(),
     });
     this.emit({

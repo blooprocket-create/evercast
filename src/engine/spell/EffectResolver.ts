@@ -4,7 +4,6 @@ import type { CompiledSpell, SpellTrigger } from './types';
 export interface EffectResolution {
   bonusDamage: string;
   repeatProjectiles: Array<{ count: number; damageMultiplier: number }>;
-  essenceMultiplier: number;
 }
 
 export function resolveEffects(
@@ -14,7 +13,6 @@ export function resolveEffects(
 ): EffectResolution {
   let bonusDamage = big(0);
   const repeatProjectiles: Array<{ count: number; damageMultiplier: number }> = [];
-  let essenceMultiplier = 1;
 
   for (const modifier of spell.triggerModifiers.get(trigger) ?? []) {
     switch (modifier.action.kind) {
@@ -27,15 +25,11 @@ export function resolveEffects(
           damageMultiplier: Math.max(0, modifier.action.damageMultiplier),
         });
         break;
-      case 'essenceMultiplier':
-        essenceMultiplier *= Math.max(0, modifier.action.multiplier);
-        break;
     }
   }
 
   return {
     bonusDamage: bonusDamage.toString(),
     repeatProjectiles,
-    essenceMultiplier,
   };
 }

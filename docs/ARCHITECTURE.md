@@ -10,127 +10,138 @@ The authoritative game can therefore run:
 
 - in the browser with Babylon + React,
 - headlessly in Node for balance testing,
-- during offline catch-up,
+- during offline/background catch-up,
 - in automated tests,
 - and later on a trusted server if validation is ever needed.
 
 ## Runtime dependency graph
 
 ```text
-content/ (data)
+content/ authored game data
    ↓
-engine/ (authoritative deterministic game)
+engine/ authoritative deterministic rules
    ↓ snapshots + serializable GameEvents
 ┌───────────────┬──────────────────┐
 ↓               ↓                  ↓
 app/           game/               ui/
 persistence    Babylon             React
-boot/offline    renderer            HUD/tree
+boot/offline    renderer            menus/tree
 ```
 
-No arrow is allowed to point back into `engine/` from React or Babylon.
+Presentation never reports collision, damage, kills, progression, or rewards back into the engine.
 
-## Engine modules
+## Ownership rules
 
-### State
+### `src/content`
 
-`GameState` is split into two reset boundaries:
+Owns authored game data: enemies, zones, gear definitions/tuning, and the authored spell-tree graph. Content may use engine schema types, but authored names, descriptions, balance values, and graph definitions do not belong inside engine system files.
 
-- `RunState`: frontier, current encounter, mode, Essence, spell build, combat timers, run stats.
+### `src/engine`
+
+Owns deterministic rules, mutable authoritative state, economy/combat calculations, save migrations, commands, snapshots, and serializable events. It does not own React/Babylon behavior or UI layout coordinates.
+
+### `src/ui`
+
+Owns React presentation and presentation-only layout data. Spell-tree x/y coordinates live here rather than in the gameplay node definitions.
+
+### `src/game`
+
+Owns Babylon models, animation, camera, environment rendering, particles, VFX, and other visual reactions to snapshots/events.
+
+### `src/app`
+
+Owns browser lifecycle, save loading, autosave, visibility/background handling, and bootstrapping.
+
+## State boundaries
+
+`GameState` currently has four domains:
+
+- `RunState`: frontier, current encounter, push/farm mode, Arcane Essence, spell build, combat timers and run stats.
 - `MetaState`: Rebirth count, Knowledge, lifetime/highest-stage records, permanent unlock/story flags.
+- `EquipmentState`: Gold and the eight persistent gear pieces.
+- `SpellTreeState`: purchased Spell Points and activated spell-tree nodes.
 
-Rebirth replaces `RunState`; `MetaState` survives.
+The current placeholder Rebirth replaces `RunState` while equipment and spell-tree state survive. That is intentionally provisional until prestige is designed; it must not become canon by accident.
 
-### Numbers
+## Numbers
 
-All authoritative economy/combat magnitudes use `break_eternity.js` `Decimal` values immediately. Serialization uses strings. UI receives `QuantitySnapshot` values (`raw` + `display`) instead of owning Decimal objects.
+Authoritative economy/combat magnitudes use `break_eternity.js` `Decimal` values. Serialization uses strings. UI receives `QuantitySnapshot` values (`raw` + `display`) rather than owning Decimal objects.
 
-### Time
+## Time and offline progress
 
-The simulation is event-driven rather than frame-driven. `advance(seconds)` consumes time until the next cast, enemy attack, or encounter transition. The same method powers live play and offline catch-up, so renderer FPS cannot change outcomes.
+The simulation is event-driven rather than frame-driven. `advance(seconds)` consumes time until the next spawn, cast, enemy attack, or encounter transition. The same method powers live play and offline/background catch-up, so renderer FPS and browser throttling cannot change authoritative outcomes.
 
-### Encounter system
+The browser layer detects tab visibility. Hidden time is applied through `OfflineProgressor` when the tab becomes visible again, with presentation events suppressed and the normal offline cap applied.
 
-Zones and enemies are data definitions. `EncounterSystem` uses the run seed + stage + run state to choose deterministic encounters. Boss cadence and zone length are configuration, not hard-coded renderer logic.
+## Encounter system
 
-### Combat
+Each stage is a finite timed-spawn encounter. Multiple authoritative enemies can coexist.
 
-`CombatSystem` resolves casts, deterministic critical hits, enemy attacks and triggered spell effects. Player casts win exact timer ties to keep ordering stable and player-friendly.
+An encounter owns:
 
-### Spell/effect foundation
+- total enemy budget,
+- spawned count,
+- spawn cadence,
+- maximum simultaneous living enemies,
+- boss-stage identity.
 
-The tree itself is intentionally not authored yet. The engine already accepts a data-driven `SpellBuild` containing:
+The stage clears only after the full enemy budget has spawned and no living enemies remain. Spawn timing is independent of whether earlier enemies have died, subject to the `maxAlive` safety cap.
 
-- stat modifiers,
-- trigger modifiers (`onHit`, `onCrit`, `onKill`),
-- bonus damage,
-- repeat projectiles,
-- resource multipliers.
+## Combat and presentation events
 
-This is the foundation the future tree will compile into. The tree UI will not contain combat logic.
+`CombatSystem` resolves casts, deterministic critical hits, direct hits, pierce, chain, splash, repeats, enemy attacks, control, leech and triggered effects. Player casts win exact timer ties.
 
-### Push / farm loop
+The engine event stream is the presentation contract. `projectile_hit` includes effect provenance (`direct`, `pierce`, `chain`, `splash`, or `repeat`), source target when relevant, and sequence information. Babylon should animate those facts rather than infer combat from build stats.
 
-A failed frontier fight switches the run into farm mode at the safest previously cleared non-boss stage. Farm kills continue generating Essence. After a configurable number of farm kills, the simulation automatically retries the frontier. UI can also issue a manual retry command.
+## Progression economies
 
-### Events
+Gold and Arcane Essence intentionally serve different loops:
 
-The engine emits serializable `GameEvent` records. The Babylon layer reacts to visual events (cast, kill, death) but never reports collision/damage back to the engine. EventBus has ordering and runaway-event safety tests.
+- **Gold** is repeatable. Every kill grants Gold and farming/AFK time can accumulate it. Gold levels gear.
+- **Arcane Essence** is finite frontier progression. It is granted only on a stage's first-ever frontier clear and purchases Spell Points. Farming/replaying already-cleared stages grants no Essence.
 
-### Save / offline
+Boss first-clears currently award more Essence. Exact curves remain prototype tuning.
 
-`SaveCodec` is pure engine code and owns schema/version conversion. Browser `localStorage` lives in `src/app`. Offline progress advances the exact same deterministic simulation with presentation events disabled and a configurable catch-up cap.
+## Spell tree
 
-The current solver is exact event-driven catch-up. If endgame cast frequencies eventually make very long catch-up too expensive, `OfflineProgressor` is the seam where we can add a bulk/analytical strategy without changing combat or save formats.
+The current playtest tree is authored content with a centered Evercast root, connected pathing, minor/notable/mutation nodes, and Power/Speed/Projectile/Crit plus Arcane/Fire/Frost/Storm/Blood regions.
 
-## Content layer
+The engine stores only purchased points and activated node IDs, then compiles those nodes into the one true `SpellBuild`. UI layout geometry is separate from the node gameplay definitions.
 
-`src/content/**` owns authored definitions and cross-reference validation. Core systems consume a `ContentCatalog`, so tests or future modes can inject alternate catalogs.
+Current elemental mechanics are prototype balance, not canon. In particular, control effects such as Frost still need systemic balance work.
 
-## Presentation
+## Gear
 
-### Babylon (`src/game`)
+The eight persistent gear slots are Helm, Staff, Spellbook, Robe, Boots, Necklace, Ring I and Ring II. Gold levels each piece independently with additive stat growth. Automatic evolution milestones are currently 1/50/100/200/500/1000 and remain tunable.
 
-Responsible for models, animation, camera, lighting, particles, VFX and environment rendering. It consumes snapshots/events only.
+Authored gear names, descriptions and tuning live in `src/content`; engine gear modules own state/evolution mechanics.
 
-### React (`src/ui`)
+## Snapshots and coordinator size
 
-Responsible for HUD, future spell tree, prestige, lore and settings. It issues engine commands but does not mutate state directly.
+`EvercastSimulation` is the orchestration boundary, not a dumping ground for every derived read model. Snapshot construction lives in `src/engine/snapshot/SimulationSnapshotBuilder.ts`, and event-to-text formatting lives in `src/engine/events/describeGameEvent.ts`.
 
-### App (`src/app`)
+As new systems arrive, prefer extracting cohesive builders/services rather than allowing `EvercastSimulation` to absorb unrelated presentation/read-model logic.
 
-Owns browser-only bootstrapping: save loading, offline catch-up, autosave and browser lifecycle hooks.
+## Save / migration
+
+`SaveCodec` owns versioned schema conversion. Browser `localStorage` remains in `src/app`. Existing saves migrate forward rather than silently resetting progression.
+
+The current solver is exact event-driven catch-up. If endgame event frequency eventually makes long catch-up too expensive, `OfflineProgressor` is the seam for an analytical/bulk strategy without changing combat or save formats.
 
 ## Testing gates
 
-`npm run validate` runs unit/integration tests then a production TypeScript/Vite build.
+`npm run validate` runs unit/integration tests and a production TypeScript/Vite build. GitHub Actions runs the same validation on PRs and `main`.
 
-The test suite covers:
-
-- renderer-independent advancement,
-- deterministic same-seed outcomes,
-- stronger builds outperforming weaker builds,
-- push → defeat → farm behavior,
-- nested event ordering,
-- content-reference validation,
-- spell modifier compilation,
-- save round trips,
-- offline catch-up and cap behavior,
-- rebirth reset boundaries,
-- an architecture guard preventing React/Babylon imports in `src/engine`.
-
-GitHub Actions runs the same validation on PRs and `main`.
+Coverage includes deterministic advancement, multi-enemy overlap, push/farm behavior, content references, spell compilation, gear, Spell Point economy/pathing, first-clear Essence, save migrations, offline catch-up, prestige reset boundaries, and architecture guards preventing presentation dependencies from entering `src/engine`.
 
 ## Still intentionally deferred
 
-These are content/design systems, not foundation blockers:
-
-- the actual skill tree graph and economy,
-- final prestige names/formulas/cadence,
+- final spell-tree balance/topology,
+- bounded/diminishing control rules,
+- final prestige behavior,
+- gear-tree point sources and authored gear trees,
 - final enemy/zone tuning,
 - story content,
-- production GLB assets and animations,
-- pooled endgame VFX implementation,
+- production animation/VFX architecture and pooling,
+- analytical endgame offline simulation,
 - analytics/cloud saves/accounts.
-
-The architecture exposes seams for all of them without pretending their designs are already settled.
