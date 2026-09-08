@@ -8,9 +8,7 @@ import {
   GlowLayer,
   HemisphericLight,
   ImageProcessingConfiguration,
-  MeshBuilder,
   PBRMaterial,
-  ParticleSystem,
   Scene,
   ShadowGenerator,
   StandardMaterial,
@@ -25,6 +23,10 @@ import {
 } from './world/JourneyProgress';
 import { WorldGenerator } from './world/WorldGenerator';
 import { ActorAssets, ActorVisual } from './actors/ActorAssets';
+import { VfxPool, type VfxQuality } from './vfx/VfxPool';
+import { CombatFxPresenter } from './vfx/CombatFxPresenter';
+import { SpellVfxPresenter } from './vfx/SpellVfxPresenter';
+import { castDuration } from './vfx/CombatVfxPlan';
 
 export class EvercastScene {
   private readonly engine: Engine;
@@ -34,14 +36,16 @@ export class EvercastScene {
   private readonly world: WorldGenerator;
   private readonly shadows: ShadowGenerator;
   private readonly enemyMeshes = new Map<number, ActorVisual>();
-  private readonly retiring: { actor: ActorVisual; remaining: number }[] = [];
+  private readonly retiring: { id: number; actor: ActorVisual; remaining: number }[] = [];
+  readonly vfx: SpellVfxPresenter;
+  private readonly transientAnchors = new Map<number, { position: Vector3; remaining: number }>();
   private gearSignature = '';
   private mageRecovery = 0;
   private journeyInitialized = false;
   private visualFrontierStage = 1;
   private pendingWorldTravelSeconds = 0;
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, quality: VfxQuality = 'medium') {
     this.engine = new Engine(canvas, true, { preserveDrawingBuffer: false, stencil: true });
     this.scene = new Scene(this.engine);
     this.scene.clearColor = new Color4(0.025, 0.035, 0.06, 1);
@@ -84,7 +88,7 @@ export class EvercastScene {
     const glow = new GlowLayer('glow', this.scene, { blurKernelSize: 24 });
     glow.intensity = 0.32;
     glow.customEmissiveColorSelector = (_mesh, _subMesh, material, result) => {
-      const luminous = material && /boltMat|Arcane \/|Lantern \/ candle|Shrine \/ jade inlay/.test(material.name);
+      const luminous = material && /VFX \/|Arcane \/|Lantern \/ candle|Shrine \/ jade inlay/.test(material.name);
       const color = luminous && (material instanceof PBRMaterial || material instanceof StandardMaterial)
         ? material.emissiveColor : Color3.Black();
       result.set(color.r, color.g, color.b, 1);
@@ -94,6 +98,13 @@ export class EvercastScene {
     this.mage = this.actors.create('mage', 'mage-character', true);
     this.mage.root.position.set(-3.2, 0.025, 0);
     this.mage.root.rotation.y = Math.PI * 0.68;
+    const pool = new VfxPool(this.scene, quality);
+    this.vfx = new SpellVfxPresenter(pool, new CombatFxPresenter(pool, this.scene, camera), {
+      staff: () => this.mage.socketPosition('socket_spell', new Vector3(.55,1.65,0)),
+      mage: () => this.mage.root.position.add(new Vector3(0,1,0)),
+      target: id => this.enemyActor(id)?.root.position.add(new Vector3(0,.65,0)) ?? this.transientAnchors.get(id)?.position,
+      actor: id => this.enemyActor(id),
+    });
 
     this.resize();
     this.engine.runRenderLoop(() => this.scene.render());
@@ -113,12 +124,24 @@ export class EvercastScene {
       if (entry.remaining <= 0) { entry.actor.dispose(); this.retiring.splice(i, 1); }
     }
     for (const enemy of this.enemyMeshes.values()) enemy.update(deltaSeconds);
+    for (const [id,entry] of this.transientAnchors) {
+      entry.remaining -= deltaSeconds;
+      if (entry.remaining<=0) this.transientAnchors.delete(id);
+    }
+    // A target may spawn and die within the same simulation advance. Retain its
+    // presentation anchor without inventing a substitute living target.
+    for (const event of events) if (event.type==='enemy_spawned') {
+      const index=(event.spawned-1)%6;
+      if (this.transientAnchors.size>=96) this.transientAnchors.delete(this.transientAnchors.keys().next().value!);
+      this.transientAnchors.set(event.instanceId,{position:formationPosition(index).addInPlace(new Vector3(0,.65,0)),remaining:1});
+    }
 
     for (const event of events) {
       if (event.type === 'enemy_killed') {
         const mesh = this.enemyMeshes.get(event.instanceId);
         if (mesh) {
-          mesh.play('death'); this.retiring.push({ actor: mesh, remaining: 1.15 });
+          this.retiring.push({ id: event.instanceId, actor: mesh, remaining: 1.8 });
+          if (this.retiring.length>24) this.retiring.shift()!.actor.dispose();
           this.enemyMeshes.delete(event.instanceId);
         }
       }
@@ -126,21 +149,27 @@ export class EvercastScene {
 
     this.syncEnemyVisuals(snapshot, deltaSeconds);
     for (const event of events) {
-      if (event.type === 'spell_cast') { this.mage.play('attack', Math.max(0.08, Math.min(0.75, snapshot.castInterval * 0.85))); this.spawnArcaneBolt(); }
-      if (event.type === 'projectile_hit') this.enemyMeshes.get(event.instanceId)?.play('hit');
+      if (event.type === 'spell_cast') this.mage.play('attack', castDuration(snapshot.castInterval));
       if (event.type === 'enemy_attack') { this.enemyMeshes.get(event.instanceId)?.play('attack'); this.mage.play('hit'); }
       if (event.type === 'mage_defeated') { this.mage.play('death'); this.mageRecovery = 1.2; }
-      if (event.type === 'gear_evolved') this.spawnBurst(this.mage.root.position.add(new Vector3(0, 1, 0)));
+      if (event.type === 'gear_evolved') this.vfx.combat.burst(this.mage.root.position.add(new Vector3(0, 1, 0)), 'arcane');
     }
+    this.vfx.update(deltaSeconds);
+    this.vfx.ingest(snapshot,events);
     if (this.mageRecovery > 0) {
       this.mageRecovery -= deltaSeconds;
       if (this.mageRecovery <= 0) this.mage.revive(walking);
     }
   }
 
+  async whenReady(): Promise<void> {
+    await Promise.all([this.actors.whenReady(), this.vfx.pool.ready]);
+  }
+
   dispose(): void {
     window.removeEventListener('resize', this.resize);
     window.removeEventListener('keydown', this.keydown);
+    this.vfx.dispose(); this.transientAnchors.clear();
     for (const mesh of this.enemyMeshes.values()) mesh.dispose();
     this.enemyMeshes.clear();
     for (const entry of this.retiring) entry.actor.dispose();
@@ -197,8 +226,7 @@ export class EvercastScene {
       if (!livingIds.has(id)) { actor.dispose(); this.enemyMeshes.delete(id); }
     }
     snapshot.enemies.forEach((enemy, index) => {
-      const column = index % 3, row = Math.floor(index / 3);
-      const destination = new Vector3(2.65 + column * 1.15, 0.025, (row - 0.5) * 0.82);
+      const destination = formationPosition(index);
       let actor = this.enemyMeshes.get(enemy.instanceId);
       if (!actor) {
         const id = enemy.modelKey.split('/').pop()!.replaceAll('-', '_');
@@ -212,54 +240,13 @@ export class EvercastScene {
       actor.setLocomotion(Vector3.DistanceSquared(actor.root.position, destination) > 0.004);
     });
   }
-  private spawnArcaneBolt(): void {
-    const target = this.enemyMeshes.values().next().value;
-    if (!target) return;
-    const bolt = MeshBuilder.CreateSphere(`bolt-${performance.now()}`, { diameter: 0.22, segments: 8 }, this.scene);
-    bolt.position = this.mage.socketPosition('socket_spell', new Vector3(0.55, 1.65, 0));
-    const material = new StandardMaterial(`boltMat-${performance.now()}`, this.scene);
-    material.emissiveColor = new Color3(0.45, 0.4, 1);
-    material.disableLighting = true;
-    bolt.material = material;
-
-    const start = bolt.position.clone();
-    const end = target.root.position.add(new Vector3(0, 0.65, 0));
-    const duration = 220;
-    const started = performance.now();
-    const observer = this.scene.onBeforeRenderObservable.add(() => {
-      const t = Math.min((performance.now() - started) / duration, 1);
-      bolt.position = Vector3.Lerp(start, end, t);
-      if (t >= 1) {
-        this.scene.onBeforeRenderObservable.remove(observer);
-        bolt.dispose(false, true);
-      }
-    });
+  private enemyActor(id: number): ActorVisual | undefined {
+    return this.enemyMeshes.get(id) ?? this.retiring.find(entry => entry.id === id)?.actor;
   }
+}
 
-  private spawnBurst(position: Vector3): void {
-    const emitter = MeshBuilder.CreateSphere(`burst-${performance.now()}`, { diameter: 0.05 }, this.scene);
-    emitter.isVisible = false;
-    emitter.position = position;
-    const particles = new ParticleSystem(`particles-${performance.now()}`, 60, this.scene);
-    particles.particleTexture = null;
-    particles.emitter = emitter;
-    particles.minEmitBox = new Vector3(-0.1, -0.1, -0.1);
-    particles.maxEmitBox = new Vector3(0.1, 0.1, 0.1);
-    particles.color1 = new Color4(0.55, 0.45, 1, 1);
-    particles.color2 = new Color4(0.25, 0.7, 1, 1);
-    particles.minLifeTime = 0.15;
-    particles.maxLifeTime = 0.45;
-    particles.minSize = 0.04;
-    particles.maxSize = 0.16;
-    particles.emitRate = 500;
-    particles.direction1 = new Vector3(-2, 1, -2);
-    particles.direction2 = new Vector3(2, 4, 2);
-    particles.gravity = new Vector3(0, -6, 0);
-    particles.start();
-    window.setTimeout(() => particles.stop(), 90);
-    window.setTimeout(() => {
-      particles.dispose();
-      emitter.dispose();
-    }, 800);
-  }
+function formationPosition(index: number): Vector3 {
+  const column=index%3,row=Math.floor(index/3);
+  // Stagger the rear rank so six simultaneous hit/chain endpoints stay visible.
+  return new Vector3(2.4+column*1.2+row*.48,.025,(row-.5)*1.25);
 }

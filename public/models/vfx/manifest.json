@@ -1,0 +1,246 @@
+{
+  "version": 1,
+  "generator": "tools/blender/build_vfx.py",
+  "assets": [
+    {
+      "id": "arcane_core_a",
+      "school": "arcane",
+      "file": "arcane_core_a.glb",
+      "triangles": 100,
+      "pivot": "center",
+      "unit": "meter"
+    },
+    {
+      "id": "arcane_core_b",
+      "school": "arcane",
+      "file": "arcane_core_b.glb",
+      "triangles": 140,
+      "pivot": "center",
+      "unit": "meter"
+    },
+    {
+      "id": "arcane_ring_a",
+      "school": "arcane",
+      "file": "arcane_ring_a.glb",
+      "triangles": 288,
+      "pivot": "center",
+      "unit": "meter"
+    },
+    {
+      "id": "arcane_ring_b",
+      "school": "arcane",
+      "file": "arcane_ring_b.glb",
+      "triangles": 240,
+      "pivot": "center",
+      "unit": "meter"
+    },
+    {
+      "id": "arcane_shard_a",
+      "school": "arcane",
+      "file": "arcane_shard_a.glb",
+      "triangles": 20,
+      "pivot": "center",
+      "unit": "meter"
+    },
+    {
+      "id": "arcane_shard_b",
+      "school": "arcane",
+      "file": "arcane_shard_b.glb",
+      "triangles": 20,
+      "pivot": "center",
+      "unit": "meter"
+    },
+    {
+      "id": "arcane_shard_c",
+      "school": "arcane",
+      "file": "arcane_shard_c.glb",
+      "triangles": 20,
+      "pivot": "center",
+      "unit": "meter"
+    },
+    {
+      "id": "arcane_glyph_a",
+      "school": "arcane",
+      "file": "arcane_glyph_a.glb",
+      "triangles": 432,
+      "pivot": "center",
+      "unit": "meter"
+    },
+    {
+      "id": "arcane_glyph_b",
+      "school": "arcane",
+      "file": "arcane_glyph_b.glb",
+      "triangles": 360,
+      "pivot": "center",
+      "unit": "meter"
+    },
+    {
+      "id": "arcane_spark",
+      "school": "arcane",
+      "file": "arcane_spark.glb",
+      "triangles": 20,
+      "pivot": "center",
+      "unit": "meter"
+    },
+    {
+      "id": "fire_flame_a",
+      "school": "fire",
+      "file": "fire_flame_a.glb",
+      "triangles": 40,
+      "pivot": "center",
+      "unit": "meter"
+    },
+    {
+      "id": "fire_flame_b",
+      "school": "fire",
+      "file": "fire_flame_b.glb",
+      "triangles": 40,
+      "pivot": "center",
+      "unit": "meter"
+    },
+    {
+      "id": "fire_ember",
+      "school": "fire",
+      "file": "fire_ember.glb",
+      "triangles": 20,
+      "pivot": "center",
+      "unit": "meter"
+    },
+    {
+      "id": "fire_fragment_a",
+      "school": "fire",
+      "file": "fire_fragment_a.glb",
+      "triangles": 20,
+      "pivot": "center",
+      "unit": "meter"
+    },
+    {
+      "id": "fire_fragment_b",
+      "school": "fire",
+      "file": "fire_fragment_b.glb",
+      "triangles": 20,
+      "pivot": "center",
+      "unit": "meter"
+    },
+    {
+      "id": "fire_ring",
+      "school": "fire",
+      "file": "fire_ring.glb",
+      "triangles": 288,
+      "pivot": "center",
+      "unit": "meter"
+    },
+    {
+      "id": "frost_shard_a",
+      "school": "frost",
+      "file": "frost_shard_a.glb",
+      "triangles": 20,
+      "pivot": "center",
+      "unit": "meter"
+    },
+    {
+      "id": "frost_shard_b",
+      "school": "frost",
+      "file": "frost_shard_b.glb",
+      "triangles": 20,
+      "pivot": "center",
+      "unit": "meter"
+    },
+    {
+      "id": "frost_shard_c",
+      "school": "frost",
+      "file": "frost_shard_c.glb",
+      "triangles": 20,
+      "pivot": "center",
+      "unit": "meter"
+    },
+    {
+      "id": "frost_ring",
+      "school": "frost",
+      "file": "frost_ring.glb",
+      "triangles": 192,
+      "pivot": "center",
+      "unit": "meter"
+    },
+    {
+      "id": "frost_glyph",
+      "school": "frost",
+      "file": "frost_glyph.glb",
+      "triangles": 288,
+      "pivot": "center",
+      "unit": "meter"
+    },
+    {
+      "id": "frost_cluster",
+      "school": "frost",
+      "file": "frost_cluster.glb",
+      "triangles": 100,
+      "pivot": "center",
+      "unit": "meter"
+    },
+    {
+      "id": "storm_spark",
+      "school": "storm",
+      "file": "storm_spark.glb",
+      "triangles": 20,
+      "pivot": "center",
+      "unit": "meter"
+    },
+    {
+      "id": "storm_shard",
+      "school": "storm",
+      "file": "storm_shard.glb",
+      "triangles": 20,
+      "pivot": "center",
+      "unit": "meter"
+    },
+    {
+      "id": "storm_endpoint",
+      "school": "storm",
+      "file": "storm_endpoint.glb",
+      "triangles": 100,
+      "pivot": "center",
+      "unit": "meter"
+    },
+    {
+      "id": "storm_ring",
+      "school": "storm",
+      "file": "storm_ring.glb",
+      "triangles": 288,
+      "pivot": "center",
+      "unit": "meter"
+    },
+    {
+      "id": "blood_droplet",
+      "school": "blood",
+      "file": "blood_droplet.glb",
+      "triangles": 40,
+      "pivot": "center",
+      "unit": "meter"
+    },
+    {
+      "id": "blood_glyph",
+      "school": "blood",
+      "file": "blood_glyph.glb",
+      "triangles": 432,
+      "pivot": "center",
+      "unit": "meter"
+    },
+    {
+      "id": "blood_ring",
+      "school": "blood",
+      "file": "blood_ring.glb",
+      "triangles": 288,
+      "pivot": "center",
+      "unit": "meter"
+    },
+    {
+      "id": "blood_endpoint",
+      "school": "blood",
+      "file": "blood_endpoint.glb",
+      "triangles": 100,
+      "pivot": "center",
+      "unit": "meter"
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "drained": {
+    "active": 0,
+    "animationGroups": 5,
+    "chilled": 0,
+    "jobs": 0,
+    "lights": 0,
+    "materials": 147,
+    "meshes": 96,
+    "paths": 32,
+    "sceneLights": 4,
+    "sceneMeshes": 2157,
+    "templates": 30
+  },
+  "early": {
+    "active": 128,
+    "animationGroups": 35,
+    "chilled": 6,
+    "jobs": 371,
+    "lights": 0,
+    "materials": 147,
+    "meshes": 96,
+    "paths": 32,
+    "sceneLights": 4,
+    "sceneMeshes": 2337,
+    "templates": 30
+  },
+  "late": {
+    "active": 128,
+    "animationGroups": 35,
+    "chilled": 6,
+    "jobs": 373,
+    "lights": 0,
+    "materials": 147,
+    "meshes": 96,
+    "paths": 32,
+    "sceneLights": 4,
+    "sceneMeshes": 2337,
+    "templates": 30
+  }
+}

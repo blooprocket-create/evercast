@@ -70,6 +70,16 @@ describe('the Blender cast', () => {
     expect(Vector3.Distance(before, mage.socketPosition('socket_spell', Vector3.Zero()))).toBeGreaterThan(0.05);
   });
 
+  it('flashes only the hit actor, expires the overlay, and preserves shared materials',async()=>{
+    const a=await create('briarling'),b=await create('briarling');
+    const materials=a.root.getChildMeshes().map(m=>m.material);
+    a.flash(true);a.update(.01);b.update(.01);
+    expect(a.root.getChildMeshes().some(m=>m.renderOverlay)).toBe(true);
+    expect(b.root.getChildMeshes().some(m=>m.renderOverlay)).toBe(false);
+    a.update(.2);expect(a.root.getChildMeshes().some(m=>m.renderOverlay)).toBe(false);
+    expect(a.root.getChildMeshes().map(m=>m.material)).toEqual(materials);
+  });
+
   it('does not resurrect a disposed actor after its GLB arrives', async () => {
     library.dispose();
     const container = await loadLocal('/models/characters/moss_slime.glb', scene);

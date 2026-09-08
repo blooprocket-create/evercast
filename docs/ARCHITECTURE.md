@@ -152,7 +152,7 @@ Coverage includes deterministic advancement, multi-enemy overlap, push/farm beha
 - gear-tree point sources and authored gear trees,
 - final enemy/zone tuning,
 - story content,
-- pooled endgame VFX implementation,
+- further batching and platform tuning of endgame VFX,
 - analytical endgame offline simulation,
 - analytics/cloud saves/accounts.
 
@@ -178,3 +178,13 @@ Changing equipment never scales anatomy or mutates shared material state.
 and two bounded local lights. Idle animation does not advance journey distance.
 Environment templates are matte, except for restrained metal and emissive accents.
 All GLB requests respect the Vite base path and handle late completion during teardown.
+
+## Combat VFX
+
+`CombatVfxPlan` reads authoritative hit provenance; `SpellVfxPresenter` schedules
+short cosmetic flights and links, while `CombatFxPresenter` owns hit/death feedback.
+`VfxPool` shares the Blender kit and bounds reusable meshes, path buffers, and jobs
+through three quality presets. Presentation-only `healing` and `controlDelaySeconds`
+metadata report actual applied results; no combat calculations moved into Babylon.
+See [Combat VFX](COMBAT_VFX.md) for timing, resource ownership, caps, test coverage,
+the development review fixture, captures, and measured performance limitations.

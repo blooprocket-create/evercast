@@ -6,6 +6,25 @@ import { createInitialGameState } from '../state';
 import { CombatSystem } from './CombatSystem';
 
 describe('CombatSystem', () => {
+  it('reports only actual capped healing and control applied to surviving targets',()=>{
+    const state=createInitialGameState(DEFAULT_ENGINE_CONFIG),events:GameEvent[]=[];
+    state.run.mage.hp=big(99.95);state.run.mage.maxHp=big(100);
+    state.run.spell={baseDamage:'1',castInterval:1,projectileCount:1,critChance:0,critMultiplier:2,modifiers:[
+      {id:'leech',kind:'combat',action:{kind:'leech',fraction:1}},
+      {id:'control',kind:'combat',action:{kind:'control',delaySeconds:.25}},
+    ]};
+    state.run.enemies=[{instanceId:1,definitionId:'target',name:'target',stage:1,boss:false,hp:big(100),maxHp:big(100),attackDamage:big(0),attackInterval:1,attackCooldown:1}];
+    const combat=new CombatSystem(DEFAULT_ENGINE_CONFIG,e=>events.push(e));
+    combat.cast(state.run,state.equipment);
+    let hit=events.find(e=>e.type==='projectile_hit')!;
+    expect(Number(hit.healing)).toBeCloseTo(.05);expect(hit.controlDelaySeconds).toBe(.25);
+    expect(state.run.enemies[0].attackCooldown).toBe(1.25);
+    events.length=0;combat.cast(state.run,state.equipment);
+    hit=events.find(e=>e.type==='projectile_hit')!;expect(hit.healing).toBe('0');
+    state.run.enemies[0].hp=big(1);events.length=0;combat.cast(state.run,state.equipment);
+    hit=events.find(e=>e.type==='projectile_hit')!;expect(hit.controlDelaySeconds).toBe(0);
+    expect(state.run.enemies[0].attackCooldown).toBe(1.5);
+  });
   it('heals leech from actual damage dealt instead of overkill damage', () => {
     const state = createInitialGameState(DEFAULT_ENGINE_CONFIG);
     state.run.mage.hp = big(1);
@@ -28,11 +47,15 @@ describe('CombatSystem', () => {
       attackCooldown: 1,
     }];
 
-    const combat = new CombatSystem(DEFAULT_ENGINE_CONFIG, () => {});
+    const events: GameEvent[]=[];
+    const combat = new CombatSystem(DEFAULT_ENGINE_CONFIG, e=>events.push(e));
     combat.cast(state.run, state.equipment);
 
     expect(state.run.enemies[0].hp.toNumber()).toBe(0);
     expect(state.run.mage.hp.toNumber()).toBeCloseTo(1.1);
+    const hit=events.find(e=>e.type==='projectile_hit');
+    expect(Number(hit?.healing)).toBeCloseTo(.1);
+    expect(hit?.controlDelaySeconds).toBe(0);
   });
 
   it('emits enough provenance for presentation to distinguish direct, pierce, chain and splash hits', () => {

@@ -1,4 +1,5 @@
-import { AnimationGroup, AssetContainer, LoadAssetContainerAsync, MeshBuilder, PBRMaterial, Color3, Scene, ShadowGenerator, TransformNode, Vector3, Quaternion } from '@babylonjs/core';
+import { AbstractMesh, AnimationGroup, AssetContainer, LoadAssetContainerAsync, MeshBuilder, PBRMaterial, Color3, Scene, ShadowGenerator, TransformNode, Vector3, Quaternion } from '@babylonjs/core';
+import '@babylonjs/core/Rendering/outlineRenderer';
 import '@babylonjs/loaders/glTF/2.0/glTFLoader';
 import '@babylonjs/loaders/glTF/2.0/Extensions/KHR_materials_specular';
 import type { GearSnapshot } from '../../engine/types';
@@ -46,7 +47,8 @@ export class ActorAssets {
     void request.then((container) => {
       if (this.disposed || actor.root.isDisposed() || this.scene.isDisposed) return;
       if (!container) { actor.fallback(mage); return; }
-      const instance = container.instantiateModelsToScene((name) => name, false, { doNotInstantiate: false });
+      // Clones share geometry/materials, but permit independent hit overlays.
+      const instance = container.instantiateModelsToScene((name) => name, false, { doNotInstantiate: true });
       for (const root of instance.rootNodes) root.parent = actor.root;
       for (const mesh of actor.root.getChildMeshes()) {
         mesh.isPickable = false;
@@ -60,6 +62,8 @@ export class ActorAssets {
     });
     return actor;
   }
+
+  async whenReady(): Promise<void> { await Promise.all(this.requests.values()); }
 
   dispose(): void {
     this.disposed = true;
@@ -82,11 +86,16 @@ export class ActorVisual {
   private gear: readonly GearSnapshot[] = [];
   private dying = false;
   private playbackDuration?: number;
+  private flashTime = 0;
+  private flashMeshes: AbstractMesh[] = [];
+  private sockets = new Map<string, TransformNode>();
 
   constructor(name: string, scene: Scene) { this.root = new TransformNode(name, scene); }
 
   attach(groups: AnimationGroup[], release: () => void): void {
     this.release = release;
+    this.flashMeshes = this.root.getChildMeshes().filter(m => m.getTotalVertices()>0);
+    this.sockets = new Map(this.root.getDescendants().filter((n): n is TransformNode => n instanceof TransformNode && n.name.startsWith('socket_')).map(n=>[n.name,n]));
     this.groups = new Map(groups.map((g) => [g.name, g]));
     for (const group of groups) group.stop();
     this.rest = this.root.getDescendants(false).filter((n): n is TransformNode => n instanceof TransformNode).map((node) => ({
@@ -112,6 +121,11 @@ export class ActorVisual {
   }
 
   update(delta: number): void {
+    this.flashTime = Math.max(0,this.flashTime-delta);
+    for (const mesh of this.flashMeshes) {
+      mesh.renderOverlay=this.flashTime>0;
+      mesh.overlayAlpha=this.flashTime*2.2;
+    }
     this.clock += Math.max(0, delta);
     const group = this.groups.get(this.state);
     const fps = group?.targetedAnimations[0]?.animation.framePerSecond ?? 60;
@@ -132,7 +146,7 @@ export class ActorVisual {
   }
 
   socketPosition(name: string, fallback: Vector3): Vector3 {
-    const socket = this.root.getDescendants().find((node) => node.name === name);
+    const socket = this.sockets.get(name);
     if (socket instanceof TransformNode) { socket.computeWorldMatrix(true); return socket.getAbsolutePosition().clone(); }
     return this.root.position.add(fallback);
   }
@@ -147,7 +161,12 @@ export class ActorVisual {
     this.root.metadata.assetState = 'fallback';
   }
 
-  dispose(): void { this.release?.(); this.root.dispose(); this.groups.clear(); this.rest = []; }
+  flash(critical = false): void {
+    this.flashTime = critical ? .095 : .065;
+    for (const mesh of this.flashMeshes) mesh.overlayColor.set(critical ? 1 : .65,.7,1);
+  }
+
+  dispose(): void { this.sockets.clear();this.flashMeshes=[]; this.release?.(); this.root.dispose(); this.groups.clear(); this.rest = []; }
 
   private start(state: ActorState, duration?: number): void {
     for (const group of this.groups.values()) group.stop();
