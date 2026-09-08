@@ -18,7 +18,6 @@ function testEnemy(stage = 1): EnemyState {
     attackDamage: big(0),
     attackInterval: 10,
     attackCooldown: 10,
-    reward: big(999),
   };
 }
 
