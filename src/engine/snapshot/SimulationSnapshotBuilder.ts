@@ -1,4 +1,6 @@
 import type { EngineConfig } from '../config';
+import type { ContentCatalog } from '../../content/types';
+import { requireEnemy } from '../../content/catalog';
 import { GEAR_SLOT_ORDER } from '../gear/GearCatalog';
 import { compileGearStats, gearDisplayData } from '../gear/GearSystem';
 import type { GameState } from '../model';
@@ -11,6 +13,7 @@ import type { SimulationSnapshot } from '../types';
 export interface SimulationSnapshotBuildContext {
   state: GameState;
   config: EngineConfig;
+  catalog: ContentCatalog;
   canRebirth: boolean;
   lastEvent: string;
 }
@@ -18,6 +21,7 @@ export interface SimulationSnapshotBuildContext {
 export function buildSimulationSnapshot({
   state,
   config,
+  catalog,
   canRebirth,
   lastEvent,
 }: SimulationSnapshotBuildContext): SimulationSnapshot {
@@ -54,6 +58,7 @@ export function buildSimulationSnapshot({
     enemyName: target?.name ?? (run.phase === 'combat' ? 'Incoming…' : 'Road ahead'),
     enemies: run.enemies.map((enemy) => ({
       instanceId: enemy.instanceId,
+      modelKey: requireEnemy(catalog, enemy.definitionId).modelKey,
       name: enemy.name,
       boss: enemy.boss,
       hp: quantity(enemy.hp),

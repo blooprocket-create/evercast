@@ -116,6 +116,16 @@ The eight persistent gear slots are Helm, Staff, Spellbook, Robe, Boots, Necklac
 
 Authored gear names, descriptions and tuning live in `src/content`; engine gear modules own state/evolution mechanics.
 
+## Environment assets
+
+`world/EnvironmentAssets` owns the scene-local GLB template cache and creates instances
+with shared geometry and materials. `EnvironmentPropCatalog` controls weighted biome
+selection and scale. `WorldGenerator` owns scrolling chunk roots, roadside placement,
+arrival landmarks, and cathedral assemblies. Disposing a chunk removes its instances;
+disposing the world releases the templates and any late downloads. Asset loading never
+changes deterministic combat or progression. The authored pack lives in
+`public/models/environment`, with editable Blender source in `art/environment`.
+
 ## Snapshots and coordinator size
 
 `EvercastSimulation` is the orchestration boundary, not a dumping ground for every derived read model. Snapshot construction lives in `src/engine/snapshot/SimulationSnapshotBuilder.ts`, and event-to-text formatting lives in `src/engine/events/describeGameEvent.ts`.
@@ -142,6 +152,29 @@ Coverage includes deterministic advancement, multi-enemy overlap, push/farm beha
 - gear-tree point sources and authored gear trees,
 - final enemy/zone tuning,
 - story content,
-- production animation/VFX architecture and pooling,
+- pooled endgame VFX implementation,
 - analytical endgame offline simulation,
 - analytics/cloud saves/accounts.
+
+The architecture exposes seams for all of them without pretending their designs are already settled.
+
+## Art and animation presentation
+
+`ActorAssets` caches Blender GLB templates. Each combatant has independent transform
+targets and animation groups while repeated parts share geometry and materials.
+`ActorVisual` advances named idle, walk, attack, hit, and death clips on a presentation
+clock, restoring the rest pose between states. Spell casts originate at the staff
+socket. Cast animation duration adapts to the spell interval without delaying damage.
+Enemy deaths briefly retain their visual, then release its animation groups and meshes.
+The mage recovers from the defeat pose while the simulation resumes its existing flow.
+
+Snapshots expose the content catalog's enemy `modelKey`; no renderer imports enter the
+engine. Gear slots expose five cumulative modeled upgrades for the six existing tiers.
+Changing equipment never scales anatomy or mutates shared material state.
+
+`WorldTerrain` generates matching world-space chunk edges and a level combat lane.
+`WorldBackdrop` owns the sky and distant hills independently of chunk lifetime.
+`WorldGenerator` composes groves, verge vegetation, arrival landmarks, shadows, wind,
+and two bounded local lights. Idle animation does not advance journey distance.
+Environment templates are matte, except for restrained metal and emissive accents.
+All GLB requests respect the Vite base path and handle late completion during teardown.

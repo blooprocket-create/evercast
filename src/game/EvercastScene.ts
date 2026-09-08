@@ -3,19 +3,20 @@ import {
   Color3,
   Color4,
   DirectionalLight,
+  DefaultRenderingPipeline,
   Engine,
   GlowLayer,
   HemisphericLight,
-  Mesh,
+  ImageProcessingConfiguration,
   MeshBuilder,
   PBRMaterial,
   ParticleSystem,
   Scene,
+  ShadowGenerator,
   StandardMaterial,
   Vector3,
 } from '@babylonjs/core';
 import type { GameEvent } from '../engine/events/GameEvent';
-import type { GearSlot } from '../engine/gear/types';
 import type { SimulationSnapshot } from '../engine/types';
 import {
   earnedJourneyStages,
@@ -23,16 +24,19 @@ import {
   WORLD_TRAVEL_SECONDS_PER_STAGE,
 } from './world/JourneyProgress';
 import { WorldGenerator } from './world/WorldGenerator';
+import { ActorAssets, ActorVisual } from './actors/ActorAssets';
 
 export class EvercastScene {
   private readonly engine: Engine;
   private readonly scene: Scene;
-  private readonly mage: Mesh;
+  private readonly mage: ActorVisual;
+  private readonly actors: ActorAssets;
   private readonly world: WorldGenerator;
-  private readonly enemyMeshes = new Map<number, Mesh>();
-  private readonly gearMeshes = new Map<GearSlot, Mesh>();
-  private readonly gearTiers = new Map<GearSlot, number>();
-  private travelPhase = 0;
+  private readonly shadows: ShadowGenerator;
+  private readonly enemyMeshes = new Map<number, ActorVisual>();
+  private readonly retiring: { actor: ActorVisual; remaining: number }[] = [];
+  private gearSignature = '';
+  private mageRecovery = 0;
   private journeyInitialized = false;
   private visualFrontierStage = 1;
   private pendingWorldTravelSeconds = 0;
@@ -42,63 +46,120 @@ export class EvercastScene {
     this.scene = new Scene(this.engine);
     this.scene.clearColor = new Color4(0.025, 0.035, 0.06, 1);
 
-    const camera = new ArcRotateCamera('camera', -Math.PI / 2, Math.PI / 2.35, 15, new Vector3(1.4, 1.25, 0), this.scene);
-    camera.lowerRadiusLimit = 15;
-    camera.upperRadiusLimit = 15;
+    const camera = new ArcRotateCamera('camera', -Math.PI / 2, 1.31, 17.5, new Vector3(0.9, 1.15, 1), this.scene);
+    camera.lowerRadiusLimit = 17.5;
+    camera.upperRadiusLimit = 17.5;
+    camera.fov = 0.68;
+    camera.minZ = 0.2;
+    camera.maxZ = 180;
     camera.inputs.clear();
+
+    const presentation = new DefaultRenderingPipeline('environment finish', true, this.scene, [camera]);
+    presentation.samples = 4;
+    presentation.fxaaEnabled = true;
+    presentation.bloomEnabled = false;
+    this.scene.imageProcessingConfiguration.toneMappingEnabled = true;
+    this.scene.imageProcessingConfiguration.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
+    this.scene.imageProcessingConfiguration.exposure = 1.2;
+    this.scene.imageProcessingConfiguration.contrast = 1.04;
+    this.scene.imageProcessingConfiguration.vignetteEnabled = true;
+    this.scene.imageProcessingConfiguration.vignetteWeight = 1.25;
+    this.scene.imageProcessingConfiguration.vignetteColor = new Color4(0.04, 0.055, 0.045, 0);
 
     const skyLight = new HemisphericLight('sky', new Vector3(0, 1, 0), this.scene);
     skyLight.intensity = 0.65;
-    const sun = new DirectionalLight('sun', new Vector3(-0.7, -1, -0.4), this.scene);
-    sun.position = new Vector3(8, 12, -4);
-    sun.intensity = 2.2;
+    const sun = new DirectionalLight('sun', new Vector3(0.5, -1, 0.45), this.scene);
+    sun.position = new Vector3(-10, 20, -9);
+    sun.intensity = 1.5;
+    sun.shadowMinZ = 1;
+    sun.shadowMaxZ = 65;
+    sun.shadowFrustumSize = 38;
+    this.shadows = new ShadowGenerator(2048, sun);
+    this.shadows.usePercentageCloserFiltering = true;
+    this.shadows.filteringQuality = ShadowGenerator.QUALITY_MEDIUM;
+    this.shadows.bias = 0.0005;
+    this.shadows.normalBias = 0.04;
+    this.shadows.setDarkness(0.22);
 
-    new GlowLayer('glow', this.scene, { blurKernelSize: 32 }).intensity = 0.7;
-    this.world = new WorldGenerator(this.scene, skyLight, sun);
-    this.mage = this.createMage();
+    const glow = new GlowLayer('glow', this.scene, { blurKernelSize: 24 });
+    glow.intensity = 0.32;
+    glow.customEmissiveColorSelector = (_mesh, _subMesh, material, result) => {
+      const luminous = material && /boltMat|Arcane \/|Lantern \/ candle|Shrine \/ jade inlay/.test(material.name);
+      const color = luminous && (material instanceof PBRMaterial || material instanceof StandardMaterial)
+        ? material.emissiveColor : Color3.Black();
+      result.set(color.r, color.g, color.b, 1);
+    };
+    this.world = new WorldGenerator(this.scene, skyLight, sun, this.shadows);
+    this.actors = new ActorAssets(this.scene, this.shadows);
+    this.mage = this.actors.create('mage', 'mage-character', true);
+    this.mage.root.position.set(-3.2, 0.025, 0);
+    this.mage.root.rotation.y = Math.PI * 0.68;
 
+    this.resize();
     this.engine.runRenderLoop(() => this.scene.render());
     window.addEventListener('resize', this.resize);
     window.addEventListener('keydown', this.keydown);
   }
 
   sync(snapshot: SimulationSnapshot, deltaSeconds: number, events: readonly GameEvent[]): void {
-    this.travelPhase += deltaSeconds;
     const walking = snapshot.phase === 'travel';
     this.syncJourney(snapshot, deltaSeconds, walking);
-    this.syncGearVisuals(snapshot);
+    const gearSignature = snapshot.gear.map((g) => `${g.slot}:${g.evolutionTier}`).join('|');
+    if (gearSignature !== this.gearSignature) { this.mage.setGear(snapshot.gear); this.gearSignature = gearSignature; }
+    this.mage.setLocomotion(walking);
+    this.mage.update(deltaSeconds);
+    for (let i = this.retiring.length - 1; i >= 0; i--) {
+      const entry = this.retiring[i]; entry.remaining -= deltaSeconds; entry.actor.update(deltaSeconds);
+      if (entry.remaining <= 0) { entry.actor.dispose(); this.retiring.splice(i, 1); }
+    }
+    for (const enemy of this.enemyMeshes.values()) enemy.update(deltaSeconds);
 
     for (const event of events) {
       if (event.type === 'enemy_killed') {
         const mesh = this.enemyMeshes.get(event.instanceId);
-        if (mesh) this.spawnBurst(mesh.position.clone());
+        if (mesh) {
+          mesh.play('death'); this.retiring.push({ actor: mesh, remaining: 1.15 });
+          this.enemyMeshes.delete(event.instanceId);
+        }
       }
     }
 
-    this.syncEnemyVisuals(snapshot);
-    this.mage.position.y = 0.65 + (walking ? Math.sin(this.travelPhase * 8) * 0.035 : 0);
-    this.mage.rotation.z = walking ? Math.sin(this.travelPhase * 8) * 0.01 : 0;
-
+    this.syncEnemyVisuals(snapshot, deltaSeconds);
     for (const event of events) {
-      if (event.type === 'spell_cast') this.spawnArcaneBolt();
-      if (event.type === 'mage_defeated' || event.type === 'gear_evolved') this.spawnBurst(this.mage.position.clone());
+      if (event.type === 'spell_cast') { this.mage.play('attack', Math.max(0.08, Math.min(0.75, snapshot.castInterval * 0.85))); this.spawnArcaneBolt(); }
+      if (event.type === 'projectile_hit') this.enemyMeshes.get(event.instanceId)?.play('hit');
+      if (event.type === 'enemy_attack') { this.enemyMeshes.get(event.instanceId)?.play('attack'); this.mage.play('hit'); }
+      if (event.type === 'mage_defeated') { this.mage.play('death'); this.mageRecovery = 1.2; }
+      if (event.type === 'gear_evolved') this.spawnBurst(this.mage.root.position.add(new Vector3(0, 1, 0)));
+    }
+    if (this.mageRecovery > 0) {
+      this.mageRecovery -= deltaSeconds;
+      if (this.mageRecovery <= 0) this.mage.revive(walking);
     }
   }
 
   dispose(): void {
     window.removeEventListener('resize', this.resize);
     window.removeEventListener('keydown', this.keydown);
-    for (const mesh of this.enemyMeshes.values()) mesh.dispose(false, true);
+    for (const mesh of this.enemyMeshes.values()) mesh.dispose();
     this.enemyMeshes.clear();
+    for (const entry of this.retiring) entry.actor.dispose();
+    this.retiring.length = 0;
+    this.mage.dispose(); this.actors.dispose();
     this.world.dispose();
     this.scene.dispose();
     this.engine.dispose();
   }
 
-  private readonly resize = (): void => this.engine.resize();
+  private readonly resize = (): void => {
+    this.engine.resize();
+    const aspect = this.engine.getRenderWidth() / Math.max(1, this.engine.getRenderHeight());
+    // Keep both combat formations in frame on portrait screens.
+    if (this.scene.activeCamera) this.scene.activeCamera.fov = Math.max(0.68, 2 * Math.atan(11 / (35 * aspect)));
+  };
 
   private readonly keydown = (event: KeyboardEvent): void => {
-    if (event.key.toLowerCase() === 'n') this.world.jumpToNextBiome();
+    if (import.meta.env.DEV && event.key.toLowerCase() === 'n' && !event.repeat) this.world.jumpToNextBiome(event.shiftKey);
   };
 
   private syncJourney(snapshot: SimulationSnapshot, deltaSeconds: number, walking: boolean): void {
@@ -127,142 +188,42 @@ export class EvercastScene {
       return;
     }
 
-    this.world.update(0, false);
+    this.world.update(deltaSeconds, false);
   }
 
-  private createMage(): Mesh {
-    const body = MeshBuilder.CreateCylinder('mage', { height: 1.25, diameterTop: 0.42, diameterBottom: 0.9, tessellation: 10 }, this.scene);
-    body.position = new Vector3(-3.2, 0.65, 0);
-    body.material = this.gearMaterial('robeMat', new Color3(0.16, 0.13, 0.34));
-    this.gearMeshes.set('robe', body);
-
-    const head = MeshBuilder.CreateSphere('mageHead', { diameter: 0.48, segments: 12 }, this.scene);
-    head.parent = body;
-    head.position.y = 0.78;
-    const headMat = new PBRMaterial('headMat', this.scene);
-    headMat.albedoColor = new Color3(0.72, 0.57, 0.44);
-    headMat.roughness = 0.8;
-    head.material = headMat;
-
-    const hat = MeshBuilder.CreateCylinder('hat', { height: 0.85, diameterTop: 0, diameterBottom: 0.9, tessellation: 12 }, this.scene);
-    hat.parent = body;
-    hat.position.y = 1.25;
-    hat.rotation.z = -0.15;
-    hat.material = this.gearMaterial('helmMat', new Color3(0.13, 0.11, 0.28));
-    this.gearMeshes.set('helm', hat);
-
-    const staff = MeshBuilder.CreateCylinder('staff', { height: 1.8, diameter: 0.075, tessellation: 8 }, this.scene);
-    staff.parent = body;
-    staff.position = new Vector3(0.62, 0.12, -0.05);
-    staff.rotation.z = -0.18;
-    staff.material = this.gearMaterial('staffMat', new Color3(0.28, 0.18, 0.09));
-    const staffGem = MeshBuilder.CreatePolyhedron('staffGem', { type: 2, size: 0.16 }, this.scene);
-    staffGem.parent = staff;
-    staffGem.position.y = 1.02;
-    staffGem.material = this.gearMaterial('staffGemMat', new Color3(0.25, 0.2, 0.55));
-    this.gearMeshes.set('staff', staff);
-
-    const book = MeshBuilder.CreateBox('spellbook', { width: 0.42, height: 0.52, depth: 0.12 }, this.scene);
-    book.parent = body;
-    book.position = new Vector3(-0.48, 0.25, -0.22);
-    book.rotation.z = 0.12;
-    book.material = this.gearMaterial('spellbookMat', new Color3(0.25, 0.08, 0.12));
-    this.gearMeshes.set('spellbook', book);
-
-    const boots = MeshBuilder.CreateBox('boots', { width: 0.56, height: 0.18, depth: 0.46 }, this.scene);
-    boots.parent = body;
-    boots.position = new Vector3(0, -0.69, 0.02);
-    boots.material = this.gearMaterial('bootsMat', new Color3(0.14, 0.08, 0.05));
-    this.gearMeshes.set('boots', boots);
-
-    const necklace = MeshBuilder.CreateTorus('necklace', { diameter: 0.28, thickness: 0.035, tessellation: 12 }, this.scene);
-    necklace.parent = body;
-    necklace.position = new Vector3(0, 0.55, -0.24);
-    necklace.rotation.x = Math.PI / 2;
-    necklace.material = this.gearMaterial('necklaceMat', new Color3(0.42, 0.34, 0.12));
-    this.gearMeshes.set('necklace', necklace);
-
-    const ringLeft = MeshBuilder.CreateSphere('ringLeft', { diameter: 0.09, segments: 6 }, this.scene);
-    ringLeft.parent = body;
-    ringLeft.position = new Vector3(-0.53, 0.08, -0.15);
-    ringLeft.material = this.gearMaterial('ringLeftMat', new Color3(0.34, 0.31, 0.18));
-    this.gearMeshes.set('ringLeft', ringLeft);
-
-    const ringRight = MeshBuilder.CreateSphere('ringRight', { diameter: 0.09, segments: 6 }, this.scene);
-    ringRight.parent = body;
-    ringRight.position = new Vector3(0.49, 0.08, -0.16);
-    ringRight.material = this.gearMaterial('ringRightMat', new Color3(0.34, 0.31, 0.18));
-    this.gearMeshes.set('ringRight', ringRight);
-    return body;
-  }
-
-  private gearMaterial(name: string, color: Color3): PBRMaterial {
-    const material = new PBRMaterial(name, this.scene);
-    material.albedoColor = color;
-    material.metallic = 0.05;
-    material.roughness = 0.72;
-    return material;
-  }
-
-  private syncGearVisuals(snapshot: SimulationSnapshot): void {
-    for (const piece of snapshot.gear) {
-      if (this.gearTiers.get(piece.slot) === piece.evolutionTier) continue;
-      this.gearTiers.set(piece.slot, piece.evolutionTier);
-      const mesh = this.gearMeshes.get(piece.slot);
-      if (!mesh) continue;
-      if (mesh.material instanceof PBRMaterial) {
-        const tier = piece.evolutionTier;
-        mesh.material.metallic = Math.min(0.65, 0.05 + tier * 0.11);
-        mesh.material.roughness = Math.max(0.28, 0.72 - tier * 0.07);
-        mesh.material.emissiveColor = new Color3(0.06 * tier, 0.045 * tier, 0.1 * tier);
-      }
-      if (piece.slot !== 'robe') mesh.scaling.setAll(1 + piece.evolutionTier * 0.08);
-    }
-  }
-
-  private syncEnemyVisuals(snapshot: SimulationSnapshot): void {
+  private syncEnemyVisuals(snapshot: SimulationSnapshot, deltaSeconds: number): void {
     const livingIds = new Set(snapshot.enemies.map((enemy) => enemy.instanceId));
-    for (const [id, mesh] of this.enemyMeshes) {
-      if (!livingIds.has(id)) {
-        mesh.dispose(false, true);
-        this.enemyMeshes.delete(id);
-      }
+    for (const [id, actor] of this.enemyMeshes) {
+      if (!livingIds.has(id)) { actor.dispose(); this.enemyMeshes.delete(id); }
     }
-
     snapshot.enemies.forEach((enemy, index) => {
-      let mesh = this.enemyMeshes.get(enemy.instanceId);
-      if (!mesh) {
-        mesh = this.createEnemy(enemy.instanceId, enemy.boss);
-        this.enemyMeshes.set(enemy.instanceId, mesh);
+      const column = index % 3, row = Math.floor(index / 3);
+      const destination = new Vector3(2.65 + column * 1.15, 0.025, (row - 0.5) * 0.82);
+      let actor = this.enemyMeshes.get(enemy.instanceId);
+      if (!actor) {
+        const id = enemy.modelKey.split('/').pop()!.replaceAll('-', '_');
+        actor = this.actors.create(id, `enemy-${enemy.instanceId}`);
+        actor.root.rotation.y = -Math.PI * 0.68;
+        actor.root.scaling.setAll(enemy.boss ? 1.12 : 1);
+        actor.root.position.copyFrom(destination).addInPlace(new Vector3(1.2, 0, 0));
+        this.enemyMeshes.set(enemy.instanceId, actor);
       }
-      const column = index % 3;
-      const row = Math.floor(index / 3);
-      mesh.position = new Vector3(3.05 + column * 0.72, 0.68, (row - 0.5) * 0.85);
-      mesh.scaling.setAll(enemy.boss ? 1.45 : 1);
+      Vector3.LerpToRef(actor.root.position, destination, 1 - Math.exp(-deltaSeconds * 7), actor.root.position);
+      actor.setLocomotion(Vector3.DistanceSquared(actor.root.position, destination) > 0.004);
     });
   }
-
-  private createEnemy(instanceId: number, boss: boolean): Mesh {
-    const enemy = MeshBuilder.CreatePolyhedron(`enemy-${instanceId}`, { type: 2, size: 0.75 }, this.scene);
-    const material = new PBRMaterial(`enemyMat-${instanceId}`, this.scene);
-    material.albedoColor = boss ? new Color3(0.42, 0.22, 0.18) : new Color3(0.2, 0.48, 0.2);
-    material.roughness = 0.75;
-    enemy.material = material;
-    return enemy;
-  }
-
   private spawnArcaneBolt(): void {
-    const target = this.enemyMeshes.values().next().value as Mesh | undefined;
+    const target = this.enemyMeshes.values().next().value;
     if (!target) return;
     const bolt = MeshBuilder.CreateSphere(`bolt-${performance.now()}`, { diameter: 0.22, segments: 8 }, this.scene);
-    bolt.position = this.mage.position.add(new Vector3(0.55, 0.35, 0));
+    bolt.position = this.mage.socketPosition('socket_spell', new Vector3(0.55, 1.65, 0));
     const material = new StandardMaterial(`boltMat-${performance.now()}`, this.scene);
     material.emissiveColor = new Color3(0.45, 0.4, 1);
     material.disableLighting = true;
     bolt.material = material;
 
     const start = bolt.position.clone();
-    const end = target.position.clone();
+    const end = target.root.position.add(new Vector3(0, 0.65, 0));
     const duration = 220;
     const started = performance.now();
     const observer = this.scene.onBeforeRenderObservable.add(() => {

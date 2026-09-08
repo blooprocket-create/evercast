@@ -42,6 +42,24 @@ button { color: inherit; }
 .offline-card { position: absolute; top: 86px; left: 24px; max-width: 460px; padding: 8px 12px; border-radius: 10px; color: #c7ccda; font-size: 11px; }
 .prototype-hint { position: absolute; right: 24px; bottom: 24px; padding: 7px 10px; border-radius: 10px; color: #9199aa; font-size: 10px; }
 
+/* Leave the landscape visible; interface chrome sits at the edges of the scene. */
+.hud::before { content: ""; position: absolute; inset: 0 0 auto; height: 180px; background: linear-gradient(rgba(10,18,19,.6), transparent); pointer-events: none; }
+.topbar { position: relative; background: transparent; border: 0; box-shadow: none; backdrop-filter: none; padding: 8px 10px; }
+.topbar > div:first-child { gap: 6px; }
+.topbar .eyebrow { font-family: Georgia, "Times New Roman", serif; font-size: 21px; letter-spacing: .23em; color: #eee5c9; text-shadow: 0 2px 16px #142323; }
+.topbar > div:first-child > strong { font-size: 12px; font-weight: 500; letter-spacing: .04em; color: #d4d9c9; }
+.mode-pill { font-size: 9px; background: rgba(8,17,19,.35); }
+.resource-stack { gap: 24px; align-self: flex-start; padding: 10px 16px; border: 1px solid rgba(220,230,207,.12); border-radius: 4px; background: rgba(10,19,22,.55); backdrop-filter: blur(10px); }
+.resource span { font-size: 9px; color: #b8bfad; }
+.resource strong { color: #eee5c9; font-size: 16px; }
+.enemy-card { top: auto; bottom: 76px; width: min(380px, calc(100% - 48px)); border-radius: 6px; border-color: rgba(190,202,177,.17); background: rgba(9,18,22,.78); padding: 10px 14px; }
+.health-track { height: 4px; }
+.enemy-row { margin-bottom: 6px; font-size: 12px; }
+.mage-row { margin-top: 7px; font-size: 10px; }
+.event-line { bottom: 30px; border: 0; box-shadow: none; background: rgba(10,19,22,.32); backdrop-filter: none; color: #c7cdbd; font-size: 11px; }
+.prototype-hint { background: transparent; backdrop-filter: none; border: 0; box-shadow: none; opacity: .65; }
+.menu-bar { background: rgba(10,19,22,.72); border-color: rgba(190,202,177,.18); border-radius: 6px; }
+
 .menu-bar { position: absolute; left: 24px; bottom: 22px; display: flex; align-items: center; gap: 8px; padding: 6px; border-radius: 14px; pointer-events: auto; z-index: 21; }
 .menu-toggle, .menu-options button, .panel-close { border: 0; background: transparent; cursor: pointer; }
 .menu-toggle { width: 42px; height: 42px; border-radius: 10px; font-size: 20px; background: rgba(255,255,255,0.06); }
@@ -125,7 +143,7 @@ button { color: inherit; }
   .topbar { padding: 11px 12px; }
   .resource-stack { gap: 9px; }
   .resource:nth-child(2) { display: none; }
-  .enemy-card { top: 105px; }
+  .enemy-card { top: auto; bottom: 74px; }
   .offline-card { top: 92px; left: 12px; right: 12px; max-width: none; }
   .prototype-hint { display: none; }
   .menu-bar { left: 12px; bottom: 12px; }
@@ -133,7 +151,10 @@ button { color: inherit; }
   .event-line { bottom: 18px; left: auto; right: 12px; transform: none; max-width: calc(100% - 90px); }
   .character-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .gear-tree-grid { grid-template-columns: 1fr; }
-  .gear-panel { grid-template-columns: 1fr; }
-  .paperdoll-wrap { min-height: 500px; }
+  .gear-panel { grid-template-columns: 1fr; grid-auto-rows: max-content; align-content: start; }
+  .paperdoll-wrap { min-height: 0; padding: 12px; }
+  .paperdoll { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; height: auto; min-height: 0; }
+  .paperdoll-mage { display: none; }
+  .gear-slot { position: static; width: auto; min-width: 0; transform: none; }
   .game-menu-header { grid-template-columns: 1fr auto auto; }
 }

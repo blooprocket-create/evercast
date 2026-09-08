@@ -127,6 +127,7 @@ export class EvercastSimulation {
     return buildSimulationSnapshot({
       state: this.state,
       config: this.config,
+      catalog: this.catalog,
       canRebirth: this.rebirthSystem.canRebirth(this.state),
       lastEvent: this.lastEvent,
     });
