@@ -1,0 +1,252 @@
+{
+  "blender": "5.2.1 LTS",
+  "assetCount": 39,
+  "totalTriangles": 48492,
+  "totalGlbBytes": 4278532,
+  "checks": [
+    "GLB import",
+    "nonempty meshes and materials",
+    "finite vertices",
+    "nondegenerate triangles",
+    "triangle count",
+    "ground pivot",
+    "dimensions round trip",
+    "editable Blender source and biome collections"
+  ],
+  "assets": [
+    {
+      "id": "grass_clump_a",
+      "triangles": 56,
+      "bytes": 7112,
+      "passed": true
+    },
+    {
+      "id": "grass_clump_b",
+      "triangles": 86,
+      "bytes": 9460,
+      "passed": true
+    },
+    {
+      "id": "flower_patch_a",
+      "triangles": 1808,
+      "bytes": 183136,
+      "passed": true
+    },
+    {
+      "id": "flower_patch_b",
+      "triangles": 2488,
+      "bytes": 249624,
+      "passed": true
+    },
+    {
+      "id": "rock_a",
+      "triangles": 160,
+      "bytes": 19520,
+      "passed": true
+    },
+    {
+      "id": "rock_b",
+      "triangles": 160,
+      "bytes": 19520,
+      "passed": true
+    },
+    {
+      "id": "rock_c",
+      "triangles": 160,
+      "bytes": 19536,
+      "passed": true
+    },
+    {
+      "id": "healthy_tree_a",
+      "triangles": 3476,
+      "bytes": 321728,
+      "passed": true
+    },
+    {
+      "id": "healthy_tree_b",
+      "triangles": 3476,
+      "bytes": 321724,
+      "passed": true
+    },
+    {
+      "id": "healthy_tree_c",
+      "triangles": 3476,
+      "bytes": 321708,
+      "passed": true
+    },
+    {
+      "id": "fallen_log",
+      "triangles": 740,
+      "bytes": 60660,
+      "passed": true
+    },
+    {
+      "id": "small_ruin_stone",
+      "triangles": 500,
+      "bytes": 42712,
+      "passed": true
+    },
+    {
+      "id": "meadow_waystone",
+      "triangles": 520,
+      "bytes": 45188,
+      "passed": true
+    },
+    {
+      "id": "dark_tree_a",
+      "triangles": 3476,
+      "bytes": 321648,
+      "passed": true
+    },
+    {
+      "id": "dark_tree_b",
+      "triangles": 3476,
+      "bytes": 321708,
+      "passed": true
+    },
+    {
+      "id": "dark_tree_c",
+      "triangles": 3476,
+      "bytes": 321732,
+      "passed": true
+    },
+    {
+      "id": "root_cluster",
+      "triangles": 648,
+      "bytes": 43372,
+      "passed": true
+    },
+    {
+      "id": "mushroom_patch",
+      "triangles": 1776,
+      "bytes": 139660,
+      "passed": true
+    },
+    {
+      "id": "bush_clump",
+      "triangles": 1144,
+      "bytes": 112268,
+      "passed": true
+    },
+    {
+      "id": "mossy_rock_a",
+      "triangles": 400,
+      "bytes": 44976,
+      "passed": true
+    },
+    {
+      "id": "mossy_rock_b",
+      "triangles": 400,
+      "bytes": 44980,
+      "passed": true
+    },
+    {
+      "id": "forest_shrine_arch",
+      "triangles": 1352,
+      "bytes": 114284,
+      "passed": true
+    },
+    {
+      "id": "forest_fern",
+      "triangles": 1980,
+      "bytes": 136092,
+      "passed": true
+    },
+    {
+      "id": "ancient_fir",
+      "triangles": 2892,
+      "bytes": 254204,
+      "passed": true
+    },
+    {
+      "id": "dead_tree_a",
+      "triangles": 1236,
+      "bytes": 80712,
+      "passed": true
+    },
+    {
+      "id": "dead_tree_b",
+      "triangles": 1236,
+      "bytes": 80696,
+      "passed": true
+    },
+    {
+      "id": "dead_tree_c",
+      "triangles": 1236,
+      "bytes": 80712,
+      "passed": true
+    },
+    {
+      "id": "gravestone_a",
+      "triangles": 274,
+      "bytes": 23380,
+      "passed": true
+    },
+    {
+      "id": "gravestone_b",
+      "triangles": 312,
+      "bytes": 26156,
+      "passed": true
+    },
+    {
+      "id": "gravestone_c",
+      "triangles": 288,
+      "bytes": 24880,
+      "passed": true
+    },
+    {
+      "id": "broken_fence_segment",
+      "triangles": 338,
+      "bytes": 28964,
+      "passed": true
+    },
+    {
+      "id": "ruined_arch",
+      "triangles": 932,
+      "bytes": 73300,
+      "passed": true
+    },
+    {
+      "id": "mausoleum",
+      "triangles": 984,
+      "bytes": 77828,
+      "passed": true
+    },
+    {
+      "id": "graveyard_gate",
+      "triangles": 748,
+      "bytes": 59136,
+      "passed": true
+    },
+    {
+      "id": "cathedral_tower",
+      "triangles": 642,
+      "bytes": 53000,
+      "passed": true
+    },
+    {
+      "id": "cathedral_nave",
+      "triangles": 644,
+      "bytes": 50760,
+      "passed": true
+    },
+    {
+      "id": "cathedral_buttress",
+      "triangles": 148,
+      "bytes": 13864,
+      "passed": true
+    },
+    {
+      "id": "bone_pile_rubble",
+      "triangles": 960,
+      "bytes": 92876,
+      "passed": true
+    },
+    {
+      "id": "vigil_lantern",
+      "triangles": 388,
+      "bytes": 35716,
+      "passed": true
+    }
+  ]
+}

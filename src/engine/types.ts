@@ -19,6 +19,7 @@ export interface GearSnapshot {
 
 export interface EnemySnapshot {
   instanceId: number;
+  modelKey: string;
   name: string;
   boss: boolean;
   hp: QuantitySnapshot;

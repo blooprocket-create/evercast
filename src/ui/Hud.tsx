@@ -46,7 +46,7 @@ export function Hud({
           <div className="health-track"><div className="health-fill" style={{ width: `${snapshot.enemyHpPercent}%` }} /></div>
           <div className="mage-row">
             <span>Wave · {snapshot.encounterAliveEnemies} alive · {snapshot.encounterSpawnedEnemies}/{snapshot.encounterTotalEnemies} spawned</span>
-            <span>{snapshot.spawnInterval.toFixed(2)}s cadence</span>
+            <span>{snapshot.boss ? 'Guardian' : `Stage ${snapshot.encounterStage}`}</span>
           </div>
           <div className="mage-row"><span>Mage</span><span>{snapshot.mageHp.display} / {snapshot.mageMaxHp.display}</span></div>
           <div className="health-track mage"><div className="health-fill" style={{ width: `${snapshot.mageHpPercent}%` }} /></div>
@@ -59,8 +59,8 @@ export function Hud({
         </div>
       )}
 
-      <div className="prototype-hint">Prototype: press N to jump to the next biome</div>
-      <div className="event-line">{snapshot.lastEvent}</div>
+      {import.meta.env.DEV && <div className="prototype-hint">N · next region &nbsp; Shift N · preview transition</div>}
+      <div className="event-line">{snapshot.lastEvent.replace(/\d+\.\d{3,}/g, (value) => Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 }))}</div>
       <GameMenu
         snapshot={snapshot}
         onLevelGear={onLevelGear}

@@ -1,0 +1,438 @@
+{
+  "version": 1,
+  "units": "meters",
+  "upAxis": "Y (GLB), Z (Blender)",
+  "pivot": "ground center",
+  "style": "faceted low-poly fantasy; modeled details; no textures required",
+  "assets": [
+    {
+      "id": "grass_clump_a",
+      "biome": "greenfields",
+      "url": "/models/environment/greenfields/grass_clump_a.glb",
+      "triangles": 56,
+      "dimensionsMeters": [
+        1.388,
+        0.76,
+        0.547
+      ]
+    },
+    {
+      "id": "grass_clump_b",
+      "biome": "greenfields",
+      "url": "/models/environment/greenfields/grass_clump_b.glb",
+      "triangles": 86,
+      "dimensionsMeters": [
+        1.614,
+        1.087,
+        0.547
+      ]
+    },
+    {
+      "id": "flower_patch_a",
+      "biome": "greenfields",
+      "url": "/models/environment/greenfields/flower_patch_a.glb",
+      "triangles": 1808,
+      "dimensionsMeters": [
+        1.649,
+        1.015,
+        0.66
+      ]
+    },
+    {
+      "id": "flower_patch_b",
+      "biome": "greenfields",
+      "url": "/models/environment/greenfields/flower_patch_b.glb",
+      "triangles": 2488,
+      "dimensionsMeters": [
+        1.702,
+        1.056,
+        0.672
+      ]
+    },
+    {
+      "id": "rock_a",
+      "biome": "greenfields",
+      "url": "/models/environment/greenfields/rock_a.glb",
+      "triangles": 160,
+      "dimensionsMeters": [
+        1.498,
+        1.038,
+        1.222
+      ]
+    },
+    {
+      "id": "rock_b",
+      "biome": "greenfields",
+      "url": "/models/environment/greenfields/rock_b.glb",
+      "triangles": 160,
+      "dimensionsMeters": [
+        2.045,
+        1.383,
+        0.894
+      ]
+    },
+    {
+      "id": "rock_c",
+      "biome": "greenfields",
+      "url": "/models/environment/greenfields/rock_c.glb",
+      "triangles": 160,
+      "dimensionsMeters": [
+        1.251,
+        0.917,
+        1.901
+      ]
+    },
+    {
+      "id": "healthy_tree_a",
+      "biome": "greenfields",
+      "url": "/models/environment/greenfields/healthy_tree_a.glb",
+      "triangles": 3476,
+      "dimensionsMeters": [
+        4.024,
+        3.638,
+        4.266
+      ]
+    },
+    {
+      "id": "healthy_tree_b",
+      "biome": "greenfields",
+      "url": "/models/environment/greenfields/healthy_tree_b.glb",
+      "triangles": 3476,
+      "dimensionsMeters": [
+        3.212,
+        2.876,
+        5.113
+      ]
+    },
+    {
+      "id": "healthy_tree_c",
+      "biome": "greenfields",
+      "url": "/models/environment/greenfields/healthy_tree_c.glb",
+      "triangles": 3476,
+      "dimensionsMeters": [
+        3.7,
+        3.608,
+        4.027
+      ]
+    },
+    {
+      "id": "fallen_log",
+      "biome": "greenfields",
+      "url": "/models/environment/greenfields/fallen_log.glb",
+      "triangles": 740,
+      "dimensionsMeters": [
+        2.57,
+        0.654,
+        0.915
+      ]
+    },
+    {
+      "id": "small_ruin_stone",
+      "biome": "greenfields",
+      "url": "/models/environment/greenfields/small_ruin_stone.glb",
+      "triangles": 500,
+      "dimensionsMeters": [
+        1.1,
+        0.747,
+        0.757
+      ]
+    },
+    {
+      "id": "meadow_waystone",
+      "biome": "greenfields",
+      "url": "/models/environment/greenfields/meadow_waystone.glb",
+      "triangles": 520,
+      "dimensionsMeters": [
+        0.95,
+        0.8,
+        2.18
+      ]
+    },
+    {
+      "id": "dark_tree_a",
+      "biome": "whispering_woods",
+      "url": "/models/environment/whispering_woods/dark_tree_a.glb",
+      "triangles": 3476,
+      "dimensionsMeters": [
+        3.898,
+        3.619,
+        5.001
+      ]
+    },
+    {
+      "id": "dark_tree_b",
+      "biome": "whispering_woods",
+      "url": "/models/environment/whispering_woods/dark_tree_b.glb",
+      "triangles": 3476,
+      "dimensionsMeters": [
+        3.413,
+        3.08,
+        6.068
+      ]
+    },
+    {
+      "id": "dark_tree_c",
+      "biome": "whispering_woods",
+      "url": "/models/environment/whispering_woods/dark_tree_c.glb",
+      "triangles": 3476,
+      "dimensionsMeters": [
+        3.487,
+        3.645,
+        4.632
+      ]
+    },
+    {
+      "id": "root_cluster",
+      "biome": "whispering_woods",
+      "url": "/models/environment/whispering_woods/root_cluster.glb",
+      "triangles": 648,
+      "dimensionsMeters": [
+        2.16,
+        2.018,
+        0.47
+      ]
+    },
+    {
+      "id": "mushroom_patch",
+      "biome": "whispering_woods",
+      "url": "/models/environment/whispering_woods/mushroom_patch.glb",
+      "triangles": 1776,
+      "dimensionsMeters": [
+        1.448,
+        1.211,
+        0.704
+      ]
+    },
+    {
+      "id": "bush_clump",
+      "biome": "whispering_woods",
+      "url": "/models/environment/whispering_woods/bush_clump.glb",
+      "triangles": 1144,
+      "dimensionsMeters": [
+        1.567,
+        1.454,
+        1.056
+      ]
+    },
+    {
+      "id": "mossy_rock_a",
+      "biome": "whispering_woods",
+      "url": "/models/environment/whispering_woods/mossy_rock_a.glb",
+      "triangles": 400,
+      "dimensionsMeters": [
+        1.472,
+        1.184,
+        1.18
+      ]
+    },
+    {
+      "id": "mossy_rock_b",
+      "biome": "whispering_woods",
+      "url": "/models/environment/whispering_woods/mossy_rock_b.glb",
+      "triangles": 400,
+      "dimensionsMeters": [
+        2.04,
+        1.44,
+        0.906
+      ]
+    },
+    {
+      "id": "forest_shrine_arch",
+      "biome": "whispering_woods",
+      "url": "/models/environment/whispering_woods/forest_shrine_arch.glb",
+      "triangles": 1352,
+      "dimensionsMeters": [
+        3.2,
+        1.553,
+        3.421
+      ]
+    },
+    {
+      "id": "forest_fern",
+      "biome": "whispering_woods",
+      "url": "/models/environment/whispering_woods/forest_fern.glb",
+      "triangles": 1980,
+      "dimensionsMeters": [
+        1.849,
+        1.762,
+        0.674
+      ]
+    },
+    {
+      "id": "ancient_fir",
+      "biome": "whispering_woods",
+      "url": "/models/environment/whispering_woods/ancient_fir.glb",
+      "triangles": 2892,
+      "dimensionsMeters": [
+        3.805,
+        3.84,
+        5.509
+      ]
+    },
+    {
+      "id": "dead_tree_a",
+      "biome": "gravehollow",
+      "url": "/models/environment/gravehollow/dead_tree_a.glb",
+      "triangles": 1236,
+      "dimensionsMeters": [
+        2.83,
+        2.665,
+        3.776
+      ]
+    },
+    {
+      "id": "dead_tree_b",
+      "biome": "gravehollow",
+      "url": "/models/environment/gravehollow/dead_tree_b.glb",
+      "triangles": 1236,
+      "dimensionsMeters": [
+        2.248,
+        2.256,
+        4.521
+      ]
+    },
+    {
+      "id": "dead_tree_c",
+      "biome": "gravehollow",
+      "url": "/models/environment/gravehollow/dead_tree_c.glb",
+      "triangles": 1236,
+      "dimensionsMeters": [
+        2.648,
+        2.814,
+        3.483
+      ]
+    },
+    {
+      "id": "gravestone_a",
+      "biome": "gravehollow",
+      "url": "/models/environment/gravehollow/gravestone_a.glb",
+      "triangles": 274,
+      "dimensionsMeters": [
+        0.85,
+        0.8,
+        1.48
+      ]
+    },
+    {
+      "id": "gravestone_b",
+      "biome": "gravehollow",
+      "url": "/models/environment/gravehollow/gravestone_b.glb",
+      "triangles": 312,
+      "dimensionsMeters": [
+        0.88,
+        0.55,
+        1.6
+      ]
+    },
+    {
+      "id": "gravestone_c",
+      "biome": "gravehollow",
+      "url": "/models/environment/gravehollow/gravestone_c.glb",
+      "triangles": 288,
+      "dimensionsMeters": [
+        0.852,
+        0.55,
+        1.368
+      ]
+    },
+    {
+      "id": "broken_fence_segment",
+      "biome": "gravehollow",
+      "url": "/models/environment/gravehollow/broken_fence_segment.glb",
+      "triangles": 338,
+      "dimensionsMeters": [
+        3.02,
+        0.42,
+        1.49
+      ]
+    },
+    {
+      "id": "ruined_arch",
+      "biome": "gravehollow",
+      "url": "/models/environment/gravehollow/ruined_arch.glb",
+      "triangles": 932,
+      "dimensionsMeters": [
+        3.2,
+        1.126,
+        3.303
+      ]
+    },
+    {
+      "id": "mausoleum",
+      "biome": "gravehollow",
+      "url": "/models/environment/gravehollow/mausoleum.glb",
+      "triangles": 984,
+      "dimensionsMeters": [
+        3.0,
+        2.72,
+        3.65
+      ]
+    },
+    {
+      "id": "graveyard_gate",
+      "biome": "gravehollow",
+      "url": "/models/environment/gravehollow/graveyard_gate.glb",
+      "triangles": 748,
+      "dimensionsMeters": [
+        3.7,
+        0.8,
+        3.644
+      ]
+    },
+    {
+      "id": "cathedral_tower",
+      "biome": "gravehollow",
+      "url": "/models/environment/gravehollow/cathedral_tower.glb",
+      "triangles": 642,
+      "dimensionsMeters": [
+        2.7,
+        2.7,
+        7.95
+      ]
+    },
+    {
+      "id": "cathedral_nave",
+      "biome": "gravehollow",
+      "url": "/models/environment/gravehollow/cathedral_nave.glb",
+      "triangles": 644,
+      "dimensionsMeters": [
+        4.411,
+        3.125,
+        5.385
+      ]
+    },
+    {
+      "id": "cathedral_buttress",
+      "biome": "gravehollow",
+      "url": "/models/environment/gravehollow/cathedral_buttress.glb",
+      "triangles": 148,
+      "dimensionsMeters": [
+        2.56,
+        0.76,
+        4.5
+      ]
+    },
+    {
+      "id": "bone_pile_rubble",
+      "biome": "gravehollow",
+      "url": "/models/environment/gravehollow/bone_pile_rubble.glb",
+      "triangles": 960,
+      "dimensionsMeters": [
+        1.969,
+        1.112,
+        0.471
+      ]
+    },
+    {
+      "id": "vigil_lantern",
+      "biome": "gravehollow",
+      "url": "/models/environment/gravehollow/vigil_lantern.glb",
+      "triangles": 388,
+      "dimensionsMeters": [
+        0.76,
+        0.76,
+        2.1
+      ]
+    }
+  ]
+}

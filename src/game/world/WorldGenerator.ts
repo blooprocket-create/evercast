@@ -6,11 +6,18 @@ import {
   Mesh,
   MeshBuilder,
   PBRMaterial,
+  PointLight,
   Scene,
+  ShadowGenerator,
   StandardMaterial,
   TransformNode,
   Vector3,
 } from '@babylonjs/core';
+import { EnvironmentAssets } from './EnvironmentAssets';
+import { chooseEnvironmentProp } from './EnvironmentPropCatalog';
+import { createTerrainChunk, createTerrainMaterials, terrainHeight, type TerrainPalette } from './WorldTerrain';
+import { createGroundDetails, createContactShadow } from './WorldGroundDetails';
+import { WorldBackdrop } from './WorldBackdrop';
 
 export type BiomeId = 'greenfields' | 'whispering_woods' | 'gravehollow';
 
@@ -48,15 +55,12 @@ export interface TransitionProfile {
 interface WorldChunk {
   index: number;
   root: TransformNode;
-  meshes: Mesh[];
-  materials: Array<PBRMaterial | StandardMaterial>;
 }
 
 const CHUNK_SIZE = 12;
-const GROUND_SLICES = 4;
 const VISIBLE_BEHIND = 4;
 const VISIBLE_AHEAD = 8;
-// Prototype scale only. Longer regions give us several screen widths of ecological drift.
+// Each region has a clear arrival, a settled landscape, and a gradual ecological drift.
 const SEGMENT_LENGTH = 120;
 const TRANSITION_LENGTH = 72;
 const CYCLE_LENGTH = SEGMENT_LENGTH * 3;
@@ -66,45 +70,45 @@ const FAR_LOOKAHEAD = 28;
 const BIOMES: readonly BiomeStyle[] = [
   {
     id: 'greenfields',
-    ground: new Color3(0.12, 0.28, 0.12),
-    road: new Color3(0.24, 0.19, 0.11),
+    ground: new Color3(0.12, 0.19, 0.085),
+    road: new Color3(0.23, 0.174, 0.092),
     trunk: new Color3(0.22, 0.12, 0.06),
     foliage: new Color3(0.18, 0.42, 0.16),
     stone: new Color3(0.29, 0.32, 0.28),
     accent: new Color3(0.72, 0.8, 0.35),
-    sky: new Color3(0.16, 0.27, 0.38),
-    fog: new Color3(0.35, 0.46, 0.38),
-    fogDensity: 0.008,
-    ambient: 0.78,
-    sun: 2.25,
+    sky: new Color3(0.105, 0.20, 0.24),
+    fog: new Color3(0.28, 0.39, 0.40),
+    fogDensity: 0.013,
+    ambient: 0.9,
+    sun: 2.1,
   },
   {
     id: 'whispering_woods',
-    ground: new Color3(0.045, 0.13, 0.075),
-    road: new Color3(0.11, 0.085, 0.055),
+    ground: new Color3(0.036, 0.077, 0.043),
+    road: new Color3(0.11, 0.10, 0.063),
     trunk: new Color3(0.11, 0.065, 0.04),
     foliage: new Color3(0.055, 0.21, 0.11),
     stone: new Color3(0.19, 0.24, 0.2),
     accent: new Color3(0.34, 0.72, 0.46),
-    sky: new Color3(0.055, 0.1, 0.13),
-    fog: new Color3(0.09, 0.16, 0.12),
-    fogDensity: 0.018,
-    ambient: 0.48,
-    sun: 1.35,
+    sky: new Color3(0.035, 0.073, 0.083),
+    fog: new Color3(0.13, 0.225, 0.185),
+    fogDensity: 0.022,
+    ambient: 0.96,
+    sun: 1.85,
   },
   {
     id: 'gravehollow',
-    ground: new Color3(0.085, 0.075, 0.09),
-    road: new Color3(0.14, 0.125, 0.14),
+    ground: new Color3(0.065, 0.056, 0.072),
+    road: new Color3(0.135, 0.12, 0.117),
     trunk: new Color3(0.095, 0.075, 0.07),
     foliage: new Color3(0.12, 0.14, 0.13),
     stone: new Color3(0.28, 0.27, 0.32),
     accent: new Color3(0.5, 0.38, 0.62),
-    sky: new Color3(0.06, 0.055, 0.09),
-    fog: new Color3(0.16, 0.13, 0.19),
+    sky: new Color3(0.043, 0.047, 0.077),
+    fog: new Color3(0.20, 0.20, 0.26),
     fogDensity: 0.026,
-    ambient: 0.38,
-    sun: 0.8,
+    ambient: 0.8,
+    sun: 1.8,
   },
 ] as const;
 
@@ -173,8 +177,8 @@ export function sampleBiome(distance: number): { from: BiomeId; to: BiomeId; t: 
 }
 
 function styleAt(distance: number, layer: keyof Omit<TransitionProfile, 'raw'>): BiomeSample {
-  const style = rawBiomeSample(distance);
-  const profile = sampleTransitionProfile(distance);
+  const style = rawBiomeSample(Math.max(0, distance));
+  const profile = sampleTransitionProfile(Math.max(0, distance));
   return { from: style.from, to: style.to, t: profile[layer] };
 }
 
@@ -183,6 +187,13 @@ function influenceFor(sample: BiomeSample, biome: BiomeId): number {
 }
 
 export class WorldGenerator {
+  private readonly assets: EnvironmentAssets;
+  private readonly terrainMaterials: [PBRMaterial, PBRMaterial];
+  private readonly contactMaterial: StandardMaterial;
+  private readonly backdrop: WorldBackdrop;
+  private readonly windNodes = new Set<TransformNode>();
+  private readonly lanternNodes = new Set<TransformNode>();
+  private readonly localLights: PointLight[] = [];
   private readonly chunks = new Map<number, WorldChunk>();
   private readonly motes: Mesh[] = [];
   private readonly moteMaterial: StandardMaterial;
@@ -194,7 +205,20 @@ export class WorldGenerator {
     private readonly scene: Scene,
     private readonly skyLight: HemisphericLight,
     private readonly sun: DirectionalLight,
+    shadows?: ShadowGenerator,
   ) {
+    this.assets = new EnvironmentAssets(scene, undefined, shadows);
+    this.terrainMaterials = createTerrainMaterials(scene);
+    this.contactMaterial = new StandardMaterial('ground contact shade', scene);
+    this.contactMaterial.disableLighting = true;
+    this.contactMaterial.emissiveColor = Color3.White();
+    this.contactMaterial.backFaceCulling = false;
+    this.backdrop = new WorldBackdrop(scene);
+    for (let i = 0; i < 2; i++) {
+      const light = new PointLight(`landmark candle-${i}`, Vector3.Zero(), scene);
+      light.diffuse = new Color3(1, 0.52, 0.19); light.intensity = 2.8; light.range = 3.5; light.setEnabled(false);
+      this.localLights.push(light);
+    }
     this.scene.fogMode = Scene.FOGMODE_EXP2;
     this.moteMaterial = new StandardMaterial('world-motes', this.scene);
     this.moteMaterial.disableLighting = true;
@@ -206,18 +230,18 @@ export class WorldGenerator {
 
   update(deltaSeconds: number, walking: boolean): void {
     this.visualTime += deltaSeconds;
-    this.distance += deltaSeconds * (walking ? 2.6 : 0.08);
+    this.distance += walking ? deltaSeconds * 2.6 : 0;
     this.rebuildVisibleChunks();
     this.updateAtmosphere();
     this.updateMotes(deltaSeconds);
+    this.updateWind();
+    this.updateLocalLights();
   }
 
-  jumpToNextBiome(): void {
-    const wrapped = wrap(this.distance, SEGMENT_LENGTH);
-    const transitionStart = SEGMENT_LENGTH - TRANSITION_LENGTH;
-    // Jump near the beginning of the transition, not past it, so N previews the full drift.
-    const target = transitionStart + 5;
-    this.distance += wrapped < target ? target - wrapped : SEGMENT_LENGTH - wrapped + target;
+  jumpToNextBiome(previewTransition = false): void {
+    this.distance = previewTransition
+      ? Math.floor(this.distance / SEGMENT_LENGTH) * SEGMENT_LENGTH + SEGMENT_LENGTH - TRANSITION_LENGTH + 12
+      : (Math.floor(this.distance / SEGMENT_LENGTH) + 1) * SEGMENT_LENGTH;
     this.lastCenterIndex = Number.NaN;
     this.rebuildVisibleChunks(true);
     this.updateAtmosphere();
@@ -234,6 +258,13 @@ export class WorldGenerator {
     this.chunks.clear();
     for (const mote of this.motes) mote.dispose();
     this.moteMaterial.dispose();
+    this.assets.dispose();
+    this.backdrop.dispose();
+    for (const material of this.terrainMaterials) material.dispose();
+    this.contactMaterial.dispose();
+    this.windNodes.clear();
+    this.lanternNodes.clear();
+    for (const light of this.localLights) light.dispose();
   }
 
   private rebuildVisibleChunks(force = false): void {
@@ -266,325 +297,149 @@ export class WorldGenerator {
     }
   }
 
+  private readonly paletteAt = (x: number): TerrainPalette => {
+    const style = styleAt(x, 'ground');
+    return { ground: lerpColor(style.from.ground, style.to.ground, style.t), road: lerpColor(style.from.road, style.to.road, style.t) };
+  };
+
   private buildChunk(index: number): WorldChunk {
     const root = new TransformNode(`world-chunk-${index}`, this.scene);
-    const meshes: Mesh[] = [];
-    const materials: Array<PBRMaterial | StandardMaterial> = [];
-    const absoluteStart = index * CHUNK_SIZE;
-    const absoluteCenter = absoluteStart + CHUNK_SIZE / 2;
+    for (const mesh of createTerrainChunk(index, this.scene, this.paletteAt, ...this.terrainMaterials)) mesh.parent = root;
+    createGroundDetails(index, this.scene, this.terrainMaterials[0], this.paletteAt).parent = root;
+    const center = index * CHUNK_SIZE;
+    const arrival = wrap(center, CYCLE_LENGTH);
+    const landmark = center > 0 && (arrival === SEGMENT_LENGTH || arrival === SEGMENT_LENGTH * 2);
 
-    // Split the floor into smaller pieces so material changes are not quantized to 12m chunks.
-    this.addGroundSlices(index, absoluteStart, root, meshes, materials);
-
-    const localStyle = styleAt(absoluteCenter, 'props');
-    const trunkMat = this.makePbr(`trunk-${index}`, lerpColor(localStyle.from.trunk, localStyle.to.trunk, localStyle.t), 0.92, materials);
-    const foliageMat = this.makePbr(`foliage-${index}`, lerpColor(localStyle.from.foliage, localStyle.to.foliage, localStyle.t), 0.88, materials);
-    const stoneMat = this.makePbr(`stone-${index}`, lerpColor(localStyle.from.stone, localStyle.to.stone, localStyle.t), 0.96, materials);
-    const accent = lerpColor(localStyle.from.accent, localStyle.to.accent, localStyle.t);
-    const accentMat = this.makePbr(`accent-${index}`, accent, 0.8, materials);
-    accentMat.emissiveColor = accent.scale(0.08);
-
-    this.addFarScenery(index, absoluteCenter, root, meshes, materials);
-
-    // Density itself now changes with biome influence instead of always placing seven props.
-    for (let slot = 0; slot < 10; slot += 1) {
-      const seed = index * 97 + slot * 13;
-      const localX = -CHUNK_SIZE / 2 + 0.6 + random01(seed + 1) * (CHUNK_SIZE - 1.2);
-      const absoluteX = absoluteCenter + localX;
-      const style = styleAt(absoluteX, 'props');
-      const woods = influenceFor(style, 'whispering_woods');
-      const grave = influenceFor(style, 'gravehollow');
-      const density = 0.54 + woods * 0.4 + grave * 0.12;
-      if (random01(seed + 90) > density) continue;
-
-      const side = random01(seed + 2) > 0.48 ? 1 : -1;
-      const z = side * (1.55 + random01(seed + 3) * 1.55);
-      const chooseTo = random01(seed + 4) < style.t;
-      const biome = chooseTo ? style.to.id : style.from.id;
-      this.addBiomeProp(biome, localX, z, seed, root, meshes, trunkMat, foliageMat, stoneMat, accentMat);
+    this.addFarScenery(index, root);
+    // Three spaced anchors create groves and clearings rather than a random pile of props.
+    for (let slot = 0; slot < 3; slot++) {
+      const seed = index * 97 + slot * 31;
+      const x = -4.1 + slot * 4.1 + (random01(seed + 1) - 0.5) * 0.55;
+      const style = styleAt(center + x, 'props');
+      const biome = random01(seed + 2) < style.t ? style.to.id : style.from.id;
+      if (landmark && slot === 1) continue;
+      const prop = chooseEnvironmentProp(biome, random01(seed + 10));
+      const id = slot === 0 && !landmark
+        ? biome === 'greenfields' ? `healthy_tree_${String.fromCharCode(97 + Math.floor(random01(seed + 18) * 3))}`
+          : biome === 'whispering_woods' ? `dark_tree_${String.fromCharCode(97 + Math.floor(random01(seed + 18) * 3))}`
+          : prop.id
+        : prop.id;
+      const tall = /tree|fir|waystone|lantern|mausoleum|arch|gravestone|fence/.test(id);
+      const z = tall ? 3.5 + random01(seed + 3) * 1.6 : 2.1 + random01(seed + 3) * 1.2;
+      const scale = (id.includes('tree') ? 0.91 : prop.scale) * (0.9 + random01(seed + 4) * 0.2);
+      this.placeProp(id, root, x, z, scale, (random01(seed + 5) - 0.5) * 0.6);
+      if (tall && !id.includes('mausoleum')) {
+        const companion = biome === 'greenfields' ? (slot % 2 ? 'fallen_log' : 'rock_b')
+          : biome === 'whispering_woods' ? 'mossy_rock_a' : 'gravestone_b';
+        this.placeProp(companion, root, x + 0.85, z - 0.65, biome === 'gravehollow' ? 0.55 : 0.4, random01(seed + 6) * 2);
+      }
     }
 
-    // Arrival landmarks sit at the end of the ecological blend, rather than causing it.
-    const wrappedCenter = wrap(absoluteCenter, CYCLE_LENGTH);
-    if (Math.abs(wrappedCenter - SEGMENT_LENGTH) < CHUNK_SIZE * 0.52) {
-      this.addForestThreshold(root, meshes, trunkMat, foliageMat);
-    }
-    if (Math.abs(wrappedCenter - SEGMENT_LENGTH * 2) < CHUNK_SIZE * 0.52) {
-      this.addGraveGate(root, meshes, stoneMat, accentMat);
-    }
-
-    return { index, root, meshes, materials };
-  }
-
-  private addGroundSlices(
-    index: number,
-    absoluteStart: number,
-    root: TransformNode,
-    meshes: Mesh[],
-    materials: Array<PBRMaterial | StandardMaterial>,
-  ): void {
-    const width = CHUNK_SIZE / GROUND_SLICES;
-    for (let slice = 0; slice < GROUND_SLICES; slice += 1) {
-      const localX = -CHUNK_SIZE / 2 + width * (slice + 0.5);
-      const absoluteX = absoluteStart + width * (slice + 0.5);
-      const style = styleAt(absoluteX, 'ground');
-      const groundColor = lerpColor(style.from.ground, style.to.ground, style.t);
-      const roadColor = lerpColor(style.from.road, style.to.road, style.t);
-      const groundMat = this.makePbr(`ground-${index}-${slice}`, groundColor, 0.98, materials);
-      const roadMat = this.makePbr(`road-${index}-${slice}`, roadColor, 0.94, materials);
-
-      const ground = MeshBuilder.CreateBox(`ground-${index}-${slice}`, { width: width + 0.035, height: 0.32, depth: 7 }, this.scene);
-      ground.parent = root;
-      ground.position = new Vector3(localX, -0.16, 0);
-      ground.material = groundMat;
-      meshes.push(ground);
-
-      const road = MeshBuilder.CreateBox(`road-${index}-${slice}`, { width: width + 0.045, height: 0.04, depth: 1.55 }, this.scene);
-      road.parent = root;
-      road.position = new Vector3(localX, 0.02, 0);
-      road.material = roadMat;
-      meshes.push(road);
-    }
-  }
-
-  private addBiomeProp(
-    biome: BiomeId,
-    x: number,
-    z: number,
-    seed: number,
-    root: TransformNode,
-    meshes: Mesh[],
-    trunkMat: PBRMaterial,
-    foliageMat: PBRMaterial,
-    stoneMat: PBRMaterial,
-    accentMat: PBRMaterial,
-  ): void {
-    if (biome === 'greenfields') {
-      if (random01(seed + 10) < 0.38) {
-        this.addTree(x, z, 0.7 + random01(seed + 11) * 0.55, root, meshes, trunkMat, foliageMat, false);
-      } else if (random01(seed + 12) < 0.5) {
-        this.addRock(x, z, 0.3 + random01(seed + 13) * 0.35, root, meshes, stoneMat);
+    // Ground cover follows the verges, in small ecological patches with breathing room.
+    for (let slot = 0; slot < 22; slot++) {
+      const seed = index * 197 + slot * 19;
+      const x = -5.8 + (slot % 11) * 1.12 + (random01(seed) - 0.5) * 0.65;
+      const z = slot < 11 ? -1.45 - random01(seed + 1) * 2.1 : 1.65 + random01(seed + 1) * 2.4;
+      const style = styleAt(center + x, 'props');
+      const biome = random01(seed + 2) < style.t ? style.to.id : style.from.id;
+      let id: string, scale: number;
+      if (biome === 'greenfields') {
+        id = random01(seed + 3) < 0.7 ? (slot % 2 ? 'grass_clump_a' : 'grass_clump_b') : (slot % 3 ? 'flower_patch_a' : 'flower_patch_b');
+        scale = 0.34 + random01(seed + 4) * 0.23;
+      } else if (biome === 'whispering_woods') {
+        id = random01(seed + 3) < 0.48 ? 'forest_fern' : (slot % 3 ? 'mushroom_patch' : 'root_cluster');
+        scale = 0.4 + random01(seed + 4) * 0.25;
       } else {
-        this.addFlowerPatch(x, z, root, meshes, accentMat, seed);
+        if (slot % 3 !== 0) continue;
+        id = 'bone_pile_rubble';scale = 0.28 + random01(seed + 4) * 0.22;
       }
-      return;
+      this.placeProp(id, root, x, z, scale, random01(seed + 5) * Math.PI * 2, false);
     }
 
-    if (biome === 'whispering_woods') {
-      if (random01(seed + 20) < 0.78) {
-        this.addTree(x, z, 0.9 + random01(seed + 21) * 0.8, root, meshes, trunkMat, foliageMat, false);
-      } else {
-        this.addRock(x, z, 0.4 + random01(seed + 22) * 0.45, root, meshes, stoneMat);
-      }
-      return;
-    }
-
-    if (random01(seed + 30) < 0.42) {
-      this.addTree(x, z, 0.75 + random01(seed + 31) * 0.65, root, meshes, trunkMat, foliageMat, true);
-    } else if (random01(seed + 32) < 0.7) {
-      this.addTombstone(x, z, root, meshes, stoneMat, seed);
-    } else {
-      this.addRock(x, z, 0.45 + random01(seed + 33) * 0.4, root, meshes, stoneMat);
-    }
-  }
-
-  private addTree(
-    x: number,
-    z: number,
-    scale: number,
-    root: TransformNode,
-    meshes: Mesh[],
-    trunkMat: PBRMaterial,
-    foliageMat: PBRMaterial,
-    dead: boolean,
-  ): void {
-    const trunk = MeshBuilder.CreateCylinder(`tree-trunk-${root.name}-${meshes.length}`, {
-      height: 2.8 * scale,
-      diameterTop: 0.2 * scale,
-      diameterBottom: 0.45 * scale,
-      tessellation: 7,
-    }, this.scene);
-    trunk.parent = root;
-    trunk.position = new Vector3(x, 1.4 * scale, z);
-    trunk.rotation.z = (random01(x * 17 + z * 31) - 0.5) * 0.12;
-    trunk.material = trunkMat;
-    meshes.push(trunk);
-
-    if (dead) {
-      for (const direction of [-1, 1]) {
-        const branch = MeshBuilder.CreateCylinder(`dead-branch-${root.name}-${meshes.length}`, {
-          height: 1.25 * scale,
-          diameterTop: 0.05 * scale,
-          diameterBottom: 0.14 * scale,
-          tessellation: 6,
-        }, this.scene);
-        branch.parent = root;
-        branch.position = new Vector3(x + direction * 0.28 * scale, 2.35 * scale, z);
-        branch.rotation.z = direction * 0.78;
-        branch.material = trunkMat;
-        meshes.push(branch);
-      }
-      return;
-    }
-
-    const crown = MeshBuilder.CreatePolyhedron(`tree-crown-${root.name}-${meshes.length}`, { type: 2, size: 1.05 * scale }, this.scene);
-    crown.parent = root;
-    crown.position = new Vector3(x, 3.25 * scale, z);
-    crown.scaling = new Vector3(1.05, 1.2, 0.9);
-    crown.material = foliageMat;
-    meshes.push(crown);
-  }
-
-  private addRock(x: number, z: number, scale: number, root: TransformNode, meshes: Mesh[], material: PBRMaterial): void {
-    const rock = MeshBuilder.CreatePolyhedron(`rock-${root.name}-${meshes.length}`, { type: 1, size: scale }, this.scene);
-    rock.parent = root;
-    rock.position = new Vector3(x, scale * 0.45, z);
-    rock.scaling = new Vector3(1.25, 0.72, 1.05);
-    rock.rotation.y = random01(x * 41 + z * 19) * Math.PI;
-    rock.material = material;
-    meshes.push(rock);
-  }
-
-  private addFlowerPatch(x: number, z: number, root: TransformNode, meshes: Mesh[], material: PBRMaterial, seed: number): void {
-    for (let i = 0; i < 4; i += 1) {
-      const flower = MeshBuilder.CreateSphere(`flower-${root.name}-${meshes.length}`, { diameter: 0.08 + random01(seed + i) * 0.05, segments: 5 }, this.scene);
-      flower.parent = root;
-      flower.position = new Vector3(x + (random01(seed + i * 7) - 0.5) * 0.7, 0.08, z + (random01(seed + i * 9) - 0.5) * 0.45);
-      flower.material = material;
-      meshes.push(flower);
-    }
-  }
-
-  private addTombstone(x: number, z: number, root: TransformNode, meshes: Mesh[], material: PBRMaterial, seed: number): void {
-    const stone = MeshBuilder.CreateBox(`tomb-${root.name}-${meshes.length}`, {
-      width: 0.38 + random01(seed + 1) * 0.15,
-      height: 0.82 + random01(seed + 2) * 0.35,
-      depth: 0.18,
-    }, this.scene);
-    stone.parent = root;
-    stone.position = new Vector3(x, 0.45, z);
-    stone.rotation.z = (random01(seed + 3) - 0.5) * 0.2;
-    stone.material = material;
-    meshes.push(stone);
-  }
-
-  private addFarScenery(
-    index: number,
-    absoluteCenter: number,
-    root: TransformNode,
-    meshes: Mesh[],
-    materials: Array<PBRMaterial | StandardMaterial>,
-  ): void {
-    // Far scenery samples ahead of the player, so the destination appears on the horizon
-    // before the local ground and props have fully changed.
-    const style = styleAt(absoluteCenter + FAR_LOOKAHEAD, 'background');
-    const farSeed = index * 151;
-    const chooseTo = random01(farSeed + 70) < style.t;
-    const biome = chooseTo ? style.to.id : style.from.id;
-    const foliageColor = lerpColor(style.from.foliage, style.to.foliage, style.t).scale(0.58);
-    const stoneColor = lerpColor(style.from.stone, style.to.stone, style.t).scale(0.72);
-    const farFoliage = this.makePbr(`far-foliage-${index}`, foliageColor, 1, materials);
-    const farStone = this.makePbr(`far-stone-${index}`, stoneColor, 1, materials);
-
-    if (biome === 'greenfields') {
-      const hill = MeshBuilder.CreateSphere(`far-hill-${index}`, { diameter: 5.5 + random01(farSeed) * 3, segments: 8 }, this.scene);
-      hill.parent = root;
-      hill.position = new Vector3((random01(farSeed + 1) - 0.5) * 6, 0.2, 5.8);
-      hill.scaling = new Vector3(1.8, 0.55, 0.75);
-      hill.material = farFoliage;
-      meshes.push(hill);
-      return;
-    }
-
-    if (biome === 'whispering_woods') {
-      for (let i = 0; i < 3; i += 1) {
-        this.addTree(-4 + i * 4 + random01(farSeed + i) * 1.2, 4.6 + random01(farSeed + i + 8), 1.25 + random01(farSeed + i + 20) * 0.65, root, meshes, farStone, farFoliage, false);
-      }
-      return;
-    }
-
-    const graveInfluence = influenceFor(style, 'gravehollow');
-    if (graveInfluence > 0.35 && (Math.abs(index % 17) === 0 || Math.abs(index % 17) === 1)) {
-      this.addCathedralSilhouette(root, meshes, farStone);
-    } else {
-      for (let i = 0; i < 3; i += 1) {
-        this.addTombstone(-4 + i * 3.5, 4.7 + random01(farSeed + i) * 1.2, root, meshes, farStone, farSeed + i);
+    if (landmark) {
+      const shrine = arrival === SEGMENT_LENGTH;
+      this.placeProp(shrine ? 'forest_shrine_arch' : 'graveyard_gate', root, 0, 4.6, 1.35);
+      if (!shrine) {
+        this.placeProp('broken_fence_segment', root, -3.4, 4.6, 1.05);
+        this.placeProp('broken_fence_segment', root, 3.4, 4.6, 1.05);
+        this.placeProp('vigil_lantern', root, -2.1, 3.8, 0.95);
+        this.placeProp('vigil_lantern', root, 2.1, 3.8, 0.95);
       }
     }
-  }
-
-  private addForestThreshold(root: TransformNode, meshes: Mesh[], trunkMat: PBRMaterial, foliageMat: PBRMaterial): void {
-    this.addTree(-2.3, 2.7, 1.5, root, meshes, trunkMat, foliageMat, false);
-    this.addTree(2.1, 2.5, 1.6, root, meshes, trunkMat, foliageMat, false);
-    const fallen = MeshBuilder.CreateCylinder(`threshold-log-${root.name}`, { height: 4.2, diameter: 0.3, tessellation: 7 }, this.scene);
-    fallen.parent = root;
-    fallen.position = new Vector3(0, 2.95, 2.55);
-    fallen.rotation.z = Math.PI / 2;
-    fallen.material = trunkMat;
-    meshes.push(fallen);
-  }
-
-  private addGraveGate(root: TransformNode, meshes: Mesh[], stoneMat: PBRMaterial, accentMat: PBRMaterial): void {
-    for (const side of [-1, 1]) {
-      const pillar = MeshBuilder.CreateBox(`grave-pillar-${side}-${root.name}`, { width: 0.65, height: 4.2, depth: 0.65 }, this.scene);
-      pillar.parent = root;
-      pillar.position = new Vector3(side * 2.25, 2.1, 2.8);
-      pillar.material = stoneMat;
-      meshes.push(pillar);
-
-      const cap = MeshBuilder.CreatePolyhedron(`grave-cap-${side}-${root.name}`, { type: 1, size: 0.58 }, this.scene);
-      cap.parent = root;
-      cap.position = new Vector3(side * 2.25, 4.45, 2.8);
-      cap.material = accentMat;
-      meshes.push(cap);
+    if (wrap(index, 10) === 0 && !landmark && styleAt(center, 'props').from.id === 'greenfields') {
+      this.placeProp('meadow_waystone', root, 2.1, 2.6, 1);
     }
-
-    const lintel = MeshBuilder.CreateBox(`grave-lintel-${root.name}`, { width: 5.2, height: 0.42, depth: 0.55 }, this.scene);
-    lintel.parent = root;
-    lintel.position = new Vector3(0, 3.9, 2.8);
-    lintel.material = stoneMat;
-    meshes.push(lintel);
+    return { index, root };
   }
 
-  private addCathedralSilhouette(root: TransformNode, meshes: Mesh[], material: PBRMaterial): void {
-    const body = MeshBuilder.CreateBox(`cathedral-body-${root.name}`, { width: 5.6, height: 4.2, depth: 1.7 }, this.scene);
-    body.parent = root;
-    body.position = new Vector3(0, 2.1, 7.5);
-    body.material = material;
-    meshes.push(body);
-
-    for (const x of [-2.1, 0, 2.1]) {
-      const tower = MeshBuilder.CreateBox(`cathedral-tower-${x}-${root.name}`, { width: 1.2, height: x === 0 ? 6.8 : 5.6, depth: 1.45 }, this.scene);
-      tower.parent = root;
-      tower.position = new Vector3(x, x === 0 ? 3.4 : 2.8, 7.4);
-      tower.material = material;
-      meshes.push(tower);
-
-      const spire = MeshBuilder.CreateCylinder(`cathedral-spire-${x}-${root.name}`, {
-        height: 2.6,
-        diameterTop: 0,
-        diameterBottom: 1.35,
-        tessellation: 6,
-      }, this.scene);
-      spire.parent = root;
-      spire.position = new Vector3(x, x === 0 ? 8.1 : 6.9, 7.4);
-      spire.material = material;
-      meshes.push(spire);
+  private placeProp(id: string, root: TransformNode, x: number, z: number, scale = 1, yaw = 0, castShadow = true): void {
+    const index = Number(root.name.replace('world-chunk-', ''));
+    const absoluteX = index * CHUNK_SIZE + x;
+    const node = this.assets.place(id, root, x, z, scale, yaw, { height: terrainHeight(absoluteX, z), castShadow });
+    if (id === 'vigil_lantern' || id === 'forest_shrine_arch') {
+      this.lanternNodes.add(node);
+      node.onDisposeObservable.addOnce(() => this.lanternNodes.delete(node));
+    }
+    if (/tree|fir|fern|grass_clump|flower_patch|bush_clump/.test(id)) {
+      node.metadata.windPhase = random01(absoluteX * 41 + z * 7) * Math.PI * 2;
+      node.metadata.windStrength = /tree|fir/.test(id) ? 0.004 : 0.024;
+      this.windNodes.add(node);
+      node.onDisposeObservable.addOnce(() => this.windNodes.delete(node));
+    }
+    if (castShadow && z < 8) {
+      const radius = /mausoleum|arch|gate/.test(id) ? 1.7 : id.includes('tree') ? 0.65 : 0.6;
+      const contact = createContactShadow(this.scene, this.contactMaterial, absoluteX, x, z, radius * scale);
+      contact.parent = root;
     }
   }
 
-  private makePbr(name: string, color: Color3, roughness: number, materials: Array<PBRMaterial | StandardMaterial>): PBRMaterial {
-    const material = new PBRMaterial(name, this.scene);
-    material.albedoColor = color;
-    material.metallic = 0;
-    material.roughness = roughness;
-    materials.push(material);
-    return material;
+  private updateWind(): void {
+    for (const node of this.windNodes) {
+      if (Math.abs(node.getAbsolutePosition().x) > 28) continue;
+      node.rotation.z = Math.sin(this.visualTime * 0.85 + node.metadata.windPhase) * node.metadata.windStrength;
+    }
+  }
+
+  private updateLocalLights(): void {
+    const nearby = [...this.lanternNodes].filter((node) => Math.abs(node.getAbsolutePosition().x) < 14)
+      .sort((a, b) => Math.abs(a.getAbsolutePosition().x) - Math.abs(b.getAbsolutePosition().x));
+    this.localLights.forEach((light, i) => {
+      const node = nearby[i]; light.setEnabled(Boolean(node));
+      if (!node) return;
+      const shrine = node.metadata.assetId === 'forest_shrine_arch';
+      light.position.copyFrom(node.getAbsolutePosition()).addInPlace(new Vector3(0, shrine ? 1.7 : 1.45, -0.15));
+      light.diffuse.set(shrine ? 0.25 : 1, shrine ? 0.85 : 0.52, shrine ? 0.62 : 0.19);
+      light.intensity = shrine ? 1.4 : 2.8 + Math.sin(this.visualTime * 4 + i * 2) * 0.15;
+    });
+  }
+
+  private addFarScenery(index: number, root: TransformNode): void {
+    const style = styleAt(index * CHUNK_SIZE + FAR_LOOKAHEAD, 'background');
+    const seed = index * 151;
+    const biome = random01(seed + 70) < style.t ? style.to.id : style.from.id;
+    if (biome === 'gravehollow' && wrap(index, 10) === 0) {
+      this.placeProp('cathedral_nave', root, 0, 20, 1.35, 0, false);
+      this.placeProp('cathedral_tower', root, -3.4, 20.2, 1.12, 0, false);
+      this.placeProp('cathedral_tower', root, 3.4, 20.2, 0.96, 0, false);
+      this.placeProp('cathedral_buttress', root, -4.9, 19.8, 1, 0, false);
+      this.placeProp('cathedral_buttress', root, 4.9, 19.8, 1, 0, false);
+      return;
+    }
+    const count = biome === 'greenfields' ? 2 : 3;
+    for (let slot = 0; slot < count; slot++) {
+      const variant = String.fromCharCode(97 + Math.floor(random01(seed + slot + 9) * 3));
+      const family = biome === 'greenfields' ? 'healthy_tree' : biome === 'whispering_woods' ? 'dark_tree' : 'dead_tree';
+      const id = biome === 'whispering_woods' && random01(seed + slot + 6) < 0.55 ? 'ancient_fir' : `${family}_${variant}`;
+      this.placeProp(id, root, -4 + slot * (count === 2 ? 7 : 4),
+        10.5 + random01(seed + slot + 8) * 5,
+        biome === 'whispering_woods' ? 1.1 + random01(seed + slot) * 0.3 : 0.9 + random01(seed + slot) * 0.2,
+        random01(seed + slot + 25) * Math.PI * 2, false);
+    }
   }
 
   private createAtmosphereMotes(): void {
     for (let i = 0; i < 22; i += 1) {
-      const mote = MeshBuilder.CreateSphere(`world-mote-${i}`, { diameter: 0.035 + (i % 5) * 0.008, segments: 4 }, this.scene);
+      const mote = MeshBuilder.CreateSphere(`world-mote-${i}`, { diameter: 0.018 + (i % 5) * 0.004, segments: 4 }, this.scene);
       mote.material = this.moteMaterial;
       mote.position = new Vector3(-7 + random01(i * 13) * 17, 0.6 + random01(i * 17) * 4.8, -1.8 + random01(i * 23) * 7.5);
       this.motes.push(mote);
@@ -595,7 +450,7 @@ export class WorldGenerator {
     const style = styleAt(this.distance + 8, 'motes');
     const accent = lerpColor(style.from.accent, style.to.accent, style.t);
     this.moteMaterial.emissiveColor = accent;
-    this.moteMaterial.alpha = lerp(0.42, 0.72, style.t);
+    this.moteMaterial.alpha = lerp(0.18, 0.4, influenceFor(style, 'whispering_woods'));
 
     const graveInfluence = influenceFor(style, 'gravehollow');
     const woodsInfluence = influenceFor(style, 'whispering_woods');
@@ -623,23 +478,25 @@ export class WorldGenerator {
     const sky = lerpColor(skyStyle.from.sky, skyStyle.to.sky, skyStyle.t);
     const fog = lerpColor(fogStyle.from.fog, fogStyle.to.fog, fogStyle.t);
     this.scene.clearColor = new Color4(sky.r, sky.g, sky.b, 1);
+    const backdropStyle = styleAt(this.distance + FAR_LOOKAHEAD, 'background');
+    const farFoliage = lerpColor(backdropStyle.from.foliage, backdropStyle.to.foliage, backdropStyle.t);
+    this.backdrop.update(this.distance, sky, fog, farFoliage, influenceFor(skyStyle, 'greenfields'));
     this.scene.fogColor = fog;
     this.scene.fogDensity = lerp(fogStyle.from.fogDensity, fogStyle.to.fogDensity, fogStyle.t);
 
     this.skyLight.intensity = lerp(skyStyle.from.ambient, skyStyle.to.ambient, skyStyle.t);
-    this.skyLight.diffuse = lerpColor(new Color3(0.82, 0.88, 1), new Color3(0.62, 0.65, 0.82), skyStyle.t);
+    const gloom = 1 - influenceFor(skyStyle, 'greenfields');
+    this.skyLight.diffuse = lerpColor(new Color3(0.91, 0.96, 0.92), new Color3(0.66, 0.77, 0.88), gloom);
     this.skyLight.groundColor = lerpColor(groundStyle.from.ground.scale(0.32), groundStyle.to.ground.scale(0.32), groundStyle.t);
 
     // Sun changes later than the sky, preserving warm light for a while as the horizon darkens.
     const sunT = staged(rawBiomeSample(this.distance + 6).t, 0.24, 0.9);
     const sunSample = rawBiomeSample(this.distance + 6);
     this.sun.intensity = lerp(sunSample.from.sun, sunSample.to.sun, sunT);
-    this.sun.diffuse = lerpColor(new Color3(1, 0.92, 0.76), new Color3(0.72, 0.75, 0.94), sunT);
+    this.sun.diffuse = lerpColor(new Color3(1, 0.95, 0.83), new Color3(0.74, 0.80, 1), gloom);
   }
 
   private disposeChunk(chunk: WorldChunk): void {
-    for (const mesh of chunk.meshes) mesh.dispose(false, false);
-    for (const material of chunk.materials) material.dispose();
     chunk.root.dispose();
   }
 

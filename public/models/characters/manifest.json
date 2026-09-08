@@ -1,0 +1,180 @@
+{
+  "version": 1,
+  "units": "meters",
+  "front": "Blender -Y",
+  "assets": [
+    {
+      "id": "mage",
+      "url": "/models/characters/mage.glb",
+      "triangles": 3684,
+      "animations": [
+        "idle",
+        "walk",
+        "attack",
+        "hit",
+        "death"
+      ],
+      "rig": "articulated transform hierarchy"
+    },
+    {
+      "id": "moss_slime",
+      "url": "/models/characters/moss_slime.glb",
+      "triangles": 488,
+      "animations": [
+        "idle",
+        "walk",
+        "attack",
+        "hit",
+        "death"
+      ],
+      "rig": "articulated transform hierarchy"
+    },
+    {
+      "id": "briarling",
+      "url": "/models/characters/briarling.glb",
+      "triangles": 590,
+      "animations": [
+        "idle",
+        "walk",
+        "attack",
+        "hit",
+        "death"
+      ],
+      "rig": "articulated transform hierarchy"
+    },
+    {
+      "id": "road_imp",
+      "url": "/models/characters/road_imp.glb",
+      "triangles": 688,
+      "animations": [
+        "idle",
+        "walk",
+        "attack",
+        "hit",
+        "death"
+      ],
+      "rig": "articulated transform hierarchy"
+    },
+    {
+      "id": "ash_beetle",
+      "url": "/models/characters/ash_beetle.glb",
+      "triangles": 1140,
+      "animations": [
+        "idle",
+        "walk",
+        "attack",
+        "hit",
+        "death"
+      ],
+      "rig": "articulated transform hierarchy"
+    },
+    {
+      "id": "hollow_crow",
+      "url": "/models/characters/hollow_crow.glb",
+      "triangles": 668,
+      "animations": [
+        "idle",
+        "walk",
+        "attack",
+        "hit",
+        "death"
+      ],
+      "rig": "articulated transform hierarchy"
+    },
+    {
+      "id": "road_warden",
+      "url": "/models/characters/road_warden.glb",
+      "triangles": 812,
+      "animations": [
+        "idle",
+        "walk",
+        "attack",
+        "hit",
+        "death"
+      ],
+      "rig": "articulated transform hierarchy"
+    },
+    {
+      "id": "crypt_hound",
+      "url": "/models/characters/crypt_hound.glb",
+      "triangles": 836,
+      "animations": [
+        "idle",
+        "walk",
+        "attack",
+        "hit",
+        "death"
+      ],
+      "rig": "articulated transform hierarchy"
+    },
+    {
+      "id": "ember_wisp",
+      "url": "/models/characters/ember_wisp.glb",
+      "triangles": 374,
+      "animations": [
+        "idle",
+        "walk",
+        "attack",
+        "hit",
+        "death"
+      ],
+      "rig": "articulated transform hierarchy"
+    },
+    {
+      "id": "gear_robe",
+      "url": "/models/characters/gear_robe.glb",
+      "triangles": 708,
+      "animations": [],
+      "rig": "socket attachment"
+    },
+    {
+      "id": "gear_helm",
+      "url": "/models/characters/gear_helm.glb",
+      "triangles": 284,
+      "animations": [],
+      "rig": "socket attachment"
+    },
+    {
+      "id": "gear_boots",
+      "url": "/models/characters/gear_boots.glb",
+      "triangles": 520,
+      "animations": [],
+      "rig": "socket attachment"
+    },
+    {
+      "id": "gear_ringLeft",
+      "url": "/models/characters/gear_ringLeft.glb",
+      "triangles": 216,
+      "animations": [],
+      "rig": "socket attachment"
+    },
+    {
+      "id": "gear_ringRight",
+      "url": "/models/characters/gear_ringRight.glb",
+      "triangles": 216,
+      "animations": [],
+      "rig": "socket attachment"
+    },
+    {
+      "id": "gear_staff",
+      "url": "/models/characters/gear_staff.glb",
+      "triangles": 484,
+      "animations": [],
+      "rig": "socket attachment"
+    },
+    {
+      "id": "gear_spellbook",
+      "url": "/models/characters/gear_spellbook.glb",
+      "triangles": 548,
+      "animations": [],
+      "rig": "socket attachment"
+    },
+    {
+      "id": "gear_necklace",
+      "url": "/models/characters/gear_necklace.glb",
+      "triangles": 152,
+      "animations": [],
+      "rig": "socket attachment"
+    }
+  ]
+}

@@ -158,6 +158,7 @@ export class EvercastSimulation {
       enemyName: target?.name ?? (run.phase === 'combat' ? 'Incoming…' : 'Road ahead'),
       enemies: run.enemies.map((enemy) => ({
         instanceId: enemy.instanceId,
+        modelKey: this.catalog.enemies.get(enemy.definitionId)!.modelKey,
         name: enemy.name,
         boss: enemy.boss,
         hp: quantity(enemy.hp),
