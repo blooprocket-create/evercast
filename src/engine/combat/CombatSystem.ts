@@ -167,6 +167,8 @@ export class CombatSystem {
     run.stats.projectileHits += 1;
     if (critical) run.stats.criticalHits += 1;
 
+    const healthBeforeLeech = big(run.mage.hp);
+    const controlDelaySeconds = enemy.hp.cmp(0) > 0 ? spell.controlDelaySeconds : 0;
     if (spell.controlDelaySeconds > 0 && enemy.hp.cmp(0) > 0) {
       enemy.attackCooldown += spell.controlDelaySeconds;
     }
@@ -186,6 +188,8 @@ export class CombatSystem {
       source,
       sourceInstanceId,
       sequence,
+      healing: decimalMaxZero(run.mage.hp.sub(healthBeforeLeech)).toString(),
+      controlDelaySeconds,
     });
 
     if (!allowTriggers || enemy.hp.cmp(0) <= 0) return;

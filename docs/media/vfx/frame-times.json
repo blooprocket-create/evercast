@@ -1,0 +1,38 @@
+{
+  "combat": {
+    "frames": 125,
+    "medianMs": 48.599999999998545,
+    "p95Ms": 55.69999999999709,
+    "stats": {
+      "active": 128,
+      "animationGroups": 35,
+      "chilled": 6,
+      "jobs": 374,
+      "lights": 0,
+      "materials": 147,
+      "meshes": 96,
+      "paths": 32,
+      "sceneLights": 4,
+      "sceneMeshes": 2337,
+      "templates": 30
+    }
+  },
+  "idle": {
+    "frames": 191,
+    "medianMs": 34.69999999999709,
+    "p95Ms": 34.80000000000291,
+    "stats": {
+      "active": 0,
+      "animationGroups": 35,
+      "chilled": 0,
+      "jobs": 0,
+      "lights": 0,
+      "materials": 147,
+      "meshes": 96,
+      "paths": 16,
+      "sceneLights": 4,
+      "sceneMeshes": 2321,
+      "templates": 30
+    }
+  }
+}

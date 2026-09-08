@@ -17,6 +17,10 @@ export type GameEvent =
       source: ProjectileHitSource;
       sourceInstanceId?: number;
       sequence: number;
+      /** Actual health restored (after max-HP clamp), for presentation only. */
+      healing?: string;
+      /** Attack delay actually applied by this hit, in seconds. */
+      controlDelaySeconds?: number;
     }
   | { type: 'enemy_attack'; time: number; instanceId: number; damage: string }
   | { type: 'enemy_killed'; time: number; stage: number; instanceId: number; enemyId: string; gold: string }
