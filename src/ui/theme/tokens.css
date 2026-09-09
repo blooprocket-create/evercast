@@ -96,6 +96,12 @@
   --value-width: 10ch;
 
   --shelf-height: 132px;
+  /*
+   * Three pinned destinations plus More. This is the invariant the whole
+   * shell rests on, not a layout guess - src/ui/architecture.test.ts asserts
+   * SHELF_SLOTS is 3, and the grid reads this rather than hardcoding a count.
+   */
+  --shelf-slot-count: 4;
   --control-height: 38px;
   --touch-target: 44px;
 }
@@ -112,4 +118,11 @@
 .uiValue {
   font-variant-numeric: tabular-nums;
   text-align: right;
+}
+
+/* The shelf stacks on a phone, so the insets everything else uses grow with it. */
+@media (max-width: 620px) {
+  :root {
+    --shelf-height: 168px;
+  }
 }

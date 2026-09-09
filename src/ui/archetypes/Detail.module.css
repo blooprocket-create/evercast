@@ -25,3 +25,16 @@
   gap: var(--space-4);
   align-content: start;
 }
+
+@media (max-width: 860px) {
+  .detail {
+    flex-direction: column;
+  }
+
+  .list {
+    width: 100%;
+    max-height: 45%;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+}

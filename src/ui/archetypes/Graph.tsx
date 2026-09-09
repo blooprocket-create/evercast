@@ -50,6 +50,7 @@ export function Graph({
   return (
     <div className={styles.graph}>
       <div className={styles.main}>
+        {toolbar && <div className={styles.toolbar}>{toolbar}</div>}
         <div
           ref={view.containerRef}
           className={view.isDragging ? `${styles.viewport} ${styles.dragging}` : styles.viewport}
@@ -105,8 +106,6 @@ export function Graph({
               </div>
             ))}
           </div>
-
-          {toolbar && <div className={styles.toolbar}>{toolbar}</div>}
 
           {showMinimap && (
             <div className={styles.minimap} aria-hidden="true">

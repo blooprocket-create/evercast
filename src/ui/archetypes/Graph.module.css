@@ -12,6 +12,23 @@
   min-height: 0;
 }
 
+/* On a wide screen the toolbar floats over the graph; there is room to spare. */
+.toolbar {
+  position: absolute;
+  left: var(--space-3);
+  top: var(--space-3);
+  right: var(--space-3);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+
+.toolbar > * {
+  pointer-events: auto;
+}
+
 /* One transformed layer inside a hidden box: never two scroll axes. */
 .viewport {
   position: absolute;
@@ -51,21 +68,6 @@
   cursor: pointer;
   text-align: center;
   padding: 0 var(--space-2);
-}
-
-.toolbar {
-  position: absolute;
-  left: var(--space-3);
-  top: var(--space-3);
-  right: var(--space-3);
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  pointer-events: none;
-}
-
-.toolbar > * {
-  pointer-events: auto;
 }
 
 .controls {
@@ -155,4 +157,42 @@
   gap: var(--space-3);
   align-content: start;
   background: var(--veil-1);
+}
+
+@media (max-width: 860px) {
+  .graph {
+    flex-direction: column;
+  }
+
+  .inspector {
+    width: 100%;
+    max-height: 45%;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+
+  /*
+   * The toolbar floats over the graph on a wide screen, where there is room
+   * to spare. On a phone it wraps, so it takes its own row instead of sitting
+   * on top of the nodes.
+   */
+  .main {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .toolbar {
+    position: static;
+    flex-wrap: wrap;
+    padding: var(--space-2);
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+  }
+
+  .viewport {
+    position: relative;
+    inset: auto;
+    flex: 1;
+    min-height: 0;
+  }
 }

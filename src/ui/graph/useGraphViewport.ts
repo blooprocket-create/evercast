@@ -101,34 +101,67 @@ export function useGraphViewport(bounds: Rect): GraphViewport {
     const element = containerRef.current;
     if (!element) return;
 
-    let pointerId: number | null = null;
+    // Two pointers pinch, one pans. Tracked together so a second finger
+    // landing mid-drag turns the gesture into a zoom rather than fighting it.
+    const active = new Map<number, { x: number; y: number }>();
+    let pinchDistance: number | null = null;
     let last = { x: 0, y: 0 };
+
+    const spread = () => {
+      const [a, b] = [...active.values()];
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    };
+    const midpoint = () => {
+      const [a, b] = [...active.values()];
+      const rect = element.getBoundingClientRect();
+      return { x: (a.x + b.x) / 2 - rect.left, y: (a.y + b.y) / 2 - rect.top };
+    };
 
     const onDown = (event: PointerEvent) => {
       // Let clicks on nodes and controls through.
       if ((event.target as HTMLElement).closest('button')) return;
-      pointerId = event.pointerId;
-      last = { x: event.clientX, y: event.clientY };
+      active.set(event.pointerId, { x: event.clientX, y: event.clientY });
       element.setPointerCapture(event.pointerId);
-      setDragging(true);
+      if (active.size === 1) {
+        last = { x: event.clientX, y: event.clientY };
+        setDragging(true);
+      } else if (active.size === 2) {
+        pinchDistance = spread();
+      }
     };
 
     const onMove = (event: PointerEvent) => {
-      if (pointerId !== event.pointerId) return;
+      if (!active.has(event.pointerId)) return;
+      active.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      adjusted.current = true;
+      const { transform: current, bounds: box, viewport: size } = latest.current;
+
+      if (active.size >= 2) {
+        const distance = spread();
+        if (pinchDistance && distance > 0) {
+          const factor = distance / pinchDistance;
+          pinchDistance = distance;
+          setTransform(clampPan(zoomAt(current, factor, midpoint()), box, size, 80));
+        }
+        return;
+      }
+
       const dx = event.clientX - last.x;
       const dy = event.clientY - last.y;
       last = { x: event.clientX, y: event.clientY };
-      adjusted.current = true;
-      const { transform: current, bounds: box, viewport: size } = latest.current;
       setTransform(
         clampPan({ ...current, x: current.x + dx, y: current.y + dy }, box, size, 80),
       );
     };
 
     const onUp = (event: PointerEvent) => {
-      if (pointerId !== event.pointerId) return;
-      pointerId = null;
-      setDragging(false);
+      active.delete(event.pointerId);
+      if (active.size < 2) pinchDistance = null;
+      if (active.size === 1) {
+        const [only] = [...active.values()];
+        last = { x: only.x, y: only.y };
+      }
+      if (active.size === 0) setDragging(false);
     };
 
     element.addEventListener('pointerdown', onDown);

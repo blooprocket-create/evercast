@@ -100,3 +100,42 @@
   background: var(--accent);
   flex: none;
 }
+
+@media (max-width: 860px) {
+  .log {
+    display: none;
+  }
+
+  .vitals {
+    width: 180px;
+  }
+}
+
+@media (max-width: 620px) {
+  .shelf {
+    flex-direction: column;
+    justify-content: center;
+    gap: var(--space-3);
+    padding: var(--space-3);
+  }
+
+  .divider {
+    display: none;
+  }
+
+  .vitals {
+    width: 100%;
+  }
+
+  .slots {
+    display: grid;
+    grid-template-columns: repeat(var(--shelf-slot-count), minmax(0, 1fr));
+    width: 100%;
+  }
+
+  /* Four across, never wider than a thumb reach and never below 44px. */
+  .slot {
+    width: auto;
+    height: 60px;
+  }
+}

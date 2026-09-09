@@ -178,3 +178,35 @@
   color: var(--ink-mid);
   pointer-events: auto;
 }
+
+@media (max-width: 860px) {
+  /* The wallet strip takes the top row on a phone; the place block sits under it. */
+  .place {
+    width: auto;
+    left: var(--space-3);
+    top: calc(var(--space-3) + 62px);
+  }
+
+  .wordmark {
+    font-size: var(--text-lead);
+  }
+
+  .wallets {
+    right: var(--space-3);
+    top: var(--space-3);
+  }
+
+  .wallet {
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .enemy {
+    top: auto;
+    bottom: var(--space-3);
+    left: var(--space-3);
+    right: var(--space-3);
+    width: auto;
+    transform: none;
+  }
+}

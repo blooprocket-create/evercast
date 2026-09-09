@@ -56,3 +56,31 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* The same registry, rendered as a scrollable strip instead of a column. */
+@media (max-width: 860px) {
+  .rail {
+    width: 100%;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-2);
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .rail > div {
+    display: flex;
+    gap: var(--space-2);
+  }
+
+  .group {
+    display: none;
+  }
+
+  .entry {
+    width: auto;
+    white-space: nowrap;
+  }
+}
