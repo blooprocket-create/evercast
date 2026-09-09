@@ -1,0 +1,180 @@
+.chrome {
+  position: absolute;
+  inset: 0 0 var(--shelf-height) 0;
+  pointer-events: none;
+}
+
+.chrome::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 180px;
+  background: linear-gradient(var(--hud-fade), transparent);
+}
+
+.place {
+  position: absolute;
+  left: var(--space-5);
+  top: var(--space-5);
+  display: grid;
+  gap: var(--space-2);
+  width: 296px;
+}
+
+.wordmark {
+  font: 400 23px / 1 var(--font-display);
+  letter-spacing: 0.26em;
+  color: var(--ink);
+  text-shadow: 0 2px 18px var(--wordmark-shadow);
+}
+
+.zone {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font: 500 var(--text-body) / 1 var(--font-ui);
+  color: var(--ink-mid);
+}
+
+.zoneDot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+}
+
+.frontier {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.frontierLabel {
+  font: 600 var(--text-label) / 1 var(--font-ui);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-low);
+}
+
+.frontierValue {
+  font: 600 var(--text-title) / 1 var(--font-display);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.best {
+  margin-left: auto;
+  font: 600 var(--text-label) / 1 var(--font-ui);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-low);
+  font-variant-numeric: tabular-nums;
+}
+
+.mode {
+  width: fit-content;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+  background: var(--pill);
+  font: 600 var(--text-label) / 1 var(--font-ui);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.wallets {
+  position: absolute;
+  right: var(--space-5);
+  top: var(--space-5);
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-3);
+  pointer-events: auto;
+}
+
+.wallet {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--glass);
+  backdrop-filter: blur(10px);
+}
+
+.walletItem {
+  display: grid;
+  gap: var(--space-1);
+  justify-items: end;
+}
+
+.walletLabel {
+  font: 600 var(--text-label) / 1 var(--font-ui);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-low);
+}
+
+.gold {
+  font: 500 var(--text-lead) / 1 var(--font-display);
+  color: var(--gold);
+}
+
+.essence {
+  font: 500 var(--text-lead) / 1 var(--font-display);
+  color: var(--essence);
+}
+
+.enemy {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  transform: translateX(-50%);
+  width: min(340px, calc(100% - 48px));
+  padding: var(--space-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-card);
+  background: var(--glass-strong);
+  backdrop-filter: blur(8px);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.enemyHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.enemyName {
+  font: 600 var(--text-lead) / 1 var(--font-display);
+  color: var(--ink);
+}
+
+.wave {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font: 600 var(--text-label) / 1 var(--font-ui);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-low);
+}
+
+.away {
+  position: absolute;
+  left: var(--space-5);
+  top: 200px;
+  max-width: 440px;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--glass-mid);
+  font: 400 var(--text-small) / 1.5 var(--font-ui);
+  color: var(--ink-mid);
+  pointer-events: auto;
+}

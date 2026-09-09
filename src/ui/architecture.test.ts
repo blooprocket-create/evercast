@@ -73,8 +73,10 @@ describe('ui architecture', () => {
     expect(offences(FILES, /repeat\(\s*\d/)).toEqual([]);
   });
 
-  it('only lets archetypes own a scroll container', () => {
-    const candidates = FILES.filter((file) => !within(file, 'archetypes'));
+  it('never lets a surface own a scroll container', () => {
+    // Archetypes and shell chrome own scrolling; a surface describes data and
+    // hands it over, which is what keeps two-axis scrolling impossible.
+    const candidates = FILES.filter((file) => within(file, 'surfaces'));
     expect(offences(candidates, /overflow(-[xy])?\s*:\s*(auto|scroll)/)).toEqual([]);
   });
 

@@ -125,7 +125,7 @@ function CharacterPanel({ snapshot }: { snapshot: SimulationSnapshot }) {
   );
 }
 
-function TreePanel({
+export function TreePanel({
   snapshot,
   onBuySpellPoint,
   onActivateSpellNode,
@@ -183,7 +183,7 @@ interface GearPanelProps {
   onLevelGear: (slot: GearSlot) => void;
 }
 
-function GearPanel({ gear, selected, onSelect, onLevelGear }: GearPanelProps) {
+export function GearPanel({ gear, selected, onSelect, onLevelGear }: GearPanelProps) {
   return (
     <div className="gear-panel menu-scroll">
       <div className="paperdoll-wrap">
