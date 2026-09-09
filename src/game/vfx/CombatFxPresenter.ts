@@ -1,4 +1,4 @@
-import { ArcRotateCamera, Color3, PointLight, Scene, Vector3 } from '@babylonjs/core';
+import { Color3, PointLight, Scene, Vector3 } from '@babylonjs/core';
 import type { ActorVisual } from '../actors/ActorAssets';
 import type { Hit } from './CombatVfxPlan';
 import { VfxPool, type School } from './VfxPool';
@@ -8,8 +8,6 @@ import type { GameEvent } from '../../engine/events/GameEvent';
 /** Local transient feedback: never touches shared actor materials or authoritative state. */
 export class CombatFxPresenter {
   private chill = new Map<number, { left: number; strength: number; position: Vector3; tick: number }>();
-  private impulse = 0;
-  private cameraOffset = 0;
   private light?: PointLight;
   private lightTime = 0;
   private numbers: DamageNumbers;
@@ -17,7 +15,6 @@ export class CombatFxPresenter {
   constructor(
     private pool: VfxPool,
     scene: Scene,
-    private camera?: ArcRotateCamera,
   ) {
     this.numbers = new DamageNumbers(scene);
     if (pool.budget.lights) {
@@ -49,7 +46,6 @@ export class CombatFxPresenter {
       });
       this.burst(position, 'frost', 0.65);
     }
-    if (hit.critical) this.impulse = Math.min(0.025, this.impulse + 0.012);
     if (this.light && actor) {
       this.light.includedOnlyMeshes = actor.root.getChildMeshes();
       this.light.position.copyFrom(position);
@@ -151,12 +147,6 @@ export class CombatFxPresenter {
         });
       }
     }
-    if (this.camera) {
-      this.camera.target.y -= this.cameraOffset;
-      this.impulse *= Math.exp(-dt * 24);
-      this.cameraOffset = this.impulse * Math.sin(this.impulse * 800);
-      this.camera.target.y += this.cameraOffset;
-    }
     this.lightTime = Math.max(0, this.lightTime - dt);
     if (this.light) this.light.intensity = this.lightTime * 5;
   }
@@ -164,8 +154,6 @@ export class CombatFxPresenter {
     return { chilled: this.chill.size, lights: this.light ? 1 : 0 };
   }
   dispose(): void {
-    if (this.camera) this.camera.target.y -= this.cameraOffset;
-    this.cameraOffset = 0;
     this.chill.clear();
     this.burstCooldowns.clear();
     this.light?.dispose();
