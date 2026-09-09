@@ -39,7 +39,7 @@ export class EvercastSimulation {
   private readonly gearSystem: GearSystem;
   private readonly spellTreeSystem: SpellTreeSystem;
   private recordPresentationEvents = true;
-  private lastEvent = 'The Evercast stirs.';
+  private lastEvent: GameEvent | null = null;
 
   constructor(options: SimulationOptions = {}) {
     this.config = { ...DEFAULT_ENGINE_CONFIG, ...options.config };
@@ -130,7 +130,7 @@ export class EvercastSimulation {
       config: this.config,
       catalog: this.catalog,
       canRebirth: this.rebirthSystem.canRebirth(this.state),
-      lastEvent: this.lastEvent,
+      lastEvent: this.lastEvent ? describeGameEvent(this.lastEvent) : 'The Evercast stirs.',
     });
   }
 
@@ -273,7 +273,7 @@ export class EvercastSimulation {
   }
 
   private captureEvent(event: GameEvent): void {
-    this.lastEvent = describeGameEvent(event);
+    this.lastEvent = event;
     if (this.recordPresentationEvents) this.presentationEvents.push(event);
   }
 }

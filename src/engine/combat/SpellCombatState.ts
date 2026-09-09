@@ -1,5 +1,6 @@
 import type { EnemyState, RunState } from '../model';
 import type { SpellMechanics } from '../spell/SpellMechanics';
+import type { CompiledSpell } from '../spell/types';
 import { compileSpell } from '../spell/SpellCompiler';
 
 export interface CombatPosition {
@@ -103,8 +104,8 @@ export function nearby(
         a.instanceId - b.instanceId,
     );
 }
-export function effectiveCastInterval(run: RunState): number {
-  const spell = compileSpell(run.spell),
+export function effectiveCastInterval(run: RunState, compiled?: CompiledSpell): number {
+  const spell = compiled ?? compileSpell(run.spell),
     m = spell.mechanics,
     s = run.combatState;
   if (!m || !s) return spell.castInterval;

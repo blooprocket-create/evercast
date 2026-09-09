@@ -1,11 +1,15 @@
 import type { GameEvent } from './GameEvent';
+import { big, formatBig } from '../numbers';
+
+/** Event payloads carry raw `Decimal.toString()` values; never show those. */
+const n = (value: string): string => formatBig(big(value));
 
 export function describeGameEvent(event: GameEvent): string {
   switch (event.type) {
     case 'meteor_queued':
       return 'A meteor gathers above the battlefield.';
     case 'effect_hit':
-      return `${event.effect} deals ${event.damage}.`;
+      return `${event.effect} deals ${n(event.damage)}.`;
     case 'status_applied':
       return `${event.status} applied (${event.stacks}).`;
     case 'combat_state':
@@ -17,15 +21,15 @@ export function describeGameEvent(event: GameEvent): string {
     case 'spell_cast':
       return `Evercast cast (${event.projectiles} projectile${event.projectiles === 1 ? '' : 's'}).`;
     case 'projectile_hit':
-      return `${event.critical ? 'Critical! ' : ''}${hitLabel(event.source)} hits for ${event.damage}.`;
+      return `${event.critical ? 'Critical! ' : ''}${hitLabel(event.source)} hits for ${n(event.damage)}.`;
     case 'enemy_attack':
-      return `An enemy hits for ${event.damage}.`;
+      return `An enemy hits for ${n(event.damage)}.`;
     case 'enemy_killed':
-      return `Enemy falls. +${event.gold} Gold.`;
+      return `Enemy falls. +${n(event.gold)} Gold.`;
     case 'mage_defeated':
       return `The mage falls at stage ${event.stage}.`;
     case 'resource_gained':
-      return `+${event.amount} ${resourceLabel(event.resource)}.`;
+      return `+${n(event.amount)} ${resourceLabel(event.resource)}.`;
     case 'stage_advanced':
       return `Frontier advanced to stage ${event.stage}.`;
     case 'mode_changed':
@@ -35,13 +39,13 @@ export function describeGameEvent(event: GameEvent): string {
     case 'gear_evolved':
       return `${event.name} evolved at gear level ${event.level}.`;
     case 'spell_point_purchased':
-      return `Evercast absorbs ${event.cost} Essence. +1 Spell Point.`;
+      return `Evercast absorbs ${n(event.cost)} Essence. +1 Spell Point.`;
     case 'spell_node_activated':
       return `${event.nodeName} awakened.`;
     case 'spell_tree_respecced':
       return `Evercast reshaped. ${event.refundedPoints} point${event.refundedPoints === 1 ? '' : 's'} returned.`;
     case 'rebirth_performed':
-      return `Rebirth ${event.rebirths}: +${event.knowledgeGained} Knowledge.`;
+      return `Rebirth ${event.rebirths}: +${n(event.knowledgeGained)} Knowledge.`;
   }
 }
 

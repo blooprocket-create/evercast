@@ -83,7 +83,7 @@ export function buildSimulationSnapshot({
     spellBaseDamage: quantity(big(compiledSpell.damage)),
     gearDamageBonus: quantity(gearStats.baseDamageBonus),
     gearHealthBonus: quantity(gearStats.maxHpBonus),
-    castInterval: effectiveCastInterval(run),
+    castInterval: effectiveCastInterval(run, compiledSpell),
     critChance: compiledSpell.critChance,
     critMultiplier: compiledSpell.critMultiplier,
     pierceTargets: compiledSpell.pierceTargets,

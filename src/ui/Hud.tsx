@@ -60,7 +60,7 @@ export function Hud({
       )}
 
       {import.meta.env.DEV && <div className="prototype-hint">N · next region &nbsp; Shift N · preview transition</div>}
-      <div className="event-line">{snapshot.lastEvent.replace(/\d+\.\d{3,}/g, (value) => Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 }))}</div>
+      <div className="event-line">{snapshot.lastEvent}</div>
       <GameMenu
         snapshot={snapshot}
         onLevelGear={onLevelGear}

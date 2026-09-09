@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { GearSlot } from './engine/gear/types';
-import { OfflineProgressor } from './engine/offline/OfflineProgressor';
+import { OfflineProgressor, type OfflineSummary } from './engine/offline/OfflineProgressor';
 import type { SimulationSnapshot } from './engine/types';
 import { EvercastScene } from './game/EvercastScene';
 import { offlineSummary, saveGame, simulation } from './app/runtime';
@@ -9,6 +9,7 @@ import { Hud } from './ui/Hud';
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [snapshot, setSnapshot] = useState<SimulationSnapshot>(() => simulation.getSnapshot());
+  const [awayProgress, setAwayProgress] = useState<OfflineSummary | null>(offlineSummary);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -35,7 +36,7 @@ export default function App() {
 
       const elapsedSeconds = Math.max(0, (Date.now() - hiddenAt) / 1000);
       hiddenAt = null;
-      backgroundProgressor.apply(simulation, elapsedSeconds);
+      setAwayProgress(backgroundProgressor.apply(simulation, elapsedSeconds));
 
       simulation.drainPresentationEvents();
       const next = simulation.getSnapshot();
@@ -81,6 +82,7 @@ export default function App() {
 
   const refreshAfter = (action: () => boolean) => {
     if (!action()) return;
+    setAwayProgress(null);
     setSnapshot(simulation.getSnapshot());
     saveGame();
   };
@@ -95,8 +97,8 @@ export default function App() {
       <canvas ref={canvasRef} className="game-canvas" aria-label="Evercast game world" />
       <Hud
         snapshot={snapshot}
-        offlineSummary={offlineSummary}
-        onRetry={() => simulation.execute({ type: 'retry_frontier' })}
+        offlineSummary={awayProgress}
+        onRetry={() => refreshAfter(() => simulation.execute({ type: 'retry_frontier' }))}
         onLevelGear={levelGear}
         onBuySpellPoint={buySpellPoint}
         onActivateSpellNode={activateSpellNode}
