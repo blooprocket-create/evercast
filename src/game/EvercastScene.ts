@@ -33,6 +33,9 @@ import { castDuration } from './vfx/CombatVfxPlan';
 /** Roughly head height above an enemy's feet. */
 const HEALTH_BAR_OFFSET = new Vector3(0, 1.55, 0);
 
+/** Matches DEFAULT_UI_SETTINGS.display.depthOfField; the store is the authority. */
+const DEFAULT_DEPTH_OF_FIELD = 0.75;
+
 export class EvercastScene {
   private readonly engine: Engine;
   private readonly scene: Scene;
@@ -42,6 +45,7 @@ export class EvercastScene {
   private readonly shadows: ShadowGenerator;
   private readonly enemyMeshes = new Map<number, ActorVisual>();
   private readonly retiring: { id: number; actor: ActorVisual; remaining: number }[] = [];
+  private readonly presentation: DefaultRenderingPipeline;
   private readonly healthBars: EnemyHealthBars;
   readonly vfx: SpellVfxPresenter;
   private readonly transientAnchors = new Map<number, { position: Vector3; remaining: number }>();
@@ -72,6 +76,7 @@ export class EvercastScene {
     camera.inputs.clear();
 
     const presentation = new DefaultRenderingPipeline('environment finish', true, this.scene, [camera]);
+    this.presentation = presentation;
     presentation.samples = 4;
     presentation.fxaaEnabled = true;
     presentation.bloomEnabled = false;
@@ -80,7 +85,6 @@ export class EvercastScene {
     // the near verge, which is what makes the diorama read as a diorama.
     // Babylon measures focus distance in millimetres, and the camera radius is
     // pinned, so the plane of focus sits exactly on the road.
-    presentation.depthOfFieldEnabled = true;
     presentation.depthOfFieldBlurLevel = DepthOfFieldEffectBlurLevel.Medium;
     // The mage sits ~17.4 units from the camera and the far end of a lane ~20.8,
     // so the plane of focus goes through the middle of the road. Aperture is
@@ -89,7 +93,7 @@ export class EvercastScene {
     presentation.depthOfField.focusDistance = 18500;
     presentation.depthOfField.focalLength = 85;
     presentation.depthOfField.fStop = 1.35;
-    presentation.depthOfField.lensSize = 410;
+    this.setDepthOfField(DEFAULT_DEPTH_OF_FIELD);
     this.scene.imageProcessingConfiguration.toneMappingEnabled = true;
     this.scene.imageProcessingConfiguration.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
     this.scene.imageProcessingConfiguration.exposure = 1.2;
@@ -228,6 +232,22 @@ export class EvercastScene {
 
   async whenReady(): Promise<void> {
     await Promise.all([this.actors.whenReady(), this.vfx.pool.ready]);
+  }
+
+  /**
+   * `strength` runs 0 (off) to 1 (shallowest). Aperture is lensSize / fStop, so
+   * that is the single knob worth exposing: focus stays on the road, and the
+   * player decides how much of the world falls away from it.
+   */
+  setDepthOfField(strength: number): void {
+    const clamped = Math.min(1, Math.max(0, strength));
+    this.presentation.depthOfFieldEnabled = clamped > 0.02;
+    if (clamped <= 0.02) return;
+    this.presentation.depthOfField.lensSize = clamped * 560;
+  }
+
+  setDamageNumbersVisible(visible: boolean): void {
+    this.vfx.combat.setDamageNumbersVisible(visible);
   }
 
   dispose(): void {

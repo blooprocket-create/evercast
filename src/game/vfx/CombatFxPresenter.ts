@@ -29,6 +29,10 @@ export class CombatFxPresenter {
     }
   }
 
+  setDamageNumbersVisible(visible: boolean): void {
+    this.numbers.setVisible(visible);
+  }
+
   hit(hit: Hit, position: Vector3, actor?: ActorVisual): void {
     actor?.play('hit');
     actor?.flash(hit.critical);
