@@ -10,6 +10,7 @@ import { DEFAULT_ENGINE_CONFIG } from '../../engine/config';
 import { createInitialGameState } from '../../engine/state';
 import { big } from '../../engine/numbers';
 import type { GameEvent } from '../../engine/events/GameEvent';
+import { SPELL_MECHANIC_DEFAULTS } from '../../content/spellTreeTuning';
 
 function local(url: string, scene: Scene): Promise<AssetContainer> {
   return LoadAssetContainerAsync(
@@ -20,15 +21,91 @@ function local(url: string, scene: Scene): Promise<AssetContainer> {
 }
 
 describe('VFX resource ownership', () => {
+  it('bounds meteor and contagion visuals without limiting or mutating authoritative procs', async () => {
+    const engine = new NullEngine(),
+      scene = new Scene(engine),
+      pool = new VfxPool(scene, 'low', local);
+    await pool.ready;
+    const state = createInitialGameState(DEFAULT_ENGINE_CONFIG),
+      events: GameEvent[] = [];
+    state.run.spell = {
+      baseDamage: '1',
+      castInterval: 0.02,
+      projectileCount: 2,
+      critChance: 0,
+      critMultiplier: 2,
+      modifiers: [],
+      mechanics: {
+        ...SPELL_MECHANIC_DEFAULTS,
+        route: 'twin',
+        explosive: true,
+        dot: true,
+        contagion: true,
+        meteor: true,
+        plaguefall: true,
+        meteorChance: 1,
+        contagionChance: 1,
+      },
+    };
+    state.run.enemies = Array.from({ length: 6 }, (_, i) => ({
+      instanceId: i + 1,
+      definitionId: 'briarling',
+      name: 'Target',
+      stage: 1,
+      boss: false,
+      hp: big('1e12'),
+      maxHp: big('1e12'),
+      attackDamage: big(0),
+      attackInterval: 1,
+      attackCooldown: 1,
+      position: { x: 2 + i * 0.4, z: 0 },
+    }));
+    const presenter = new SpellVfxPresenter(pool, new CombatFxPresenter(pool, scene), {
+      staff: () => new Vector3(-3, 1, 0),
+      mage: () => new Vector3(-3, 1, 0),
+      target: (id) => new Vector3(2 + (id - 1) * 0.4, 0.65, 0),
+      actor: () => undefined,
+    });
+    const combat = new CombatSystem(DEFAULT_ENGINE_CONFIG, (e) => events.push(e));
+    let maxPending = 0;
+    for (let i = 0; i < 200; i++) {
+      combat.cast(state.run, state.equipment);
+      state.run.elapsedSeconds += 0.02;
+      combat.evolving.effects.advance(state.run);
+      maxPending = Math.max(maxPending, state.run.combatState!.meteors.length);
+      const before = JSON.stringify(state.run);
+      presenter.ingest(
+        { castInterval: 0.02, activeSpellNodeIds: [], spellMechanics: state.run.spell.mechanics },
+        events.splice(0),
+      );
+      presenter.update(0.02);
+      expect(JSON.stringify(state.run)).toBe(before);
+      expect(presenter.stats.jobs).toBeLessThanOrEqual(pool.budget.jobs);
+    }
+    expect(maxPending).toBeGreaterThan(pool.budget.meshes);
+    expect(pool.stats.meshes).toBeLessThanOrEqual(pool.budget.meshes);
+    expect(pool.stats.paths).toBeLessThanOrEqual(pool.budget.paths);
+    presenter.ingest({ castInterval: 1, activeSpellNodeIds: [], enemies: [], elapsedSeconds: 10 }, []);
+    for (let i = 0; i < 20; i++) presenter.update(0.1);
+    expect(presenter.stats.active).toBe(0);
+    expect(presenter.stats.jobs).toBe(0);
+    presenter.dispose();
+    expect(scene.meshes).toHaveLength(0);
+    expect(scene.materials).toEqual([scene.defaultMaterial]);
+    scene.dispose();
+    engine.dispose();
+  });
   it('refreshes the complete draw range when a shard slot becomes a larger rune', async () => {
     const engine = new NullEngine(),
       scene = new Scene(engine),
       pool = new VfxPool(scene, 'low', local);
     await pool.ready;
     expect(scene.getMeshByName('VFX template arcane_ring_a')!.getTotalIndices()).not.toBe(
-      scene.getMeshByName('VFX template arcane_ring_b')!.getTotalIndices());
+      scene.getMeshByName('VFX template arcane_ring_b')!.getTotalIndices(),
+    );
     expect(scene.getMeshByName('VFX template arcane_glyph_a')!.getTotalIndices()).not.toBe(
-      scene.getMeshByName('VFX template arcane_glyph_b')!.getTotalIndices());
+      scene.getMeshByName('VFX template arcane_glyph_b')!.getTotalIndices(),
+    );
     pool.emit('arcane_shard_a', 'arcane', 0.1, () => {});
     const piece = scene.meshes.find((m) => m.name === 'VFX piece 0')!;
     const small = piece.getTotalIndices();

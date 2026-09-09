@@ -9,7 +9,7 @@ describe('authored spell tree content', () => {
 
   it('has no dangling path requirements', () => {
     for (const node of SPELL_TREE_NODES) {
-      for (const requiredId of node.requires) {
+      for (const requiredId of node.requiresAll) {
         expect(SPELL_TREE_NODE_BY_ID.has(requiredId), `${node.id} requires missing ${requiredId}`).toBe(true);
       }
     }
@@ -17,7 +17,7 @@ describe('authored spell tree content', () => {
 
   it('keeps the root free of gameplay modifiers and prerequisites', () => {
     const root = SPELL_TREE_NODE_BY_ID.get(SPELL_TREE_ROOT_ID)!;
-    expect(root.requires).toEqual([]);
+    expect(root.requiresAll).toEqual([]);
     expect(root.modifiers).toEqual([]);
   });
 });

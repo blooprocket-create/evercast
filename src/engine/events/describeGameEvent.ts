@@ -2,12 +2,20 @@ import type { GameEvent } from './GameEvent';
 
 export function describeGameEvent(event: GameEvent): string {
   switch (event.type) {
+    case 'meteor_queued':
+      return 'A meteor gathers above the battlefield.';
+    case 'effect_hit':
+      return `${event.effect} deals ${event.damage}.`;
+    case 'status_applied':
+      return `${event.status} applied (${event.stacks}).`;
+    case 'combat_state':
+      return `${event.state}: ${event.stacks}.`;
     case 'encounter_started':
       return `Stage ${event.stage}: ${event.totalEnemies} incoming.`;
     case 'enemy_spawned':
       return `${event.enemyName} enters (${event.spawned}/${event.total}).`;
     case 'spell_cast':
-      return `Arcane Bolt cast (${event.projectiles} projectile${event.projectiles === 1 ? '' : 's'}).`;
+      return `Evercast cast (${event.projectiles} projectile${event.projectiles === 1 ? '' : 's'}).`;
     case 'projectile_hit':
       return `${event.critical ? 'Critical! ' : ''}${hitLabel(event.source)} hits for ${event.damage}.`;
     case 'enemy_attack':
@@ -39,18 +47,26 @@ export function describeGameEvent(event: GameEvent): string {
 
 function hitLabel(source: Extract<GameEvent, { type: 'projectile_hit' }>['source']): string {
   switch (source) {
-    case 'direct': return 'Arcane Bolt';
-    case 'pierce': return 'Piercing Bolt';
-    case 'chain': return 'Chain';
-    case 'splash': return 'Splash';
-    case 'repeat': return 'Echo';
+    case 'direct':
+      return 'Evercast';
+    case 'pierce':
+      return 'Piercing Bolt';
+    case 'chain':
+      return 'Chain';
+    case 'splash':
+      return 'Splash';
+    case 'repeat':
+      return 'Echo';
   }
 }
 
 function resourceLabel(resource: Extract<GameEvent, { type: 'resource_gained' }>['resource']): string {
   switch (resource) {
-    case 'essence': return 'Arcane Essence';
-    case 'knowledge': return 'Knowledge';
-    case 'gold': return 'Gold';
+    case 'essence':
+      return 'Arcane Essence';
+    case 'knowledge':
+      return 'Knowledge';
+    case 'gold':
+      return 'Gold';
   }
 }

@@ -1,14 +1,19 @@
 import { EvercastScene } from '../../src/game/EvercastScene';
 import { CombatSystem } from '../../src/engine/combat/CombatSystem';
+import {
+  clearSpellCombat,
+  effectiveCastInterval,
+  ensurePositions,
+} from '../../src/engine/combat/SpellCombatState';
 import { DEFAULT_ENGINE_CONFIG } from '../../src/engine/config';
 import { createInitialGameState } from '../../src/engine/state';
 import { createDefaultCatalog } from '../../src/content/catalog';
 import { buildSimulationSnapshot } from '../../src/engine/snapshot/SimulationSnapshotBuilder';
 import { big } from '../../src/engine/numbers';
 import type { GameEvent } from '../../src/engine/events/GameEvent';
-import type { SpellModifier } from '../../src/engine/spell/types';
 import type { VfxQuality } from '../../src/game/vfx/VfxPool';
-import { SPELL_TREE_NODES } from '../../src/content/spellTree';
+import { SPELL_TREE_NODES, SPELL_TREE_NODE_BY_ID } from '../../src/content/spellTree';
+import { buildSpellFromTree, canActivateSpellNode } from '../../src/engine/spellTree/SpellTreeSystem';
 
 const query = new URLSearchParams(location.search);
 const view = new EvercastScene(
@@ -16,23 +21,37 @@ const view = new EvercastScene(
   (query.get('quality') ?? 'medium') as VfxQuality,
 );
 const state = createInitialGameState(DEFAULT_ENGINE_CONFIG),
-  catalog = createDefaultCatalog();
-const events: GameEvent[] = [];
+  catalog = createDefaultCatalog(),
+  events: GameEvent[] = [];
 const combat = new CombatSystem(DEFAULT_ENGINE_CONFIG, (e) => events.push(e));
 let nextId = 100,
   auto = false,
   paused = false,
-  elapsed = 0,
   previous = performance.now();
+const history: GameEvent[] = [];
 const snapshot = () =>
   buildSimulationSnapshot({
     state,
     config: DEFAULT_ENGINE_CONFIG,
     catalog,
     canRebirth: false,
-    lastEvent: 'VFX review',
+    lastEvent: 'Authored spell review',
   });
+const mode = document.querySelector<HTMLSelectElement>('#mode')!;
+for (const node of SPELL_TREE_NODES.filter((n) => ['root', 'route', 'mutation', 'fusion'].includes(n.kind))) {
+  const option = document.createElement('option');
+  option.value = node.id;
+  option.textContent = `${node.kind} · ${node.name}`;
+  mode.append(option);
+}
+function flush(dt = 0) {
+  const batch = events.splice(0);
+  history.push(...batch);
+  if (history.length > 2000) history.splice(0, history.length - 2000);
+  view.sync(snapshot(), dt, batch);
+}
 function refill() {
+  clearSpellCombat(state.run);
   state.run.phase = 'combat';
   state.run.frontierStage = 26;
   state.run.encounterStage = 26;
@@ -42,62 +61,51 @@ function refill() {
     name: `Target ${i + 1}`,
     stage: 26,
     boss: false,
-    hp: big('1e12'),
-    maxHp: big('1e12'),
+    hp: big('1e6'),
+    maxHp: big('1e6'),
     attackDamage: big(0),
     attackInterval: 2,
     attackCooldown: 2,
   }));
-  view.sync(snapshot(), 0, []);
+  ensurePositions(state.run);
+  state.run.castCooldown = 0;
+  events.push({
+    type: 'encounter_started',
+    time: state.run.elapsedSeconds,
+    stage: 26,
+    totalEnemies: 6,
+    boss: false,
+  });
+  flush();
 }
-function configure(mode: string) {
-  document.querySelector<HTMLSelectElement>('#mode')!.value = mode;
-  const all = mode === 'combined' || mode === 'stress';
-  state.spellTree.activatedNodeIds = SPELL_TREE_NODES.filter(
-    (n) => n.region === mode || (all && ['fire', 'storm', 'blood', 'frost'].includes(n.region)),
-  ).map((n) => n.id);
-  const mods: SpellModifier[] = [];
-  if (mode === 'pierce' || all)
-    mods.push({ id: 'review-pierce', kind: 'combat', action: { kind: 'pierce', count: all ? 1 : 4 } });
-  if (mode === 'storm' || all)
-    mods.push({
-      id: 'review-chain',
-      kind: 'combat',
-      action: { kind: 'chain', count: 3, damageMultiplier: 0.5 },
-    });
-  if (mode === 'fire' || all)
-    mods.push({
-      id: 'review-splash',
-      kind: 'combat',
-      action: { kind: 'splash', targets: 5, damageMultiplier: 0.3 },
-    });
-  if (mode === 'frost' || all)
-    mods.push({ id: 'review-control', kind: 'combat', action: { kind: 'control', delaySeconds: 0.25 } });
-  if (mode === 'blood' || all)
-    mods.push({ id: 'review-leech', kind: 'combat', action: { kind: 'leech', fraction: 0.3 } });
-  if (mode === 'repeat' || all)
-    mods.push({
-      id: 'review-repeat',
-      kind: 'trigger',
-      trigger: 'onCrit',
-      action: { kind: 'repeatProjectile', count: 2, damageMultiplier: 0.3 },
-    });
-  state.run.spell = {
-    baseDamage: '5',
-    castInterval: mode === 'stress' ? 0.04 : 0.8,
-    projectileCount: all ? 5 : 1,
-    critChance: mode === 'repeat' || all ? 1 : 0,
-    critMultiplier: 2,
-    modifiers: mods,
+function configure(id: string) {
+  const node = SPELL_TREE_NODE_BY_ID.get(id);
+  if (!node) throw new Error(`Unknown review node: ${id}`);
+  mode.value = id;
+  clearSpellCombat(state.run);
+  state.spellTree = { purchasedPoints: 20, activatedNodeIds: [] };
+  const activate = (key: string) => {
+    if (key === 'evercast_root' || state.spellTree.activatedNodeIds.includes(key)) return;
+    SPELL_TREE_NODE_BY_ID.get(key)!.requiresAll.forEach(activate);
+    if (!canActivateSpellNode(state.spellTree, key)) throw new Error(`Invalid review path: ${key}`);
+    state.spellTree.activatedNodeIds.push(key);
   };
+  activate(id);
+  state.run.spell = buildSpellFromTree(state.spellTree);
+  const m = state.run.spell.mechanics!;
+  // Explicit review-only switch: makes rare effects reproducible, without fabricated events.
+  if (document.querySelector<HTMLInputElement>('#procs')!.checked) {
+    m.meteorChance = 1;
+    m.contagionChance = 1;
+    m.ruinChance = 1;
+  }
+  state.run.castCooldown = 0;
+  history.length = 0;
+  document.querySelector('#build')!.textContent =
+    `${node.name} · ${state.spellTree.activatedNodeIds.length} allocated points`;
 }
-function cast(lethal = false) {
-  state.run.mage.hp = big(1);
-  state.run.mage.maxHp = big(100);
-  const oldDamage = state.run.spell.baseDamage;
-  if (lethal) state.run.spell.baseDamage = '1e20';
-  const result = combat.cast(state.run, state.equipment);
-  for (const id of result.killedEnemyIds)
+function collectDead(ids: number[]) {
+  for (const id of ids)
     events.push({
       type: 'enemy_killed',
       time: state.run.elapsedSeconds,
@@ -106,46 +114,76 @@ function cast(lethal = false) {
       enemyId: 'briarling',
       gold: '0',
     });
-  state.run.enemies = state.run.enemies.filter((e) => !result.killedEnemyIds.includes(e.instanceId));
-  state.run.spell.baseDamage = oldDamage;
-  view.sync(snapshot(), 0, events.splice(0));
+  state.run.enemies = state.run.enemies.filter((e) => !ids.includes(e.instanceId));
+}
+function cast(lethal = false) {
+  const old = state.run.spell.baseDamage;
+  if (lethal) state.run.spell.baseDamage = '1e20';
+  collectDead(combat.cast(state.run, state.equipment).killedEnemyIds);
+  state.run.spell.baseDamage = old;
+  state.run.castCooldown = effectiveCastInterval(state.run);
+  flush();
 }
 function step(dt: number) {
-  state.run.elapsedSeconds += dt;
-  view.sync(snapshot(), dt, []);
+  let remaining = dt;
+  while (remaining > 1e-9) {
+    const delay = Math.min(
+      remaining,
+      combat.evolving.effects.nextDelay(state.run),
+      auto && state.run.enemies.length ? Math.max(0, state.run.castCooldown) : Infinity,
+    );
+    state.run.elapsedSeconds += delay;
+    state.run.castCooldown -= delay;
+    remaining -= delay;
+    collectDead(combat.evolving.effects.advance(state.run));
+    if (auto && state.run.castCooldown <= 1e-9 && state.run.enemies.length) cast();
+    flush(delay);
+    if (delay === 0 && combat.evolving.effects.nextDelay(state.run) === 0)
+      throw new Error('Review clock stalled');
+  }
 }
 function stats() {
   return {
     ...view.vfx.stats,
+    route: state.run.spell.mechanics?.route,
+    combat: state.run.combatState,
     sceneMeshes: (view as any).scene.meshes.length,
     materials: (view as any).scene.materials.length,
-    animationGroups: (view as any).scene.animationGroups.length,
-    sceneLights: (view as any).scene.lights.length,
   };
 }
-const mode = document.querySelector<HTMLSelectElement>('#mode')!;
 mode.onchange = () => configure(mode.value);
+document.querySelector<HTMLInputElement>('#procs')!.onchange = () => configure(mode.value);
 document.querySelector<HTMLButtonElement>('#cast')!.onclick = () => cast();
 document.querySelector<HTMLButtonElement>('#auto')!.onclick = () => {
   auto = !auto;
 };
 document.querySelector<HTMLButtonElement>('#kill')!.onclick = () => cast(true);
 document.querySelector<HTMLButtonElement>('#reset')!.onclick = refill;
+document.querySelector<HTMLButtonElement>('#wounded')!.onclick = () => {
+  for (const enemy of state.run.enemies) enemy.hp = enemy.maxHp.mul(0.15);
+  flush();
+};
 refill();
-configure(query.get('mode') ?? 'arcane');
-mode.value = query.get('mode') ?? 'arcane';
+configure(query.get('mode') ?? 'evercast_root');
 function loop(now: number) {
   const dt = Math.min(0.05, (now - previous) / 1000);
   previous = now;
-  if (!paused) {
-    elapsed += dt;
-    if (auto && elapsed >= state.run.spell.castInterval) {
-      elapsed = 0;
-      cast();
-    }
-    step(dt);
-  }
-  document.querySelector('#stats')!.textContent = JSON.stringify(stats(), null, 2);
+  if (!paused) step(dt);
+  const s = stats();
+  document.querySelector('#stats')!.textContent = JSON.stringify(
+    {
+      route: s.route,
+      meshes: s.meshes,
+      paths: s.paths,
+      jobs: s.jobs,
+      momentum: s.combat?.momentum,
+      focus: s.combat?.focus,
+      supercharge: s.combat?.supercharge,
+      meteors: s.combat?.meteors.length,
+    },
+    null,
+    2,
+  );
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
@@ -157,16 +195,21 @@ requestAnimationFrame(loop);
   stats,
   refill,
   configure,
-  async frame(mode: string, time: number, lethal = false) {
+  history,
+  async frame(id: string, time: number, casts = 1) {
     paused = true;
     auto = false;
-    for (let i = 0; i < 60; i++) step(0.1);
+    for (let i = 0; i < 10; i++) step(0.1);
     refill();
-    configure(mode);
+    configure(id);
     await view.whenReady();
     await new Promise(requestAnimationFrame);
     step(1);
-    cast(lethal);
+    for (let i = 0; i < casts - 1; i++) {
+      cast();
+      step(Math.max(1, effectiveCastInterval(state.run)));
+    }
+    cast();
     for (let remaining = time; remaining > 0; remaining -= 0.008) step(Math.min(0.008, remaining));
     return stats();
   },

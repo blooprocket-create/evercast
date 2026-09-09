@@ -2,6 +2,7 @@ import Decimal from 'break_eternity.js';
 import type { EquipmentState } from './gear/types';
 import type { SpellBuild } from './spell/types';
 import type { SpellTreeState } from './spellTree/types';
+import type { CombatPosition, EnemyStatuses, SpellCombatState } from './combat/SpellCombatState';
 
 export type RunMode = 'push' | 'farm';
 export type CombatPhase = 'travel' | 'combat';
@@ -12,6 +13,8 @@ export interface MageState {
 }
 
 export interface EnemyState {
+  position?: CombatPosition;
+  statuses?: EnemyStatuses;
   instanceId: number;
   definitionId: string;
   name: string;
@@ -44,6 +47,7 @@ export interface RunStatistics {
 }
 
 export interface RunState {
+  combatState?: SpellCombatState;
   elapsedSeconds: number;
   frontierStage: number;
   highestStageThisRun: number;

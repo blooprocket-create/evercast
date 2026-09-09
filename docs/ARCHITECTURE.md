@@ -69,7 +69,7 @@ Authoritative economy/combat magnitudes use `break_eternity.js` `Decimal` values
 
 ## Time and offline progress
 
-The simulation is event-driven rather than frame-driven. `advance(seconds)` consumes time until the next spawn, cast, enemy attack, or encounter transition. The same method powers live play and offline/background catch-up, so renderer FPS and browser throttling cannot change authoritative outcomes.
+The simulation is event-driven rather than frame-driven. `advance(seconds)` consumes time until the next spawn, cast, enemy attack, timed spell effect/status expiration, or encounter transition. The same method powers live play and offline/background catch-up, so renderer FPS and browser throttling cannot change authoritative outcomes.
 
 The browser layer detects tab visibility. Hidden time is applied through `OfflineProgressor` when the tab becomes visible again, with presentation events suppressed and the normal offline cap applied.
 
@@ -104,11 +104,9 @@ Boss first-clears currently award more Essence. Exact curves remain prototype tu
 
 ## Spell tree
 
-The current playtest tree is authored content with a centered Evercast root, connected pathing, minor/notable/mutation nodes, and Power/Speed/Projectile/Crit plus Arcane/Fire/Frost/Storm/Blood regions.
+The authored v1 tree has three exclusive routes, choose-two identity groups, optional side upgrades, mutations and pairwise fusions requiring both parents. Allocations compile into SpellBuild.mechanics. EvolvingCombat and TimedSpellEffects own cast/timed behavior; stable enemy positions and temporary spell resources remain authoritative engine state. UI geometry stays separate.
 
-The engine stores only purchased points and activated node IDs, then compiles those nodes into the one true `SpellBuild`. UI layout geometry is separate from the node gameplay definitions.
-
-Current elemental mechanics are prototype balance, not canon. In particular, control effects such as Frost still need systemic balance work.
+See [Real Spell Tree v1](SPELL_TREE_V1.md) for the graph rules, provisional tuning, event timing and version 6 migration. Future fusion identity splits are supported through the same exclusive-group schema, without invented nodes.
 
 ## Gear
 
@@ -146,7 +144,7 @@ Coverage includes deterministic advancement, multi-enemy overlap, push/farm beha
 
 ## Still intentionally deferred
 
-- final spell-tree balance/topology,
+- final spell-tree balance and future fusion identities,
 - bounded/diminishing control rules,
 - final prestige behavior,
 - gear-tree point sources and authored gear trees,

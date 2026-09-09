@@ -42,11 +42,17 @@ export function compileSpell(build: SpellBuild): CompiledSpell {
           break;
         case 'splash':
           splashTargets += Math.max(0, Math.floor(modifier.action.targets));
-          splashDamageMultiplier = Math.max(splashDamageMultiplier, Math.max(0, modifier.action.damageMultiplier));
+          splashDamageMultiplier = Math.max(
+            splashDamageMultiplier,
+            Math.max(0, modifier.action.damageMultiplier),
+          );
           break;
         case 'chain':
           chainTargets += Math.max(0, Math.floor(modifier.action.count));
-          chainDamageMultiplier = Math.max(chainDamageMultiplier, Math.max(0, modifier.action.damageMultiplier));
+          chainDamageMultiplier = Math.max(
+            chainDamageMultiplier,
+            Math.max(0, modifier.action.damageMultiplier),
+          );
           break;
         case 'control':
           controlDelaySeconds += Math.max(0, modifier.action.delaySeconds);
@@ -63,9 +69,7 @@ export function compileSpell(build: SpellBuild): CompiledSpell {
 
     switch (modifier.stat) {
       case 'damage':
-        damage = modifier.operation === 'add'
-          ? damage.add(modifier.value)
-          : damage.mul(modifier.value);
+        damage = modifier.operation === 'add' ? damage.add(modifier.value) : damage.mul(modifier.value);
         break;
       case 'castSpeed': {
         const castSpeed = apply(1 / castInterval);
@@ -84,8 +88,21 @@ export function compileSpell(build: SpellBuild): CompiledSpell {
     }
   }
 
+  const mechanics = build.mechanics;
+  if (mechanics?.route === 'twin') projectileCount = 2;
+  if (mechanics?.route === 'piercing') {
+    projectileCount = 1;
+    pierceTargets = mechanics.chain ? 0 : mechanics.penetrations;
+    chainTargets = mechanics.chain ? mechanics.penetrations : 0;
+    chainDamageMultiplier = mechanics.piercedDamage;
+  }
+  if (mechanics?.route === 'charged') {
+    projectileCount = 1;
+    castInterval *= mechanics.chargedInterval;
+  }
   return {
     damage: damage.toString(),
+    mechanics: build.mechanics,
     castInterval: Math.max(0.01, castInterval),
     projectileCount,
     critChance,

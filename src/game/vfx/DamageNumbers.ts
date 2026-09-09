@@ -14,7 +14,7 @@ export class DamageNumbers {
     this.root.style.cssText = 'position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:2;';
     document.body.append(this.root);
   }
-  show(hit: Hit, position: Vector3): void {
+  show(hit: Pick<Hit, 'instanceId' | 'critical' | 'damage'>, position: Vector3): void {
     if (!this.root) return;
     let label =
       this.labels.find((l) => l.id === hit.instanceId && l.age < 0.1) ??

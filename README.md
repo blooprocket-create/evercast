@@ -53,3 +53,7 @@ The renderer adds matte materials, uneven terrain around a clear combat lane,
 soft shadows, layered distant hills, wind, and lit biome landmarks. In development,
 **N** previews the next biome and **Shift N** its transition; these shortcuts do not
 change simulation progress or appear in production.
+
+## Spell tree
+
+Evercast v1 has three exclusive routes, choose-two identities, nine mutations and nine fusions. See [the spell-tree guide](docs/SPELL_TREE_V1.md) for mechanics, playtest tuning, save migration and the development VFX review.

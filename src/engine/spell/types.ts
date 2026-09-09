@@ -1,11 +1,7 @@
+import type { SpellMechanics } from './SpellMechanics';
 export type SpellTrigger = 'onHit' | 'onCrit' | 'onKill';
 
-export type SpellStat =
-  | 'damage'
-  | 'castSpeed'
-  | 'projectiles'
-  | 'critChance'
-  | 'critMultiplier';
+export type SpellStat = 'damage' | 'castSpeed' | 'projectiles' | 'critChance' | 'critMultiplier';
 
 export type SpellCombatAction =
   | { kind: 'pierce'; count: number }
@@ -37,6 +33,7 @@ export type SpellModifier =
     };
 
 export interface SpellBuild {
+  mechanics?: SpellMechanics;
   baseDamage: string;
   castInterval: number;
   projectileCount: number;
@@ -46,6 +43,7 @@ export interface SpellBuild {
 }
 
 export interface CompiledSpell {
+  mechanics?: SpellMechanics;
   damage: string;
   castInterval: number;
   projectileCount: number;

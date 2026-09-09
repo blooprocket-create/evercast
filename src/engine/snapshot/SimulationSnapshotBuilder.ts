@@ -9,6 +9,7 @@ import { compileSpell } from '../spell/SpellCompiler';
 import { spellPointCost } from '../spellTree/SpellTreeCatalog';
 import { totalSpellPoints, unspentSpellPoints } from '../spellTree/SpellTreeSystem';
 import type { SimulationSnapshot } from '../types';
+import { effectiveCastInterval } from '../combat/SpellCombatState';
 
 export interface SimulationSnapshotBuildContext {
   state: GameState;
@@ -29,15 +30,16 @@ export function buildSimulationSnapshot({
   const target = run.enemies[0];
   const compiledSpell = compileSpell(run.spell);
   const gearStats = compileGearStats(state.equipment);
-  const finalDamage = big(compiledSpell.damage).add(gearStats.baseDamageBonus);
-  const enemyHpPercent = target && target.maxHp.cmp(0) > 0
-    ? percent(target.hp.div(target.maxHp).toNumber())
-    : 0;
-  const mageHpPercent = run.mage.maxHp.cmp(0) > 0
-    ? percent(run.mage.hp.div(run.mage.maxHp).toNumber())
-    : 0;
+  const finalDamage = big(compiledSpell.damage)
+    .add(gearStats.baseDamageBonus)
+    .mul(compiledSpell.mechanics?.route === 'charged' ? compiledSpell.mechanics.chargedDamage : 1);
+  const enemyHpPercent =
+    target && target.maxHp.cmp(0) > 0 ? percent(target.hp.div(target.maxHp).toNumber()) : 0;
+  const mageHpPercent = run.mage.maxHp.cmp(0) > 0 ? percent(run.mage.hp.div(run.mage.maxHp).toNumber()) : 0;
 
   return {
+    spellMechanics: compiledSpell.mechanics ? { ...compiledSpell.mechanics } : undefined,
+    combatState: run.combatState ? structuredClone(run.combatState) : undefined,
     elapsedSeconds: run.elapsedSeconds,
     stage: run.frontierStage,
     encounterStage: run.encounterStage,
@@ -57,6 +59,8 @@ export function buildSimulationSnapshot({
     enemyHpPercent,
     enemyName: target?.name ?? (run.phase === 'combat' ? 'Incoming…' : 'Road ahead'),
     enemies: run.enemies.map((enemy) => ({
+      position: enemy.position ? { ...enemy.position } : undefined,
+      statuses: enemy.statuses ? structuredClone(enemy.statuses) : undefined,
       instanceId: enemy.instanceId,
       modelKey: requireEnemy(catalog, enemy.definitionId).modelKey,
       name: enemy.name,
@@ -79,7 +83,7 @@ export function buildSimulationSnapshot({
     spellBaseDamage: quantity(big(compiledSpell.damage)),
     gearDamageBonus: quantity(gearStats.baseDamageBonus),
     gearHealthBonus: quantity(gearStats.maxHpBonus),
-    castInterval: compiledSpell.castInterval,
+    castInterval: effectiveCastInterval(run),
     critChance: compiledSpell.critChance,
     critMultiplier: compiledSpell.critMultiplier,
     pierceTargets: compiledSpell.pierceTargets,
@@ -94,9 +98,8 @@ export function buildSimulationSnapshot({
     spellTreeUnspentPoints: unspentSpellPoints(state.spellTree),
     nextSpellPointCost: quantity(big(spellPointCost(state.spellTree.purchasedPoints))),
     activeSpellNodeIds: [...state.spellTree.activatedNodeIds],
-    progressToNextEncounter: run.phase === 'travel'
-      ? Math.min(1, run.travelElapsed / config.travelSeconds)
-      : 1,
+    progressToNextEncounter:
+      run.phase === 'travel' ? Math.min(1, run.travelElapsed / config.travelSeconds) : 1,
     highestStageEver: state.meta.highestStageEver,
     rebirths: state.meta.rebirths,
     canRebirth,

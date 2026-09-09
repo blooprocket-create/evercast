@@ -8,6 +8,7 @@ import { random01 } from '../random/DeterministicRandom';
 import { resolveEffects } from '../spell/EffectResolver';
 import { compileSpell } from '../spell/SpellCompiler';
 import type { CompiledSpell } from '../spell/types';
+import { EvolvingCombat } from './EvolvingCombat';
 
 export interface CombatResult {
   killedEnemyIds: number[];
@@ -15,12 +16,17 @@ export interface CombatResult {
 }
 
 export class CombatSystem {
+  readonly evolving: EvolvingCombat;
   constructor(
     private readonly config: EngineConfig,
     private readonly emit: (event: GameEvent) => void,
-  ) {}
+  ) {
+    this.evolving = new EvolvingCombat(config, emit);
+  }
 
   cast(run: RunState, equipment: EquipmentState): CombatResult {
+    if (run.spell.mechanics)
+      return { killedEnemyIds: this.evolving.cast(run, equipment), mageDefeated: false };
     const spell = compileSpell(run.spell);
     const gear = compileGearStats(equipment);
     const baseDamage = big(spell.damage).add(gear.baseDamageBonus).toString();
@@ -93,7 +99,10 @@ export class CombatSystem {
         previousChainTargetId = enemy.instanceId;
       });
 
-      const splashed = livingEnemiesExcluding(run, new Set([target.instanceId])).slice(0, spell.splashTargets);
+      const splashed = livingEnemiesExcluding(run, new Set([target.instanceId])).slice(
+        0,
+        spell.splashTargets,
+      );
       splashed.forEach((enemy, index) => {
         this.hit(
           run,
@@ -120,12 +129,18 @@ export class CombatSystem {
   }
 
   enemyAttack(run: RunState, enemy: EnemyState): CombatResult {
-    run.mage.hp = run.mage.hp.sub(enemy.attackDamage);
+    const weakness = enemy.statuses?.weakness;
+    const damage = enemy.attackDamage.mul(
+      weakness && weakness.expiresAt > run.elapsedSeconds
+        ? Math.max(0, 1 - weakness.stacks * weakness.strength)
+        : 1,
+    );
+    run.mage.hp = run.mage.hp.sub(damage);
     this.emit({
       type: 'enemy_attack',
       time: run.elapsedSeconds,
       instanceId: enemy.instanceId,
-      damage: enemy.attackDamage.toString(),
+      damage: damage.toString(),
     });
     return {
       killedEnemyIds: [],
@@ -150,14 +165,16 @@ export class CombatSystem {
   ): void {
     if (enemy.hp.cmp(0) <= 0 || damageMultiplier <= 0) return;
 
-    const critical = critChance > 0 && random01(
-      this.config.seed,
-      run.encounterStage,
-      castId,
-      projectileIndex,
-      enemy.instanceId,
-      run.stats.projectileHits,
-    ) < critChance;
+    const critical =
+      critChance > 0 &&
+      random01(
+        this.config.seed,
+        run.encounterStage,
+        castId,
+        projectileIndex,
+        enemy.instanceId,
+        run.stats.projectileHits,
+      ) < critChance;
 
     const hpBeforeHit = big(enemy.hp);
     let damage = big(baseDamage).mul(damageMultiplier);
