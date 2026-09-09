@@ -13,6 +13,9 @@ import {
   spellPointCost,
 } from './SpellTreeCatalog';
 import type { SpellTreeState } from './types';
+import { SPELL_MECHANIC_DEFAULTS } from '../../content/spellTreeTuning';
+import { SPELL_TREE_EXCLUSIVE_GROUPS } from '../../content/spellTree';
+import { clearSpellCombat } from '../combat/SpellCombatState';
 
 export const MAX_SPELL_TREE_POINTS = SPELL_TREE_NODES.filter((node) => node.id !== SPELL_TREE_ROOT_ID).length;
 
@@ -40,11 +43,32 @@ export function isSpellNodeActive(state: SpellTreeState, nodeId: string): boolea
 }
 
 export function canActivateSpellNode(state: SpellTreeState, nodeId: string): boolean {
-  if (nodeId === SPELL_TREE_ROOT_ID || state.activatedNodeIds.includes(nodeId)) return false;
-  if (unspentSpellPoints(state) <= 0) return false;
+  return spellNodeStatus(state, nodeId) === 'available';
+}
+
+export type SpellNodeStatus = 'active' | 'available' | 'exclusive' | 'requirements' | 'points' | 'unknown';
+export function spellNodeStatus(state: SpellTreeState, nodeId: string): SpellNodeStatus {
   const node = SPELL_TREE_NODE_BY_ID.get(nodeId);
-  if (!node) return false;
-  return node.requires.some((requiredId) => isSpellNodeActive(state, requiredId));
+  if (!node) return 'unknown';
+  if (isSpellNodeActive(state, nodeId)) return 'active';
+  // A locked ancestor locks its entire route, even if its direct group is still empty.
+  const locked = (id: string, visited = new Set<string>()): boolean => {
+    if (visited.has(id)) return false;
+    visited.add(id);
+    const n = SPELL_TREE_NODE_BY_ID.get(id);
+    if (!n || isSpellNodeActive(state, id)) return false;
+    const group = SPELL_TREE_EXCLUSIVE_GROUPS.find((g) => g.id === n.exclusiveGroup);
+    if (
+      group &&
+      state.activatedNodeIds.filter((a) => SPELL_TREE_NODE_BY_ID.get(a)?.exclusiveGroup === group.id)
+        .length >= group.maxSelections
+    )
+      return true;
+    return n.requiresAll.some((parent) => locked(parent, visited));
+  };
+  if (locked(nodeId)) return 'exclusive';
+  if (!node.requiresAll.every((id) => isSpellNodeActive(state, id))) return 'requirements';
+  return unspentSpellPoints(state) > 0 ? 'available' : 'points';
 }
 
 export function modifiersForSpellTree(state: SpellTreeState): SpellModifier[] {
@@ -60,6 +84,13 @@ export function modifiersForSpellTree(state: SpellTreeState): SpellModifier[] {
 export function buildSpellFromTree(state: SpellTreeState): SpellBuild {
   const build = createDefaultSpellBuild();
   build.modifiers = modifiersForSpellTree(state);
+  build.mechanics = { ...SPELL_MECHANIC_DEFAULTS };
+  for (const id of state.activatedNodeIds)
+    for (const effect of SPELL_TREE_NODE_BY_ID.get(id)?.mechanics ?? []) {
+      const target = build.mechanics as unknown as Record<string, string | number | boolean>;
+      target[effect.key] =
+        effect.operation === 'add' ? Number(target[effect.key]) + Number(effect.value) : effect.value;
+    }
   return build;
 }
 
@@ -99,6 +130,7 @@ export class SpellTreeSystem {
   respec(state: GameState): boolean {
     if (state.spellTree.activatedNodeIds.length === 0) return false;
     const refundedPoints = state.spellTree.activatedNodeIds.length;
+    clearSpellCombat(state.run);
     state.spellTree.activatedNodeIds = [];
     state.run.spell = buildSpellFromTree(state.spellTree);
     this.emit({

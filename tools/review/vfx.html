@@ -1,8 +1,72 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Evercast · Combat VFX review</title>
-<style>html,body{margin:0;height:100%;overflow:hidden;background:#18251d;color:#f3e6c7;font:14px system-ui}canvas{width:100%;height:100%;display:block}aside{position:absolute;top:22px;left:24px}h1{font:22px Georgia;letter-spacing:.12em;margin:0 0 10px}button,select{background:#24392ded;color:#f3e6c7;border:1px solid #8c9a7166;border-radius:5px;padding:8px;margin:3px}small{display:block;color:#bdd1bc;margin:9px 3px}pre{position:absolute;bottom:20px;left:28px;font-size:11px;color:#c5d6c6}</style></head>
-<body><canvas aria-label="Evercast combat VFX"></canvas><aside><h1>EVERCAST / THE EVOLVING SPELL</h1>
-<select id="mode" aria-label="Effect"><option>arcane</option><option>pierce</option><option>storm</option><option>fire</option><option>frost</option><option>blood</option><option>repeat</option><option>combined</option><option>stress</option></select>
-<button id="cast">Cast once</button><button id="auto">Auto cast</button><button id="kill">Lethal cast</button><button id="reset">Refill targets</button>
-<small>Real CombatSystem events · presentation review · no saved game changes</small></aside><pre id="stats"></pre>
-<script type="module" src="./vfxReview.ts"></script></body></html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Evercast · Combat VFX review</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #18251d;
+        color: #f3e6c7;
+        font: 14px system-ui;
+      }
+      canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      aside {
+        position: absolute;
+        top: 22px;
+        left: 24px;
+      }
+      h1 {
+        font: 22px Georgia;
+        letter-spacing: 0.12em;
+        margin: 0 0 10px;
+      }
+      button,
+      select {
+        background: #24392ded;
+        color: #f3e6c7;
+        border: 1px solid #8c9a7166;
+        border-radius: 5px;
+        padding: 8px;
+        margin: 3px;
+      }
+      small {
+        display: block;
+        color: #bdd1bc;
+        margin: 9px 3px;
+      }
+      pre {
+        position: absolute;
+        bottom: 20px;
+        left: 28px;
+        font-size: 11px;
+        color: #c5d6c6;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas aria-label="Evercast combat VFX"></canvas>
+    <aside>
+      <h1>EVERCAST / THE EVOLVING SPELL</h1>
+      <select id="mode" aria-label="Authored spell node"></select>
+      <button id="cast">Cast once</button><button id="auto">Auto cast</button
+      ><button id="kill">Lethal cast</button><button id="reset">Refill targets</button>
+      <button id="wounded">Targets to 15% HP</button
+      ><label><input type="checkbox" id="procs" />100% proc preview (review only)</label
+      ><small id="build"></small
+      ><small
+        >Real CombatSystem events · no saved game changes · normal tuning unless preview is checked</small
+      >
+    </aside>
+    <pre id="stats"></pre>
+    <script type="module" src="./vfxReview.ts"></script>
+  </body>
+</html>

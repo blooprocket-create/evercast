@@ -4,6 +4,7 @@ import type { EngineConfig } from '../config';
 import type { EncounterState, EnemyState, RunState } from '../model';
 import { big } from '../numbers';
 import { chooseDeterministic } from '../random/DeterministicRandom';
+import { ensurePositions } from '../combat/SpellCombatState';
 
 export interface EncounterDescriptor {
   encounter: EncounterState;
@@ -77,7 +78,9 @@ export class EncounterSystem {
     const enemy: EnemyState = {
       instanceId: run.nextEnemyInstanceId++,
       definitionId: definition.id,
-      name: isBoss ? `${definition.name} ${Math.max(1, Math.ceil(encounter.stage / this.config.bossCadence))}` : definition.name,
+      name: isBoss
+        ? `${definition.name} ${Math.max(1, Math.ceil(encounter.stage / this.config.bossCadence))}`
+        : definition.name,
       stage: encounter.stage,
       boss: isBoss,
       hp: maxHp,
@@ -88,6 +91,7 @@ export class EncounterSystem {
     };
 
     run.enemies.push(enemy);
+    ensurePositions(run);
     encounter.spawnedEnemies += 1;
     encounter.spawnCooldown = encounter.spawnInterval;
     return enemy;

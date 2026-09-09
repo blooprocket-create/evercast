@@ -1,6 +1,7 @@
 import { createDefaultCatalog, validateCatalog } from '../content/catalog';
 import type { ContentCatalog } from '../content/types';
 import { CombatSystem } from './combat/CombatSystem';
+import { clearSpellCombat, effectiveCastInterval } from './combat/SpellCombatState';
 import type { EngineConfig } from './config';
 import { DEFAULT_ENGINE_CONFIG } from './config';
 import { EncounterSystem } from './encounters/EncounterSystem';
@@ -77,9 +78,8 @@ export class EvercastSimulation {
           throw new Error(`Simulation safety limit exceeded while advancing ${seconds}s.`);
         }
 
-        const consumed = this.state.run.phase === 'travel'
-          ? this.advanceTravel(remaining)
-          : this.advanceCombat(remaining);
+        const consumed =
+          this.state.run.phase === 'travel' ? this.advanceTravel(remaining) : this.advanceCombat(remaining);
         remaining -= consumed;
       }
     } finally {
@@ -93,6 +93,7 @@ export class EvercastSimulation {
         this.progressionSystem.retryFrontier(this.state);
         return true;
       case 'set_spell_build':
+        clearSpellCombat(this.state.run);
         this.state.run.spell = structuredClone(command.build);
         this.state.run.castCooldown = Math.min(
           this.state.run.castCooldown,
@@ -184,14 +185,20 @@ export class EvercastSimulation {
       return Math.min(available, EPSILON);
     }
 
-    const canSpawn = encounter.spawnedEnemies < encounter.totalEnemies && run.enemies.length < encounter.maxAlive;
+    const canSpawn =
+      encounter.spawnedEnemies < encounter.totalEnemies && run.enemies.length < encounter.maxAlive;
     const nextSpawn = canSpawn ? Math.max(0, encounter.spawnCooldown) : Number.POSITIVE_INFINITY;
     const nextCast = run.enemies.length > 0 ? Math.max(0, run.castCooldown) : Number.POSITIVE_INFINITY;
     const nextAttack = run.enemies.reduce(
       (soonest, enemy) => Math.min(soonest, Math.max(0, enemy.attackCooldown)),
       Number.POSITIVE_INFINITY,
     );
-    const nextAction = Math.min(nextSpawn, nextCast, nextAttack);
+    const nextAction = Math.min(
+      nextSpawn,
+      nextCast,
+      nextAttack,
+      this.combatSystem.evolving.effects.nextDelay(run),
+    );
 
     if (!Number.isFinite(nextAction)) {
       throw new Error('Combat has no reachable next event.');
@@ -206,15 +213,20 @@ export class EvercastSimulation {
     if (consumed + EPSILON < nextAction) return consumed;
 
     if (canSpawn && encounter.spawnCooldown <= EPSILON) this.spawnNextEnemy();
+    this.collectDeadEnemies(this.combatSystem.evolving.effects.advance(run));
 
     // Player wins ties. A cast can kill the first target and subsequent projectiles retarget.
     if (run.enemies.length > 0 && run.castCooldown <= EPSILON) {
       const result = this.combatSystem.cast(run, this.state.equipment);
-      run.castCooldown += compileSpell(run.spell).castInterval;
+      run.castCooldown += effectiveCastInterval(run);
       this.collectDeadEnemies(result.killedEnemyIds);
     }
 
-    if (run.encounter && run.encounter.spawnedEnemies >= run.encounter.totalEnemies && run.enemies.length === 0) {
+    if (
+      run.encounter &&
+      run.encounter.spawnedEnemies >= run.encounter.totalEnemies &&
+      run.enemies.length === 0
+    ) {
       this.progressionSystem.handleEncounterCleared(this.state);
       return consumed || Math.min(available, EPSILON);
     }
@@ -238,6 +250,7 @@ export class EvercastSimulation {
     if (!enemy || !run.encounter) return;
     this.eventBus.emit({
       type: 'enemy_spawned',
+      position: enemy.position ? { ...enemy.position } : undefined,
       time: run.elapsedSeconds,
       stage: enemy.stage,
       instanceId: enemy.instanceId,

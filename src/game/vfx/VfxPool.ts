@@ -15,7 +15,7 @@ import {
 import '@babylonjs/loaders/glTF/2.0/glTFLoader';
 import manifest from '../../../public/models/vfx/manifest.json';
 
-export type School = 'arcane' | 'fire' | 'frost' | 'storm' | 'blood';
+export type School = 'arcane' | 'fire' | 'frost' | 'storm' | 'blood' | 'plague';
 export type VfxQuality = 'low' | 'medium' | 'high';
 export const VFX_BUDGETS = {
   low: { meshes: 48, paths: 16, jobs: 192, shards: 2, segments: 8, lights: 0 },
@@ -23,6 +23,7 @@ export const VFX_BUDGETS = {
   high: { meshes: 160, paths: 48, jobs: 576, shards: 7, segments: 16, lights: 1 },
 } as const;
 const COLORS: Record<School, string> = {
+  plague: '#8ee36f',
   arcane: '#9b70ff',
   fire: '#ff762b',
   frost: '#63dcff',

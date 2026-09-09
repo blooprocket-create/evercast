@@ -1,5 +1,9 @@
 # Combat VFX
 
+## Current authored tree
+
+The v1 tree replaces the old elemental playtest allocations. See [Spell Tree v1](SPELL_TREE_V1.md) for its runtime effects and current review controls. The original kit, generic effect contracts and historical screenshots below remain useful for asset/lifecycle regression testing; they are not separate player-selectable spell schools.
+
 The one evolving spell is composed at runtime from small faceted meshes, short
 procedural paths, and the simulation's hit events. Damage, target selection,
 control, healing, deaths, and rewards remain entirely in `src/engine`.
@@ -30,13 +34,13 @@ There are no baked spell trajectories or world coordinates in the GLBs.
   Repeats have their own quieter, slightly delayed flight.
 - `SpellVfxPresenter` captures target anchors, schedules short visual actions,
   samples the **current** staff socket at release, and composes school treatments.
-  Active spell-tree regions only choose decoration; they never choose hit targets.
+  Compiled mechanics only choose decoration; they never choose hit targets. ProcVfxPresenter consumes meteor, spread, status and secondary-damage events.
 - `CombatFxPresenter` owns impact glyphs/shards, critical emphasis, temporary chill,
   authored hit/death animation triggers, bounded camera impulses and optional light.
 - `DamageNumbers` reuses at most 24 DOM labels, formatted from emitted damage.
   Labels appear at visual impact and retain critical emphasis over tiny secondary hits.
 - `VfxPool` loads templates once, bakes the glTF coordinate conversion once, shares
-  six materials and template geometry, and reuses mesh and dynamic ribbon slots.
+  seven materials (including the v1 plague tint) and template geometry, and reuses mesh and dynamic ribbon slots.
   Lightning modifies fixed vertex buffers rather than rebuilding tubes each frame.
 
 The attack clip is compressed to 60–240 ms according to cast cadence. Charge follows

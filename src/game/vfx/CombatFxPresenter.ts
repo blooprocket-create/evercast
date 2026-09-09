@@ -3,6 +3,7 @@ import type { ActorVisual } from '../actors/ActorAssets';
 import type { Hit } from './CombatVfxPlan';
 import { VfxPool, type School } from './VfxPool';
 import { DamageNumbers } from './DamageNumbers';
+import type { GameEvent } from '../../engine/events/GameEvent';
 
 /** Local transient feedback: never touches shared actor materials or authoritative state. */
 export class CombatFxPresenter {
@@ -53,11 +54,25 @@ export class CombatFxPresenter {
     }
   }
 
+  effect(event: Extract<GameEvent, { type: 'effect_hit' }>, position: Vector3, actor?: ActorVisual): void {
+    this.numbers.show({ ...event, critical: !!event.empowered }, position);
+    actor?.flash(!!event.empowered);
+    if (event.effect === 'dot') this.burst(position, 'plague', 0.35);
+    else actor?.play('hit');
+  }
+
   burst(position: Vector3, school: School, size = 1, critical = false): void {
     const key = `burst:${school}:${position.x.toFixed(1)}:${position.z.toFixed(1)}:${critical}:${size > 1 ? 'area' : 'hit'}`;
     if (this.burstCooldowns.has(key)) return;
     this.burstCooldowns.set(key, 0.07);
-    const ring = school === 'arcane' ? (critical ? 'arcane_glyph_b' : 'arcane_ring_a') : `${school}_ring`;
+    const ring =
+      school === 'plague'
+        ? 'blood_ring'
+        : school === 'arcane'
+          ? critical
+            ? 'arcane_glyph_b'
+            : 'arcane_ring_a'
+          : `${school}_ring`;
     this.pool.emit(
       ring,
       school,
@@ -73,6 +88,7 @@ export class CombatFxPresenter {
       key,
     );
     const shard = {
+      plague: 'blood_droplet',
       arcane: 'arcane_shard_a',
       fire: 'fire_flame_a',
       frost: 'frost_shard_b',

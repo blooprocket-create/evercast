@@ -18,6 +18,8 @@ export interface GearSnapshot {
 }
 
 export interface EnemySnapshot {
+  position?: import('./combat/SpellCombatState').CombatPosition;
+  statuses?: import('./combat/SpellCombatState').EnemyStatuses;
   instanceId: number;
   modelKey: string;
   name: string;
@@ -28,6 +30,8 @@ export interface EnemySnapshot {
 }
 
 export interface SimulationSnapshot {
+  spellMechanics?: import('./spell/SpellMechanics').SpellMechanics;
+  combatState?: import('./combat/SpellCombatState').SpellCombatState;
   elapsedSeconds: number;
   stage: number;
   encounterStage: number;

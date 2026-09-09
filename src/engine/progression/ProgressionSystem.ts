@@ -4,6 +4,7 @@ import { goldRewardForKill } from '../gear/GearSystem';
 import type { EnemyState, GameState } from '../model';
 import { big } from '../numbers';
 import { firstClearEssenceReward } from './EssenceEconomy';
+import { clearSpellCombat } from '../combat/SpellCombatState';
 
 export class ProgressionSystem {
   constructor(
@@ -43,10 +44,7 @@ export class ProgressionSystem {
       const firstEverClear = clearedStage >= meta.highestStageEver;
 
       if (firstEverClear) {
-        const essence = firstClearEssenceReward(
-          clearedStage,
-          clearedStage % this.config.bossCadence === 0,
-        );
+        const essence = firstClearEssenceReward(clearedStage, clearedStage % this.config.bossCadence === 0);
         run.essence = run.essence.add(essence);
         this.emit({
           type: 'resource_gained',
@@ -106,6 +104,7 @@ export class ProgressionSystem {
   retryFrontier(state: GameState): void {
     const { run } = state;
     if (run.mode === 'push') return;
+    clearSpellCombat(run);
     run.mode = 'push';
     run.farmKillsSinceFailure = 0;
     run.enemies = [];
@@ -128,6 +127,7 @@ export class ProgressionSystem {
   }
 
   private resetAfterEncounter(run: GameState['run']): void {
+    clearSpellCombat(run);
     run.enemies = [];
     run.encounter = null;
     run.phase = 'travel';

@@ -1,5 +1,5 @@
 import { Vector3 } from '@babylonjs/core';
-import { SPELL_TREE_NODES } from '../../content/spellTree';
+import { ProcVfxPresenter } from './ProcVfxPresenter';
 import type { GameEvent } from '../../engine/events/GameEvent';
 import type { SimulationSnapshot } from '../../engine/types';
 import type { ActorVisual } from '../actors/ActorAssets';
@@ -20,20 +20,30 @@ export class SpellVfxPresenter {
   private clock = 0;
   private jobs: Job[] = [];
   private disposed = false;
+  private procs: ProcVfxPresenter;
   constructor(
     readonly pool: VfxPool,
     readonly combat: CombatFxPresenter,
     private anchors: VfxAnchors,
-  ) {}
+  ) {
+    this.procs = new ProcVfxPresenter(pool, combat, anchors);
+  }
 
   ingest(
-    snapshot: Pick<SimulationSnapshot, 'castInterval' | 'activeSpellNodeIds'>,
+    snapshot: Pick<SimulationSnapshot, 'castInterval' | 'activeSpellNodeIds' | 'spellMechanics'> &
+      Partial<Pick<SimulationSnapshot, 'enemies' | 'elapsedSeconds'>>,
     events: readonly GameEvent[],
   ): void {
     if (this.disposed) return;
-    const schools = new Set(
-      SPELL_TREE_NODES.filter((n) => snapshot.activeSpellNodeIds.includes(n.id)).map((n) => n.region),
-    );
+    const explosions = events.filter((e) => e.type === 'effect_hit' && e.effect === 'explosion');
+    this.procs.ingest(events.filter((e) => e.type !== 'effect_hit' || e.effect !== 'explosion'));
+    if (explosions.length)
+      this.schedule(castDuration(snapshot.castInterval) * 0.5 + 0.14, 'explosions', () =>
+        this.procs.ingest(explosions),
+      );
+    if (snapshot.enemies && snapshot.elapsedSeconds !== undefined)
+      this.procs.syncStatuses(snapshot.enemies, snapshot.elapsedSeconds);
+    const mechanics = snapshot.spellMechanics;
     const batches = new Map<number, Hit[]>();
     for (const event of events)
       if (event.type === 'projectile_hit') {
@@ -84,7 +94,7 @@ export class SpellVfxPresenter {
                 tail.z += Math.sin(Math.max(0, local - 0.17) * Math.PI) * lane * 0.6;
                 m.position.copyFrom(moving);
                 m.rotation.set(t * 9, 0, -Math.PI / 2);
-                m.scaling.setAll(flight.echo ? 0.32 : 0.45);
+                m.scaling.setAll((flight.echo ? 0.32 : 0.45) * (flight.hits[0].hit.powerScale ?? 1));
                 m.visibility = flight.echo ? 0.45 : 0.95;
               },
               true,
@@ -96,14 +106,14 @@ export class SpellVfxPresenter {
                 m.rotation.set(t * 9, 0, -Math.PI / 2);
                 m.scaling.setAll(0.19);
               });
-            if (schools.has('fire'))
+            if (mechanics?.explosive)
               this.pool.emit('fire_ember', 'fire', duration, (t, m) => {
                 m.position.copyFrom(moving);
                 m.position.y += 0.1;
                 m.scaling.setAll(0.2);
                 m.rotation.z = t * 12;
               });
-            if (schools.has('storm'))
+            if (mechanics?.chain || mechanics?.overdrive)
               this.pool.emit('storm_spark', 'storm', duration, (t, m) => {
                 m.position.copyFrom(moving);
                 m.position.y -= 0.1;
@@ -144,7 +154,7 @@ export class SpellVfxPresenter {
             );
             this.combat.burst(source, 'fire', Math.min(3, radius));
           }
-          if (schools.has('fire') && hit.source === 'direct') this.combat.burst(p, 'fire', 0.55);
+          if (hit.terminal) this.combat.burst(p, 'storm', 1.65, true);
           this.combat.hit(hit, p, this.anchors.actor(hit.instanceId));
           if (hit.healing && hit.healing !== '0') this.siphon(p);
         });
@@ -169,6 +179,7 @@ export class SpellVfxPresenter {
     this.jobs = this.jobs.filter((j) => j.at > this.clock);
     for (const job of due.sort((a, b) => a.at - b.at)) job.run();
     this.combat.update(step, (id) => this.anchors.target(id));
+    this.procs.update(step);
   }
   get stats() {
     return { jobs: this.jobs.length, ...this.pool.stats, ...this.combat.stats };
@@ -176,6 +187,7 @@ export class SpellVfxPresenter {
   dispose(): void {
     this.disposed = true;
     this.jobs.length = 0;
+    this.procs.dispose();
     this.combat.dispose();
     this.pool.dispose();
   }

@@ -1,172 +1,227 @@
-import { useMemo, useState } from 'react';
-import {
-  SPELL_TREE_NODE_BY_ID,
-  SPELL_TREE_NODES,
-  SPELL_TREE_ROOT_ID,
-  adjacentNodeIds,
-} from '../content/spellTree';
-import { canActivateSpellNode, MAX_SPELL_TREE_POINTS } from '../engine/spellTree/SpellTreeSystem';
-import type { SpellTreeState } from '../engine/spellTree/types';
+import { useRef, useState } from 'react';
+import { big } from '../engine/numbers';
+import { SPELL_TREE_NODE_BY_ID, SPELL_TREE_NODES, SPELL_TREE_ROOT_ID } from '../content/spellTree';
+import { MAX_SPELL_TREE_POINTS, spellNodeStatus } from '../engine/spellTree/SpellTreeSystem';
 import type { SimulationSnapshot } from '../engine/types';
 import { layoutForSpellNode, SPELL_TREE_VIEWBOX } from './spellTree/SpellTreeLayout';
-
-interface SpellTreeViewProps {
+interface Props {
   snapshot: SimulationSnapshot;
   onBuyPoint: () => void;
-  onActivateNode: (nodeId: string) => void;
+  onActivateNode: (id: string) => void;
   onRespec: () => void;
 }
-
-export function SpellTreeView({ snapshot, onBuyPoint, onActivateNode, onRespec }: SpellTreeViewProps) {
-  const [selectedNodeId, setSelectedNodeId] = useState(SPELL_TREE_ROOT_ID);
-  const selected = SPELL_TREE_NODE_BY_ID.get(selectedNodeId) ?? SPELL_TREE_NODE_BY_ID.get(SPELL_TREE_ROOT_ID)!;
-  const state: SpellTreeState = useMemo(() => ({
-    purchasedPoints: snapshot.spellTreePurchasedPoints,
-    activatedNodeIds: snapshot.activeSpellNodeIds,
-  }), [snapshot.spellTreePurchasedPoints, snapshot.activeSpellNodeIds]);
-  const active = useMemo(() => new Set([SPELL_TREE_ROOT_ID, ...snapshot.activeSpellNodeIds]), [snapshot.activeSpellNodeIds]);
-  const revealed = useMemo(() => revealedNodes(active), [active]);
-  const canActivateSelected = canActivateSpellNode(state, selected.id);
-  const treeFullyFunded = snapshot.spellTreeTotalPoints >= MAX_SPELL_TREE_POINTS;
-
+const labels = {
+  active: 'Awakened',
+  available: 'Available · 1 point',
+  exclusive: 'Locked by your choices · respec to change',
+  requirements: 'Missing prerequisites',
+  points: 'Need a Spell Point',
+  unknown: 'Unavailable',
+};
+export function SpellTreeView({ snapshot: s, onBuyPoint, onActivateNode, onRespec }: Props) {
+  const [selectedId, select] = useState(SPELL_TREE_ROOT_ID);
+  const viewport = useRef<HTMLDivElement>(null);
+  const selected = SPELL_TREE_NODE_BY_ID.get(selectedId)!;
+  const state = { purchasedPoints: s.spellTreePurchasedPoints, activatedNodeIds: s.activeSpellNodeIds };
+  const status = spellNodeStatus(state, selectedId);
+  const full = s.spellTreeTotalPoints >= MAX_SPELL_TREE_POINTS;
   return (
     <div className="spell-tree-layout">
       <div className="spell-tree-toolbar">
         <div className="spell-point-wallet">
-          <span className="eyebrow">EVERCAST POWER</span>
-          <strong>{snapshot.spellTreeUnspentPoints} unspent / {snapshot.spellTreeTotalPoints} total</strong>
-          <small>{snapshot.essence.display} Arcane Essence available</small>
+          <span className="eyebrow">SHAPE YOUR EVERCAST</span>
+          <strong>
+            {s.spellTreeUnspentPoints} unspent / {s.spellTreeTotalPoints} total
+          </strong>
+          <small>{s.essence.display} Arcane Essence</small>
         </div>
-        <button className="buy-spell-point" type="button" onClick={onBuyPoint} disabled={treeFullyFunded}>
-          {treeFullyFunded
-            ? 'All Spell Points Awakened'
-            : `Awaken Spell Point · ${snapshot.nextSpellPointCost.display} Essence`}
+        <button
+          className="buy-spell-point"
+          onClick={onBuyPoint}
+          disabled={full || big(s.essence.raw).cmp(s.nextSpellPointCost.raw) < 0}
+        >
+          {full ? 'All points purchased' : `Awaken Spell Point · ${s.nextSpellPointCost.display} Essence`}
         </button>
-        <button className="respec-tree-button" type="button" onClick={onRespec} disabled={snapshot.activeSpellNodeIds.length === 0}>
+        <button className="respec-tree-button" onClick={onRespec} disabled={!s.activeSpellNodeIds.length}>
           Free Respec
         </button>
       </div>
-
+      <p className="tree-instructions">
+        Choose <b>one route</b>, then up to <b>two identities</b>. Side upgrades are optional. Each fusion
+        needs <b>both mutations</b>. Scroll across to explore every route.
+      </p>
+      <nav className="tree-route-nav" aria-label="Explore spell routes">
+        {SPELL_TREE_NODES.filter((n) => n.kind === 'route').map((n) => (
+          <button
+            key={n.id}
+            className={`region-${n.region} ${spellNodeStatus(state, n.id)}`}
+            onClick={() => {
+              select(n.id);
+              viewport.current?.scrollTo({
+                left: layoutForSpellNode(n.id).x - viewport.current.clientWidth / 2,
+                behavior: 'smooth',
+              });
+            }}
+          >
+            <strong>{n.name}</strong>
+            <small>{labels[spellNodeStatus(state, n.id)]}</small>
+          </button>
+        ))}
+      </nav>
       <div className="spell-tree-main">
-        <div className="spell-tree-viewport">
+        <div
+          ref={viewport}
+          className="spell-tree-viewport"
+          tabIndex={0}
+          aria-label="Spell tree, scroll to explore three routes"
+        >
           <div className="spell-tree-canvas">
             <svg
               className="spell-tree-lines"
               viewBox={`0 0 ${SPELL_TREE_VIEWBOX.width} ${SPELL_TREE_VIEWBOX.height}`}
-              preserveAspectRatio="none"
               aria-hidden="true"
             >
-              {SPELL_TREE_NODES.flatMap((node) => node.requires.map((parentId) => {
-                const parent = SPELL_TREE_NODE_BY_ID.get(parentId);
-                if (!parent || !revealed.has(node.id) || !revealed.has(parentId)) return null;
-                const parentLayout = layoutForSpellNode(parentId);
-                const nodeLayout = layoutForSpellNode(node.id);
-                const connected = active.has(node.id) && active.has(parentId);
-                const reachable = active.has(parentId) || active.has(node.id);
-                return (
-                  <line
-                    key={`${parentId}-${node.id}`}
-                    x1={parentLayout.x}
-                    y1={parentLayout.y}
-                    x2={nodeLayout.x}
-                    y2={nodeLayout.y}
-                    className={connected ? 'active' : reachable ? 'reachable' : ''}
-                  />
-                );
-              }))}
+              {SPELL_TREE_NODES.flatMap((n) =>
+                n.requiresAll.map((id) => {
+                  const a = layoutForSpellNode(id),
+                    b = layoutForSpellNode(n.id);
+                  return (
+                    <line
+                      key={`${id}-${n.id}`}
+                      x1={a.x}
+                      y1={a.y}
+                      x2={b.x}
+                      y2={b.y}
+                      className={
+                        spellNodeStatus(state, n.id) === 'active'
+                          ? 'active'
+                          : spellNodeStatus(state, id) === 'active'
+                            ? 'reachable'
+                            : ''
+                      }
+                    />
+                  );
+                }),
+              )}
             </svg>
-
-            {SPELL_TREE_NODES.map((node) => {
-              if (!revealed.has(node.id)) return null;
-              const nodeLayout = layoutForSpellNode(node.id);
-              const isActive = active.has(node.id);
-              const canActivate = canActivateSpellNode(state, node.id);
-              const isAdjacent = node.requires.some((id) => active.has(id)) || adjacentNodeIds(node.id).some((id) => active.has(id));
+            {['twin', 'piercing', 'charged'].map((region, i) => (
+              <div className={`route-caption region-${region}`} key={region} style={{ left: i * 600 }}>
+                {
+                  SPELL_TREE_NODES.filter(
+                    (n) =>
+                      n.region === region && n.kind === 'identity' && s.activeSpellNodeIds.includes(n.id),
+                  ).length
+                }{' '}
+                / 2 identities chosen
+              </div>
+            ))}
+            {SPELL_TREE_NODES.map((n) => {
+              const p = layoutForSpellNode(n.id),
+                status = spellNodeStatus(state, n.id);
               return (
                 <button
-                  key={node.id}
+                  key={n.id}
                   type="button"
-                  className={`spell-node region-${node.region} kind-${node.kind} ${isActive ? 'active' : ''} ${canActivate ? 'available' : ''} ${isAdjacent ? 'adjacent' : ''} ${selected.id === node.id ? 'selected' : ''}`}
-                  style={{
-                    left: `${(nodeLayout.x / SPELL_TREE_VIEWBOX.width) * 100}%`,
-                    top: `${(nodeLayout.y / SPELL_TREE_VIEWBOX.height) * 100}%`,
-                  }}
-                  onClick={() => setSelectedNodeId(node.id)}
-                  title={node.name}
+                  aria-label={`${n.name}: ${labels[status]}`}
+                  aria-pressed={selectedId === n.id}
+                  className={`spell-node region-${n.region} kind-${n.kind} ${status} ${selectedId === n.id ? 'selected' : ''}`}
+                  style={{ left: p.x, top: p.y }}
+                  onClick={() => select(n.id)}
+                  title={`${n.name} — ${labels[status]}`}
                 >
-                  <span>{node.kind === 'root' ? 'EVERCAST' : node.kind === 'mutation' ? '◆' : node.kind === 'notable' ? '✦' : '•'}</span>
+                  <small>
+                    {status === 'active' ? '✓ ' : status === 'exclusive' ? '× ' : ''}
+                    {n.kind === 'minor' ? 'UPGRADE' : n.kind.toUpperCase()}
+                  </small>
+                  <span>{n.name}</span>
                 </button>
               );
             })}
-
-            <span className="tree-region-label label-arcane">ARCANE</span>
-            <span className="tree-region-label label-fire">FIRE</span>
-            <span className="tree-region-label label-frost">FROST</span>
-            <span className="tree-region-label label-storm">STORM</span>
-            <span className="tree-region-label label-blood">BLOOD</span>
           </div>
         </div>
-
-        <aside className={`spell-node-detail region-${selected.region}`}>
-          <span className="eyebrow">{selected.kind.toUpperCase()} · {selected.region.toUpperCase()}</span>
+        <aside className={`spell-node-detail region-${selected.region}`} aria-live="polite">
+          <span className="eyebrow">
+            {selected.kind.toUpperCase()} · {selected.region.toUpperCase()}
+          </span>
           <h3>{selected.name}</h3>
           <p>{selected.description}</p>
           <div className="node-status-row">
-            <span>Status</span>
-            <strong>
-              {active.has(selected.id)
-                ? 'Awakened'
-                : canActivateSelected
-                  ? 'Available'
-                  : snapshot.spellTreeUnspentPoints <= 0
-                    ? 'Need a Spell Point'
-                    : 'Path not connected'}
-            </strong>
+            <strong>{labels[status]}</strong>
           </div>
-          {selected.id !== SPELL_TREE_ROOT_ID && !active.has(selected.id) && (
+          {!!selected.requiresAll.length && (
+            <div className="node-requirements">
+              <h4>Requires {selected.requiresAll.length > 1 ? 'ALL' : ''}</h4>
+              {selected.requiresAll.map((id) => (
+                <div key={id}>
+                  {spellNodeStatus(state, id) === 'active' ? '✓' : '○'} {SPELL_TREE_NODE_BY_ID.get(id)!.name}
+                </div>
+              ))}
+            </div>
+          )}
+          {selected.exclusiveGroup && (
+            <p>
+              {selected.kind === 'route'
+                ? 'Choose 1 of 3 routes.'
+                : 'Choose up to 2 of 3 identities in this route.'}{' '}
+              Free Respec returns all allocated points.
+            </p>
+          )}
+          {status !== 'active' && (
             <button
               className="activate-spell-node"
-              type="button"
-              disabled={!canActivateSelected}
-              onClick={() => onActivateNode(selected.id)}
+              disabled={status !== 'available'}
+              onClick={() => onActivateNode(selectedId)}
             >
               Awaken Node · 1 Point
             </button>
           )}
-
           <div className="spell-build-readout">
             <h4>Current Evercast</h4>
-            <div><span>Damage</span><strong>{snapshot.damagePerProjectile.display}</strong></div>
-            <div><span>Cast</span><strong>{snapshot.castInterval.toFixed(2)}s</strong></div>
-            <div><span>Projectiles</span><strong>{snapshot.projectileCount}</strong></div>
-            <div><span>Critical</span><strong>{Math.round(snapshot.critChance * 100)}% · ×{snapshot.critMultiplier.toFixed(2)}</strong></div>
-            <div><span>Pierce</span><strong>{snapshot.pierceTargets}</strong></div>
-            <div><span>Splash</span><strong>{snapshot.splashTargets}{snapshot.splashTargets > 0 ? ` @ ${Math.round(snapshot.splashDamageMultiplier * 100)}%` : ''}</strong></div>
-            <div><span>Chain</span><strong>{snapshot.chainTargets}{snapshot.chainTargets > 0 ? ` @ ${Math.round(snapshot.chainDamageMultiplier * 100)}%` : ''}</strong></div>
-            <div><span>Control</span><strong>+{snapshot.controlDelaySeconds.toFixed(2)}s delay / hit</strong></div>
-            <div><span>Leech</span><strong>{Math.round(snapshot.leechFraction * 100)}%</strong></div>
+            <div>
+              <span>Route</span>
+              <strong>{s.spellMechanics?.route ?? 'base'}</strong>
+            </div>
+            <div>
+              <span>Damage / projectile</span>
+              <strong>{s.damagePerProjectile.display}</strong>
+            </div>
+            <div>
+              <span>Cast interval</span>
+              <strong>{s.castInterval.toFixed(2)}s</strong>
+            </div>
+            <div>
+              <span>Projectiles</span>
+              <strong>{s.projectileCount}</strong>
+            </div>
+            <div>
+              <span>Critical</span>
+              <strong>
+                {Math.round(s.critChance * 100)}% · ×{s.critMultiplier.toFixed(2)}
+              </strong>
+            </div>
+            {s.spellMechanics?.route === 'piercing' && (
+              <div>
+                <span>{s.spellMechanics.chain ? 'Chain hops' : 'Penetrations'}</span>
+                <strong>{s.spellMechanics.penetrations}</strong>
+              </div>
+            )}
+            {s.combatState && (
+              <>
+                <div>
+                  <span>Momentum / Focus</span>
+                  <strong>
+                    {s.combatState.momentum} / {s.combatState.focus}
+                  </strong>
+                </div>
+                <div>
+                  <span>Supercharge</span>
+                  <strong>{s.combatState.supercharge}</strong>
+                </div>
+              </>
+            )}
           </div>
         </aside>
       </div>
     </div>
   );
-}
-
-function revealedNodes(active: ReadonlySet<string>): Set<string> {
-  const revealed = new Set<string>([SPELL_TREE_ROOT_ID]);
-  const queue: Array<{ id: string; depth: number }> = [...active].map((id) => ({ id, depth: 0 }));
-  const visited = new Set<string>();
-
-  while (queue.length > 0) {
-    const current = queue.shift()!;
-    if (visited.has(current.id)) continue;
-    visited.add(current.id);
-    revealed.add(current.id);
-    if (current.depth >= 2) continue;
-    for (const adjacent of adjacentNodeIds(current.id)) {
-      revealed.add(adjacent);
-      queue.push({ id: adjacent, depth: current.depth + 1 });
-    }
-  }
-  return revealed;
 }

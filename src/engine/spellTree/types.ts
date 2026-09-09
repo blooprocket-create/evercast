@@ -1,18 +1,9 @@
 import type { SpellModifier } from '../spell/types';
+import type { MechanicUpgrade } from '../spell/SpellMechanics';
 
-export type SpellTreeRegion =
-  | 'core'
-  | 'power'
-  | 'speed'
-  | 'projectile'
-  | 'crit'
-  | 'arcane'
-  | 'fire'
-  | 'frost'
-  | 'storm'
-  | 'blood';
+export type SpellTreeRegion = 'core' | 'twin' | 'piercing' | 'charged';
 
-export type SpellTreeNodeKind = 'root' | 'minor' | 'notable' | 'mutation';
+export type SpellTreeNodeKind = 'root' | 'route' | 'identity' | 'minor' | 'mutation' | 'fusion';
 
 export interface SpellTreeNodeDefinition {
   id: string;
@@ -20,7 +11,9 @@ export interface SpellTreeNodeDefinition {
   description: string;
   region: SpellTreeRegion;
   kind: SpellTreeNodeKind;
-  requires: string[];
+  requiresAll: string[];
+  exclusiveGroup?: string;
+  mechanics?: MechanicUpgrade[];
   modifiers: SpellModifier[];
 }
 
