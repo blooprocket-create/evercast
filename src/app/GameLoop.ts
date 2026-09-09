@@ -1,6 +1,7 @@
 import { OfflineProgressor, type OfflineSummary } from '../engine/offline/OfflineProgressor';
 import type { EvercastScene } from '../game/EvercastScene';
-import { saveGame, simulation, snapshotStore } from './runtime';
+import { sceneMoodFor } from '../game/audio/AudioEngine';
+import { audio, saveGame, simulation, snapshotStore } from './runtime';
 
 /**
  * Owns the browser-side cadences so they are named and separable rather than
@@ -36,9 +37,12 @@ export function startGameLoop({ scene, onAwayProgress }: GameLoopOptions): () =>
   const onVisibilityChange = () => {
     if (document.hidden) {
       hiddenAt = Date.now();
+      audio.setSuspended(true);
       saveGame();
       return;
     }
+
+    audio.setSuspended(false);
 
     previous = performance.now();
     if (hiddenAt === null) return;
@@ -47,8 +51,11 @@ export function startGameLoop({ scene, onAwayProgress }: GameLoopOptions): () =>
     hiddenAt = null;
     onAwayProgress(backgroundProgressor.apply(simulation, elapsedSeconds));
 
+    // Whatever happened while away is already in the summary; replaying it as
+    // sound would be a wall of hits for a fight nobody watched.
     simulation.drainPresentationEvents();
     const next = simulation.getSnapshot();
+    audio.setScene(sceneMoodFor(next));
     scene.sync(next, 0, []);
     snapshotStore.publish(next);
     publishAccumulator = 0;
@@ -67,11 +74,14 @@ export function startGameLoop({ scene, onAwayProgress }: GameLoopOptions): () =>
     simulation.update(delta);
 
     const next = simulation.getSnapshot();
-    scene.sync(next, delta, simulation.drainPresentationEvents());
+    const events = simulation.drainPresentationEvents();
+    scene.sync(next, delta, events);
+    audio.handleEvents(events);
 
     publishAccumulator += delta;
     if (publishAccumulator >= UI_PUBLISH_SECONDS) {
       snapshotStore.publish(next);
+      audio.setScene(sceneMoodFor(next));
       publishAccumulator = 0;
     }
 
