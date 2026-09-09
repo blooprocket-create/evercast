@@ -1,3 +1,4 @@
+import type Decimal from 'break_eternity.js';
 import type { EngineConfig } from '../config';
 import type { ContentCatalog } from '../../content/types';
 import { requireEnemy } from '../../content/catalog';
@@ -16,6 +17,7 @@ export interface SimulationSnapshotBuildContext {
   config: EngineConfig;
   catalog: ContentCatalog;
   canRebirth: boolean;
+  rebirthKnowledgeGain: Decimal;
   lastEvent: string;
 }
 
@@ -24,6 +26,7 @@ export function buildSimulationSnapshot({
   config,
   catalog,
   canRebirth,
+  rebirthKnowledgeGain,
   lastEvent,
 }: SimulationSnapshotBuildContext): SimulationSnapshot {
   const run = state.run;
@@ -103,6 +106,7 @@ export function buildSimulationSnapshot({
     highestStageEver: state.meta.highestStageEver,
     rebirths: state.meta.rebirths,
     canRebirth,
+    rebirthKnowledgeGain: quantity(rebirthKnowledgeGain),
     gear: GEAR_SLOT_ORDER.map((slot) => {
       const data = gearDisplayData(state.equipment, slot);
       return {

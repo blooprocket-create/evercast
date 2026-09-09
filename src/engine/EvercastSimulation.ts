@@ -130,6 +130,7 @@ export class EvercastSimulation {
       config: this.config,
       catalog: this.catalog,
       canRebirth: this.rebirthSystem.canRebirth(this.state),
+      rebirthKnowledgeGain: this.rebirthSystem.previewKnowledgeGain(this.state),
       lastEvent: this.lastEvent ? describeGameEvent(this.lastEvent) : 'The Evercast stirs.',
     });
   }

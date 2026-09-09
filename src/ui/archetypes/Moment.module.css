@@ -1,0 +1,110 @@
+.scrim {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--space-5);
+  background: var(--scrim);
+  pointer-events: auto;
+}
+
+.card {
+  width: min(560px, 100%);
+  padding: var(--space-6);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-panel);
+  background: var(--surface-veil);
+  display: grid;
+  gap: var(--space-4);
+  justify-items: center;
+  text-align: center;
+}
+
+.danger {
+  border-color: color-mix(in srgb, var(--hp-foe) 40%, transparent);
+}
+
+.essence {
+  border-color: color-mix(in srgb, var(--essence) 40%, transparent);
+}
+
+.accent {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.badge {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-pill);
+  display: grid;
+  place-items: center;
+  border: 1px solid currentColor;
+}
+
+.danger .badge {
+  color: var(--hp-foe);
+  background: color-mix(in srgb, var(--hp-foe) 12%, transparent);
+}
+
+.essence .badge {
+  color: var(--essence);
+  background: color-mix(in srgb, var(--essence) 12%, transparent);
+}
+
+.accent .badge {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.headline {
+  margin: 0;
+  font: 500 var(--text-title) / 1.15 var(--font-display);
+  color: var(--ink);
+}
+
+.consequence {
+  margin: 0;
+  max-width: 46ch;
+  font: 400 var(--text-body) / 1.6 var(--font-ui);
+  color: var(--ink-mid);
+}
+
+.cells {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.cell {
+  padding: var(--space-3);
+  border-radius: var(--radius-card);
+  background: var(--veil-2);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.cellLabel {
+  font: 600 var(--text-label) / 1 var(--font-ui);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-low);
+}
+
+.cellValue {
+  font: 600 var(--text-lead) / 1 var(--font-display);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.actions {
+  display: grid;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.hint {
+  margin: 0;
+  font: 400 var(--text-small) / 1.5 var(--font-ui);
+  color: var(--ink-low);
+}

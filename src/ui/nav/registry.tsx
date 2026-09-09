@@ -2,6 +2,7 @@ import type { Destination } from './destinations';
 import { OverviewSurface } from '../surfaces/OverviewSurface';
 import { SpellTreeSurface } from '../surfaces/SpellTreeSurface';
 import { GearSurface } from '../surfaces/GearSurface';
+import { RebirthSurface } from '../surfaces/RebirthSurface';
 
 /**
  * Adding a feature is one entry here plus its data. No shelf change, no new
@@ -38,6 +39,17 @@ export const DESTINATIONS: RegisteredDestination[] = [
     archetype: 'detail',
     Component: GearSurface,
   },
+  {
+    id: 'rebirth',
+    group: 'power',
+    label: 'Rebirth',
+    icon: 'rebirth',
+    archetype: 'moment',
+    // Hidden until the engine says it is possible; the rail never has to know.
+    available: (snapshot) => snapshot.canRebirth,
+    badge: () => 'dot',
+    Component: RebirthSurface,
+  },
 ];
 
 export const DEFAULT_PINNED = ['character', 'spell-tree', 'gear'];
@@ -50,7 +62,6 @@ export const DEFAULT_PINNED = ['character', 'spell-tree', 'gear'];
  */
 const STRESS: RegisteredDestination[] = [
   { id: 'gear-trees', group: 'power', label: 'Gear Trees', icon: 'gearTree', archetype: 'graph', Component: Placeholder },
-  { id: 'rebirth', group: 'power', label: 'Rebirth', icon: 'rebirth', archetype: 'moment', available: (s) => s.canRebirth, badge: () => 'dot', Component: Placeholder },
   { id: 'automation', group: 'power', label: 'Automation', icon: 'automation', archetype: 'ledger', Component: Placeholder },
   { id: 'map', group: 'world', label: 'Map', icon: 'map', archetype: 'dashboard', Component: Placeholder },
   { id: 'bestiary', group: 'world', label: 'Bestiary', icon: 'bestiary', archetype: 'ledger', badge: () => 7, Component: Placeholder },

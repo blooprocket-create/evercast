@@ -1,4 +1,3 @@
-import type { OfflineSummary } from '../../engine/offline/OfflineProgressor';
 import { NumberCell } from '../format/NumberCell';
 import { Button } from '../primitives/Button';
 import { Meter } from '../primitives/Meter';
@@ -7,7 +6,7 @@ import { useSnapshotSelector } from '../state/snapshot';
 import styles from './HudOverlay.module.css';
 
 /** Always-on chrome over the diorama. The shelf is rendered by the shell. */
-export function HudOverlay({ awayProgress }: { awayProgress: OfflineSummary | null }) {
+export function HudOverlay() {
   const run = useCommand();
   const zoneName = useSnapshotSelector((s) => s.zoneName);
   const stage = useSnapshotSelector((s) => s.stage);
@@ -84,13 +83,6 @@ export function HudOverlay({ awayProgress }: { awayProgress: OfflineSummary | nu
         </div>
       )}
 
-      {awayProgress && awayProgress.secondsApplied >= 5 && (
-        <div className={styles.away}>
-          The spell kept casting: +<NumberCell value={awayProgress.goldGained} inline /> gold, +
-          <NumberCell value={awayProgress.essenceGained} inline /> essence, {awayProgress.kills} felled,
-          frontier {awayProgress.stageBefore} to {awayProgress.stageAfter}.
-        </div>
-      )}
     </div>
   );
 }

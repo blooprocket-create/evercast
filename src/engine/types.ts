@@ -83,6 +83,7 @@ export interface SimulationSnapshot {
   progressToNextEncounter: number;
   highestStageEver: number;
   rebirths: number;
+  rebirthKnowledgeGain: QuantitySnapshot;
   canRebirth: boolean;
   gear: GearSnapshot[];
   lastEvent: string;

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { accentForZone, accentVariable } from '../theme/biome';
 import { HudOverlay, ShelfLog, ShelfVitals } from './HudOverlay';
+import { WelcomeBack } from '../surfaces/WelcomeBack';
 import { SurfaceHost } from './SurfaceHost';
 import { Shelf } from '../nav/Shelf';
 import {
@@ -18,9 +19,10 @@ import styles from './AppShell.module.css';
 interface AppShellProps {
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
   awayProgress: OfflineSummary | null;
+  onDismissAwayProgress: () => void;
 }
 
-export function AppShell({ canvasRef, awayProgress }: AppShellProps) {
+export function AppShell({ canvasRef, awayProgress, onDismissAwayProgress }: AppShellProps) {
   const registry = useMemo(() => loadRegistry(), []);
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -32,7 +34,7 @@ export function AppShell({ canvasRef, awayProgress }: AppShellProps) {
     <main className={styles.shell} style={{ '--accent': accent } as React.CSSProperties}>
       <canvas ref={canvasRef} className={styles.canvas} aria-label="Evercast game world" />
       <div className={styles.layer}>
-        <HudOverlay awayProgress={awayProgress} />
+        <HudOverlay />
         <ShelfContainer
           registry={registry}
           activeId={activeId}
@@ -44,6 +46,9 @@ export function AppShell({ canvasRef, awayProgress }: AppShellProps) {
           onSelect={setActiveId}
           onClose={() => setActiveId(null)}
         />
+        {awayProgress && awayProgress.secondsApplied >= 5 && (
+          <WelcomeBack summary={awayProgress} onDismiss={onDismissAwayProgress} />
+        )}
       </div>
     </main>
   );

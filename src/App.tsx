@@ -39,7 +39,11 @@ export default function App() {
 
   return (
     <CommandProvider value={commands}>
-      <AppShell canvasRef={canvasRef} awayProgress={awayProgress} />
+      <AppShell
+        canvasRef={canvasRef}
+        awayProgress={awayProgress}
+        onDismissAwayProgress={() => setAwayProgress(null)}
+      />
     </CommandProvider>
   );
 }
