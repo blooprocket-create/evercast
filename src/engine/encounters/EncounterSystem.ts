@@ -4,7 +4,9 @@ import type { EngineConfig } from '../config';
 import type { EncounterState, EnemyState, RunState } from '../model';
 import { big } from '../numbers';
 import { chooseDeterministic } from '../random/DeterministicRandom';
-import { ensurePositions } from '../combat/SpellCombatState';
+import { ensurePositions, spawnPosition } from '../combat/SpellCombatState';
+
+const LANES = [0, 1, 2, 3, 4, 5];
 
 export interface EncounterDescriptor {
   encounter: EncounterState;
@@ -89,6 +91,21 @@ export class EncounterSystem {
       attackInterval: definition.attackInterval,
       attackCooldown: definition.attackInterval,
     };
+
+    // Which lane it comes down is deterministic but unpredictable, so a wave
+    // arrives spread across the road rather than in a single file.
+    const lane = chooseDeterministic(
+      LANES.slice(0, Math.max(1, this.config.laneCount)),
+      this.config.seed,
+      encounter.stage,
+      spawnIndex,
+      run.mode === 'push' ? 7 : 11,
+    );
+    // A boss walks in a little closer, so the fight starts sooner.
+    const from = isBoss ? this.config.enemySpawnDistance * 0.72 : this.config.enemySpawnDistance;
+    enemy.position = spawnPosition(lane, this.config.laneSpacing, from);
+    enemy.approachFrom = from;
+    enemy.approachSince = run.elapsedSeconds;
 
     run.enemies.push(enemy);
     ensurePositions(run);

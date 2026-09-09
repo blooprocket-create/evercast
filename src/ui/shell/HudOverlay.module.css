@@ -130,9 +130,9 @@
 .enemy {
   position: absolute;
   left: 50%;
-  top: 40%;
+  top: var(--space-5);
   transform: translateX(-50%);
-  width: min(340px, calc(100% - 48px));
+  width: min(420px, calc(100% - 48px));
   padding: var(--space-3);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-card);

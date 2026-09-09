@@ -162,3 +162,16 @@
   color: var(--accent);
   margin-left: auto;
 }
+
+.buyText {
+  display: grid;
+  gap: var(--space-1);
+  text-align: left;
+}
+
+.buySub {
+  font: 400 var(--text-label) / 1 var(--font-ui);
+  letter-spacing: 0.06em;
+  text-transform: none;
+  color: var(--accent);
+}

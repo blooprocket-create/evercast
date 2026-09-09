@@ -4,6 +4,7 @@ import {
   Color4,
   DirectionalLight,
   DefaultRenderingPipeline,
+  DepthOfFieldEffectBlurLevel,
   Engine,
   GlowLayer,
   HemisphericLight,
@@ -25,8 +26,12 @@ import { WorldGenerator } from './world/WorldGenerator';
 import { ActorAssets, ActorVisual } from './actors/ActorAssets';
 import { VfxPool, type VfxQuality } from './vfx/VfxPool';
 import { CombatFxPresenter } from './vfx/CombatFxPresenter';
+import { EnemyHealthBars } from './vfx/EnemyHealthBars';
 import { SpellVfxPresenter } from './vfx/SpellVfxPresenter';
 import { castDuration } from './vfx/CombatVfxPlan';
+
+/** Roughly head height above an enemy's feet. */
+const HEALTH_BAR_OFFSET = new Vector3(0, 1.55, 0);
 
 export class EvercastScene {
   private readonly engine: Engine;
@@ -37,6 +42,7 @@ export class EvercastScene {
   private readonly shadows: ShadowGenerator;
   private readonly enemyMeshes = new Map<number, ActorVisual>();
   private readonly retiring: { id: number; actor: ActorVisual; remaining: number }[] = [];
+  private readonly healthBars: EnemyHealthBars;
   readonly vfx: SpellVfxPresenter;
   private readonly transientAnchors = new Map<number, { position: Vector3; remaining: number }>();
   private gearSignature = '';
@@ -69,6 +75,16 @@ export class EvercastScene {
     presentation.samples = 4;
     presentation.fxaaEnabled = true;
     presentation.bloomEnabled = false;
+
+    // Depth of field holds the combat lane sharp and softens the far hills and
+    // the near verge, which is what makes the diorama read as a diorama.
+    // Babylon measures focus distance in millimetres, and the camera radius is
+    // pinned, so the plane of focus sits exactly on the road.
+    presentation.depthOfFieldEnabled = true;
+    presentation.depthOfFieldBlurLevel = DepthOfFieldEffectBlurLevel.Low;
+    presentation.depthOfField.focusDistance = camera.radius * 1000;
+    presentation.depthOfField.focalLength = 62;
+    presentation.depthOfField.fStop = 1.8;
     this.scene.imageProcessingConfiguration.toneMappingEnabled = true;
     this.scene.imageProcessingConfiguration.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
     this.scene.imageProcessingConfiguration.exposure = 1.2;
@@ -109,6 +125,7 @@ export class EvercastScene {
     this.mage.root.position.set(-3.2, 0.025, 0);
     this.mage.root.rotation.y = Math.PI * 0.68;
     const pool = new VfxPool(this.scene, quality);
+    this.healthBars = new EnemyHealthBars(this.scene);
     this.vfx = new SpellVfxPresenter(pool, new CombatFxPresenter(pool, this.scene, camera), {
       staff: () => this.mage.socketPosition('socket_spell', new Vector3(0.55, 1.65, 0)),
       mage: () => this.mage.root.position.add(new Vector3(0, 1, 0)),
@@ -176,6 +193,13 @@ export class EvercastScene {
     }
 
     this.syncEnemyVisuals(snapshot, deltaSeconds);
+    // Bars follow the meshes, not the snapshot: enemies are walking in, and the
+    // interface only hears about them ten times a second.
+    this.healthBars.sync(snapshot.enemies, (instanceId: number) => {
+      const actor = this.enemyMeshes.get(instanceId);
+      return actor ? actor.root.position.add(HEALTH_BAR_OFFSET) : null;
+    });
+    this.healthBars.update();
     for (const event of events) {
       if (event.type === 'spell_cast') this.mage.play('attack', castDuration(snapshot.castInterval));
       if (event.type === 'enemy_attack') {
@@ -205,6 +229,7 @@ export class EvercastScene {
     window.removeEventListener('resize', this.resize);
     window.removeEventListener('keydown', this.keydown);
     this.vfx.dispose();
+    this.healthBars.dispose();
     this.transientAnchors.clear();
     for (const mesh of this.enemyMeshes.values()) mesh.dispose();
     this.enemyMeshes.clear();

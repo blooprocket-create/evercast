@@ -10,7 +10,7 @@ import { compileSpell } from '../spell/SpellCompiler';
 import { spellPointCost } from '../spellTree/SpellTreeCatalog';
 import { totalSpellPoints, unspentSpellPoints } from '../spellTree/SpellTreeSystem';
 import type { SimulationSnapshot } from '../types';
-import { effectiveCastInterval } from '../combat/SpellCombatState';
+import { effectiveCastInterval, inAttackRange } from '../combat/SpellCombatState';
 
 export interface SimulationSnapshotBuildContext {
   state: GameState;
@@ -71,6 +71,7 @@ export function buildSimulationSnapshot({
       hp: quantity(enemy.hp),
       maxHp: quantity(enemy.maxHp),
       hpPercent: enemy.maxHp.cmp(0) > 0 ? percent(enemy.hp.div(enemy.maxHp).toNumber()) : 0,
+      approaching: !inAttackRange(enemy, config.enemyAttackRange),
     })),
     encounterTotalEnemies: run.encounter?.totalEnemies ?? 0,
     encounterSpawnedEnemies: run.encounter?.spawnedEnemies ?? 0,

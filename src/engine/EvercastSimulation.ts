@@ -1,7 +1,8 @@
 import { createDefaultCatalog, validateCatalog } from '../content/catalog';
 import type { ContentCatalog } from '../content/types';
 import { CombatSystem } from './combat/CombatSystem';
-import { clearSpellCombat, effectiveCastInterval } from './combat/SpellCombatState';
+// prettier-ignore
+import { advanceApproach, anyInRange, clearSpellCombat, effectiveCastInterval, inAttackRange, soonestRangeChange } from './combat/SpellCombatState';
 import type { EngineConfig } from './config';
 import { DEFAULT_ENGINE_CONFIG } from './config';
 import { EncounterSystem } from './encounters/EncounterSystem';
@@ -189,15 +190,20 @@ export class EvercastSimulation {
     const canSpawn =
       encounter.spawnedEnemies < encounter.totalEnemies && run.enemies.length < encounter.maxAlive;
     const nextSpawn = canSpawn ? Math.max(0, encounter.spawnCooldown) : Number.POSITIVE_INFINITY;
-    const nextCast = run.enemies.length > 0 ? Math.max(0, run.castCooldown) : Number.POSITIVE_INFINITY;
+    const reach = this.config.enemyAttackRange;
+    const nextCast = anyInRange(run, this.config.spellRange)
+      ? Math.max(0, run.castCooldown)
+      : Number.POSITIVE_INFINITY;
     const nextAttack = run.enemies.reduce(
-      (soonest, enemy) => Math.min(soonest, Math.max(0, enemy.attackCooldown)),
+      (soonest, enemy) =>
+        inAttackRange(enemy, reach) ? Math.min(soonest, Math.max(0, enemy.attackCooldown)) : soonest,
       Number.POSITIVE_INFINITY,
     );
     const nextAction = Math.min(
       nextSpawn,
       nextCast,
       nextAttack,
+      soonestRangeChange(run, [reach, this.config.spellRange], this.config.enemyApproachSpeed),
       this.combatSystem.evolving.effects.nextDelay(run),
     );
 
@@ -207,9 +213,15 @@ export class EvercastSimulation {
 
     const consumed = Math.min(available, nextAction);
     run.elapsedSeconds += consumed;
-    if (run.enemies.length > 0) run.castCooldown -= consumed;
-    for (const enemy of run.enemies) enemy.attackCooldown -= consumed;
+    // Gates read positions as they were at the START of this step. Arrival is
+    // itself an event, so an enemy is either out of range for the whole step or
+    // in range for the whole step - which is what keeps a chunked run, a single
+    // pass and a save-and-resume in agreement.
+    if (anyInRange(run, this.config.spellRange)) run.castCooldown -= consumed;
+    // An enemy still closing is not winding up a swing.
+    for (const enemy of run.enemies) if (inAttackRange(enemy, reach)) enemy.attackCooldown -= consumed;
     if (canSpawn) encounter.spawnCooldown -= consumed;
+    advanceApproach(run, reach, this.config.enemyApproachSpeed);
 
     if (consumed + EPSILON < nextAction) return consumed;
 
@@ -217,7 +229,7 @@ export class EvercastSimulation {
     this.collectDeadEnemies(this.combatSystem.evolving.effects.advance(run));
 
     // Player wins ties. A cast can kill the first target and subsequent projectiles retarget.
-    if (run.enemies.length > 0 && run.castCooldown <= EPSILON) {
+    if (anyInRange(run, this.config.spellRange) && run.castCooldown <= EPSILON) {
       const result = this.combatSystem.cast(run, this.state.equipment);
       run.castCooldown += effectiveCastInterval(run);
       this.collectDeadEnemies(result.killedEnemyIds);
@@ -233,7 +245,7 @@ export class EvercastSimulation {
     }
 
     for (const enemy of [...run.enemies]) {
-      if (enemy.attackCooldown > EPSILON) continue;
+      if (enemy.attackCooldown > EPSILON || !inAttackRange(enemy, reach)) continue;
       const result = this.combatSystem.enemyAttack(run, enemy);
       enemy.attackCooldown += enemy.attackInterval;
       if (result.mageDefeated) {

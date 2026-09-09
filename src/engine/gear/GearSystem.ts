@@ -1,6 +1,7 @@
 import type { EngineConfig } from '../config';
 import type { GameEvent } from '../events/GameEvent';
 import type { GameState } from '../model';
+import type Decimal from 'break_eternity.js';
 import { big } from '../numbers';
 import { GEAR_DEFINITIONS, GEAR_SLOT_ORDER, evolutionTierForLevel, nextEvolutionLevel } from './GearCatalog';
 import type { EquipmentState, GearSlot } from './types';
@@ -46,6 +47,37 @@ export function gearLevelCost(slot: GearSlot, currentLevel: number) {
   const definition = GEAR_DEFINITIONS[slot];
   return big(Math.floor(definition.baseLevelCost + Math.pow(Math.max(1, currentLevel), 1.35) * definition.costGrowth));
 }
+
+/**
+ * What buying `maxLevels` more levels of a slot really costs, and how many of
+ * them are actually affordable. The cost curve rises per level, so a bulk
+ * purchase is not the next level's price times the count - the interface must
+ * not guess at it, and the curve lives here.
+ */
+export function gearBulkPurchase(
+  slot: GearSlot,
+  currentLevel: number,
+  maxLevels: number,
+  gold: Decimal,
+): { levels: number; total: Decimal } {
+  let total = big(0);
+  let levels = 0;
+  let level = currentLevel;
+  const limit = Math.min(maxLevels, GEAR_BULK_LIMIT);
+
+  while (levels < limit) {
+    const next = total.add(gearLevelCost(slot, level));
+    if (next.cmp(gold) > 0) break;
+    total = next;
+    level += 1;
+    levels += 1;
+  }
+
+  return { levels, total };
+}
+
+/** A Max purchase must terminate even when gold is effectively unbounded. */
+export const GEAR_BULK_LIMIT = 10_000;
 
 export function goldRewardForKill(stage: number, boss: boolean) {
   return big(Math.max(1, Math.floor(stage * (boss ? 5 : 1))));

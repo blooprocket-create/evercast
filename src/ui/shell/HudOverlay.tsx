@@ -63,7 +63,7 @@ export function HudOverlay() {
         )}
       </div>
 
-      {phase === 'combat' && (
+      {phase === 'combat' && boss && (
         <div className={styles.enemy}>
           <div className={styles.enemyHead}>
             <span className={styles.enemyName}>

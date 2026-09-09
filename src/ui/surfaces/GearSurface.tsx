@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { GEAR_EVOLUTION_MILESTONES } from '../../engine/gear/GearCatalog';
+import { GEAR_BULK_LIMIT, gearBulkPurchase } from '../../engine/gear/GearSystem';
 import type { GearSlot } from '../../engine/gear/types';
-import { big } from '../../engine/numbers';
+import { big, formatBig } from '../../engine/numbers';
 import type { GearSnapshot } from '../../engine/types';
 import { Detail } from '../archetypes/Detail';
 import { Ledger } from '../archetypes/Ledger';
@@ -42,10 +43,8 @@ const SLOT_ICONS: Record<GearSlot, IconName> = {
 const QUANTITIES = [
   { id: 1, label: '1x' },
   { id: 10, label: '10x' },
-  { id: Number.POSITIVE_INFINITY, label: 'Max' },
+  { id: GEAR_BULK_LIMIT, label: 'Max' },
 ] as const;
-
-const MAX_BULK_LEVELS = 5000;
 
 export function GearSurface() {
   const snapshot = useSnapshot();
@@ -63,12 +62,16 @@ export function GearSurface() {
   const affordable = canAfford(selected);
 
   const tier = selected.evolutionTier;
+
+  // The cost curve rises per level, so a bulk buy is not the next price times
+  // the count. Ask the engine what it really costs and how far the gold goes.
+  const purchase = gearBulkPurchase(selected.slot, selected.level, quantity, gold);
   const buyLabel =
-    quantity === 1
-      ? 'Level up'
-      : quantity === 10
-        ? 'Level 10x'
-        : 'Level to the most you can afford';
+    purchase.levels === 0
+      ? 'Not enough gold'
+      : purchase.levels === 1
+        ? 'Level up'
+        : `Level to ${selected.level + purchase.levels}`;
 
   return (
     <Detail
@@ -149,18 +152,25 @@ export function GearSurface() {
         <button
           type="button"
           className={styles.buyButton}
-          disabled={!affordable}
-          onClick={() =>
-            runMany(
-              { type: 'level_gear', slot: selected.slot },
-              Math.min(quantity, MAX_BULK_LEVELS),
-            )
-          }
+          disabled={purchase.levels === 0}
+          onClick={() => runMany({ type: 'level_gear', slot: selected.slot }, purchase.levels)}
         >
-          <span>{affordable ? buyLabel : 'Not enough gold'}</span>
+          <span className={styles.buyText}>
+            <span>{buyLabel}</span>
+            {purchase.levels > 1 && (
+              <span className={styles.buySub}>
+                {purchase.levels} level{purchase.levels === 1 ? '' : 's'}
+                {purchase.levels < quantity && quantity !== GEAR_BULK_LIMIT
+                  ? ` of ${quantity} - all you can afford`
+                  : ''}
+              </span>
+            )}
+          </span>
           <span className={styles.price}>
-            <NumberCell value={selected.nextLevelCost} />
-            {quantity !== 1 && affordable ? ' each' : ''}
+            <NumberCell
+              value={purchase.levels === 0 ? selected.nextLevelCost : formatBig(purchase.total)}
+              title={purchase.levels === 0 ? undefined : `${purchase.total.toString()} gold total`}
+            />
           </span>
         </button>
       </div>
