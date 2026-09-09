@@ -1,6 +1,6 @@
 import type { Destination } from './destinations';
 import { OverviewSurface } from '../surfaces/OverviewSurface';
-import { LegacyTreeSurface } from '../surfaces/LegacySurfaces';
+import { SpellTreeSurface } from '../surfaces/SpellTreeSurface';
 import { GearSurface } from '../surfaces/GearSurface';
 
 /**
@@ -28,7 +28,7 @@ export const DESTINATIONS: RegisteredDestination[] = [
     icon: 'spellTree',
     archetype: 'graph',
     badge: (snapshot) => snapshot.spellTreeUnspentPoints || null,
-    Component: LegacyTreeSurface,
+    Component: SpellTreeSurface,
   },
   {
     id: 'gear',

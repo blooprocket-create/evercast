@@ -29,6 +29,7 @@ export const SPELL_TREE_LAYOUT_OPTIONS: LayoutOptions = {
   gapX: 16,
   gapY: 54,
   laneGap: 88,
+  maxPerRow: 3,
 };
 
 export const SPELL_TREE_LAYOUT = layoutGraph(SPELL_TREE_GRAPH, SPELL_TREE_LAYOUT_OPTIONS);

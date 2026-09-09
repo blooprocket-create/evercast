@@ -31,6 +31,12 @@ export interface LayoutOptions {
   gapX?: number;
   gapY?: number;
   laneGap?: number;
+  /**
+   * A rank with many siblings wraps into several rows rather than growing
+   * sideways forever. Without this the authored spell tree lays out as a
+   * 3854x474 ribbon, because 27 nodes share a single rank.
+   */
+  maxPerRow?: number;
   /** Nodes in this lane centre across every other lane instead of getting one. */
   spanLane?: string;
 }
@@ -60,7 +66,14 @@ const DEFAULTS = {
   gapX: 18,
   gapY: 58,
   laneGap: 72,
+  maxPerRow: 4,
 };
+
+function chunk<T>(items: readonly T[], size: number): T[][] {
+  const rows: T[][] = [];
+  for (let i = 0; i < items.length; i += size) rows.push(items.slice(i, i + size));
+  return rows;
+}
 
 /** Longest path from any root, so a node always sits below every prerequisite. */
 function rankNodes(nodes: readonly GraphNodeInput[]): Map<string, number> {
@@ -148,13 +161,21 @@ export function layoutGraph(
   const laneWidths = new Map<string, number>();
   for (const lane of lanes) {
     let widest = opts.nodeWidth;
-    const rankTotals = new Map<number, number>();
+    const byRank = new Map<number, GraphNodeInput[]>();
     for (const node of nodes) {
       if (isSpan(node) || laneOf(node) !== lane) continue;
       const rank = ranks.get(node.id) ?? 0;
-      rankTotals.set(rank, (rankTotals.get(rank) ?? 0) + widthOf(node) + opts.gapX);
+      const list = byRank.get(rank);
+      if (list) list.push(node);
+      else byRank.set(rank, [node]);
     }
-    for (const total of rankTotals.values()) widest = Math.max(widest, total - opts.gapX);
+    for (const rankNodes of byRank.values()) {
+      for (const row of chunk(rankNodes, opts.maxPerRow)) {
+        const rowWidth =
+          row.reduce((sum, node) => sum + widthOf(node), 0) + (row.length - 1) * opts.gapX;
+        widest = Math.max(widest, rowWidth);
+      }
+    }
     laneWidths.set(lane, widest);
   }
 
@@ -170,6 +191,7 @@ export function layoutGraph(
   const rankCount = Math.max(...[...ranks.values()]) + 1;
   const rowHeight = opts.nodeHeight + opts.gapY;
   const boxes = new Map<string, GraphBox>();
+  let cursorY = 0;
 
   const barycentre = (node: GraphNodeInput): number | null => {
     const parents = (node.requires ?? [])
@@ -182,37 +204,42 @@ export function layoutGraph(
   // Ranks ascend, so every prerequisite is already placed when its children are.
   for (let rank = 0; rank < rankCount; rank += 1) {
     const atRank = nodes.filter((node) => ranks.get(node.id) === rank);
-    const y = rank * rowHeight;
+    const y = cursorY;
+    let subRowsUsed = 1;
 
     for (const lane of lanes) {
-      const row = atRank.filter((node) => !isSpan(node) && laneOf(node) === lane);
-      if (row.length === 0) continue;
+      const inLane = atRank.filter((node) => !isSpan(node) && laneOf(node) === lane);
+      if (inLane.length === 0) continue;
 
-      row.sort((a, b) => {
+      inLane.sort((a, b) => {
         const byBarycentre = (barycentre(a) ?? 0) - (barycentre(b) ?? 0);
         if (Math.abs(byBarycentre) > 0.5) return byBarycentre;
         return (declarationIndex.get(a.id) ?? 0) - (declarationIndex.get(b.id) ?? 0);
       });
 
-      const rowWidth =
-        row.reduce((sum, node) => sum + widthOf(node), 0) + (row.length - 1) * opts.gapX;
-      let x = (laneCentres.get(lane) ?? 0) - rowWidth / 2;
-      for (const node of row) {
-        boxes.set(node.id, {
-          id: node.id,
-          rank,
-          lane,
-          x,
-          y,
-          width: widthOf(node),
-          height: heightOf(node),
-        });
-        x += widthOf(node) + opts.gapX;
-      }
+      const rows = chunk(inLane, opts.maxPerRow);
+      subRowsUsed = Math.max(subRowsUsed, rows.length);
+
+      rows.forEach((row, subRow) => {
+        const rowWidth =
+          row.reduce((sum, node) => sum + widthOf(node), 0) + (row.length - 1) * opts.gapX;
+        let x = (laneCentres.get(lane) ?? 0) - rowWidth / 2;
+        for (const node of row) {
+          boxes.set(node.id, {
+            id: node.id,
+            rank,
+            lane,
+            x,
+            y: y + subRow * rowHeight,
+            width: widthOf(node),
+            height: heightOf(node),
+          });
+          x += widthOf(node) + opts.gapX;
+        }
+      });
     }
 
-    const spans = atRank.filter(isSpan);
-    for (const node of spans) {
+    for (const node of atRank.filter(isSpan)) {
       const width = widthOf(node);
       boxes.set(node.id, {
         id: node.id,
@@ -224,6 +251,8 @@ export function layoutGraph(
         height: heightOf(node),
       });
     }
+
+    cursorY += subRowsUsed * rowHeight;
   }
 
   const edges: GraphEdge[] = [];

@@ -46,6 +46,34 @@ describe('layoutGraph', () => {
     expect(layout.boxes.get('b')!.y).toBeGreaterThan(layout.boxes.get('a')!.y);
   });
 
+  it('wraps a crowded rank into rows instead of growing sideways', () => {
+    const siblings = Array.from({ length: 7 }, (_, i) => ({
+      id: `child-${i}`,
+      requires: ['root'],
+    }));
+    const layout = layoutGraph([{ id: 'root' }, ...siblings], { maxPerRow: 3 });
+    const rows = new Set(siblings.map((n) => layout.boxes.get(n.id)!.y));
+    expect(rows.size).toBe(3); // 3 + 3 + 1
+    // Still one rank: wrapping is presentation, not a change to the graph.
+    for (const node of siblings) expect(layout.boxes.get(node.id)!.rank).toBe(1);
+  });
+
+  it('keeps a wrapped rank above the next one', () => {
+    const layout = layoutGraph(
+      [
+        { id: 'root' },
+        ...Array.from({ length: 7 }, (_, i) => ({ id: `a-${i}`, requires: ['root'] })),
+        { id: 'deep', requires: ['a-0', 'a-6'] },
+      ],
+      { maxPerRow: 3 },
+    );
+    const deep = layout.boxes.get('deep')!;
+    for (let i = 0; i < 7; i += 1) {
+      const parent = layout.boxes.get(`a-${i}`)!;
+      expect(parent.y + parent.height).toBeLessThanOrEqual(deep.y);
+    }
+  });
+
   it('packs lanes side by side and spans the designated lane across them', () => {
     const layout = layoutGraph(
       [
@@ -136,6 +164,13 @@ describe('the real spell tree', () => {
     const rootCentre = root.x + root.width / 2;
     expect(rootCentre).toBeGreaterThan(leftmost);
     expect(rootCentre).toBeLessThan(rightmost);
+  });
+
+  it('reads as a tree rather than a ribbon', () => {
+    // 27 nodes share a rank here; without wrapping the bounds are 3854x474.
+    const { width, height } = layout.bounds;
+    expect(width / height).toBeLessThan(2.5);
+    expect(width).toBeLessThan(2000);
   });
 
   it('is deterministic across runs', () => {

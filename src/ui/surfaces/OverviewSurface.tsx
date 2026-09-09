@@ -1,26 +1,14 @@
-import { big, formatBig } from '../../engine/numbers';
-import type { SimulationSnapshot } from '../../engine/types';
+import { formatBig } from '../../engine/numbers';
 import { Dashboard } from '../archetypes/Dashboard';
 import { NumberCell } from '../format/NumberCell';
+import { effectiveDps } from '../format/dps';
 import { Panel } from '../primitives/Panel';
 import { Stat } from '../primitives/Stat';
 import { useSnapshotSelector } from '../state/snapshot';
 import styles from './OverviewSurface.module.css';
 
-/** What the player actually does per second, crit included. */
-function effectiveDps(s: SimulationSnapshot): string {
-  const interval = Math.max(0.01, s.castInterval);
-  const critFactor = 1 + s.critChance * Math.max(0, s.critMultiplier - 1);
-  return formatBig(
-    big(s.damagePerProjectile.raw)
-      .mul(s.projectileCount)
-      .mul(critFactor)
-      .div(interval),
-  );
-}
-
 export function OverviewSurface() {
-  const dps = useSnapshotSelector(effectiveDps);
+  const dps = useSnapshotSelector((s) => formatBig(effectiveDps(s)));
   const projectiles = useSnapshotSelector((s) => s.projectileCount);
   const castInterval = useSnapshotSelector((s) => s.castInterval);
   const damage = useSnapshotSelector((s) => s.damagePerProjectile.display);
