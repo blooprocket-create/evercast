@@ -5,23 +5,40 @@ import type { OfflineSummary } from './engine/offline/OfflineProgressor';
 import { EvercastScene } from './game/EvercastScene';
 import { AppShell } from './ui/shell/AppShell';
 import { CommandProvider } from './ui/state/CommandContext';
+import { useUiSettings } from './ui/state/useUiSettings';
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const sceneRef = useRef<EvercastScene | null>(null);
   const [awayProgress, setAwayProgress] = useState<OfflineSummary | null>(initialOfflineSummary);
+  const { depthOfField, vfxQuality, damageNumbers } = useUiSettings().display;
 
+  // Effect budgets are fixed when the pool is built, so quality is the one
+  // display setting that needs the scene rebuilding. The simulation is a module
+  // singleton and keeps running, so no progress rides on this.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const scene = new EvercastScene(canvas);
+    const scene = new EvercastScene(canvas, vfxQuality);
+    sceneRef.current = scene;
     const stop = startGameLoop({ scene, onAwayProgress: setAwayProgress });
 
     return () => {
       stop();
       scene.dispose();
+      sceneRef.current = null;
     };
-  }, []);
+  }, [vfxQuality]);
+
+  // Applied live, and again after a rebuild - hence vfxQuality in the deps.
+  useEffect(() => {
+    sceneRef.current?.setDepthOfField(depthOfField);
+  }, [depthOfField, vfxQuality]);
+
+  useEffect(() => {
+    sceneRef.current?.setDamageNumbersVisible(damageNumbers);
+  }, [damageNumbers, vfxQuality]);
 
   const commands = {
     run: (command: Parameters<typeof runCommand>[0]) => {

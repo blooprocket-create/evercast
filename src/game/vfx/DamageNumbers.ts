@@ -63,6 +63,9 @@ export class DamageNumbers {
       label.element.style.opacity = p.z < 0 || p.z > 1 ? '0' : String(Math.min(1, (0.65 - label.age) * 4));
     }
   }
+  setVisible(visible: boolean): void {
+    if (this.root) this.root.style.display = visible ? '' : 'none';
+  }
   dispose(): void {
     this.root?.remove();
     this.root = undefined;

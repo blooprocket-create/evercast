@@ -4,6 +4,7 @@ import { OfflineProgressor, type OfflineSummary } from '../engine/offline/Offlin
 import type { EngineCommand } from '../engine/types';
 import { BrowserSaveStore } from './BrowserSaveStore';
 import { SnapshotStore } from './SnapshotStore';
+import { UiSettingsStore } from './UiSettingsStore';
 
 const saveStore = new BrowserSaveStore(DEFAULT_ENGINE_CONFIG);
 const loaded = saveStore.load();
@@ -20,6 +21,11 @@ export const initialOfflineSummary: OfflineSummary | null = loaded
 
 export const snapshotStore = new SnapshotStore(simulation.getSnapshot());
 
+/** Preferences live apart from the save, under their own key. */
+export const uiSettings = new UiSettingsStore(
+  typeof localStorage === 'undefined' ? null : localStorage,
+);
+
 export function saveGame(): void {
   saveStore.save(simulation.getState());
 }
@@ -34,6 +40,25 @@ export function runCommand(command: EngineCommand): boolean {
   snapshotStore.publish(simulation.getSnapshot());
   saveGame();
   return true;
+}
+
+export function exportSaveFile(): string {
+  return saveStore.exportSave(simulation.getState());
+}
+
+/**
+ * Import and erase both write storage and then reload, rather than trying to
+ * swap the state under a running simulation and a live Babylon scene. A boot is
+ * the one code path already guaranteed to build everything consistently.
+ */
+export function importSaveFile(json: string): void {
+  saveStore.importSave(json);
+  window.location.reload();
+}
+
+export function eraseSave(): void {
+  saveStore.clear();
+  window.location.reload();
 }
 
 /**

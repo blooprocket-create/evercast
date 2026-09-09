@@ -3,6 +3,7 @@ import { OverviewSurface } from '../surfaces/OverviewSurface';
 import { SpellTreeSurface } from '../surfaces/SpellTreeSurface';
 import { GearSurface } from '../surfaces/GearSurface';
 import { RebirthSurface } from '../surfaces/RebirthSurface';
+import { SettingsSurface } from '../surfaces/SettingsSurface';
 
 /**
  * Adding a feature is one entry here plus its data. No shelf change, no new
@@ -50,6 +51,14 @@ export const DESTINATIONS: RegisteredDestination[] = [
     badge: () => 'dot',
     Component: RebirthSurface,
   },
+  {
+    id: 'settings',
+    group: 'record',
+    label: 'Settings',
+    icon: 'settings',
+    archetype: 'detail',
+    Component: SettingsSurface,
+  },
 ];
 
 export const DEFAULT_PINNED = ['character', 'spell-tree', 'gear'];
@@ -69,7 +78,6 @@ const STRESS: RegisteredDestination[] = [
   { id: 'achievements', group: 'record', label: 'Achievements', icon: 'achievements', archetype: 'ledger', badge: () => 3, Component: Placeholder },
   { id: 'statistics', group: 'record', label: 'Statistics', icon: 'statistics', archetype: 'dashboard', Component: Placeholder },
   { id: 'collection', group: 'record', label: 'Collection', icon: 'collection', archetype: 'detail', Component: Placeholder },
-  { id: 'settings', group: 'record', label: 'Settings', icon: 'settings', archetype: 'ledger', Component: Placeholder },
   { id: 'about', group: 'record', label: 'About', icon: 'about', archetype: 'moment', Component: Placeholder },
 ];
 

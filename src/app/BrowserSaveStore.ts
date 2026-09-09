@@ -33,6 +33,21 @@ export class BrowserSaveStore {
     localStorage.setItem(this.key, JSON.stringify(envelope));
   }
 
+  /** The save as a file the player can keep, in the codec's own format. */
+  exportSave(state: GameState): string {
+    return JSON.stringify(this.codec.encode(state), null, 2);
+  }
+
+  /**
+   * Decodes first so a malformed or unsupported file is rejected before it can
+   * overwrite anything, then writes it. Throws with the codec's own message.
+   */
+  importSave(json: string): LoadedSave {
+    const loaded = this.codec.decode(JSON.parse(json));
+    localStorage.setItem(this.key, json);
+    return loaded;
+  }
+
   clear(): void {
     localStorage.removeItem(this.key);
   }

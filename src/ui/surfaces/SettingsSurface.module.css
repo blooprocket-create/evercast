@@ -1,0 +1,61 @@
+.pane {
+  display: grid;
+  gap: var(--space-4);
+  align-content: start;
+  max-width: 60rem;
+}
+
+.heading {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.title {
+  margin: 0;
+  font: 500 var(--text-value) / 1.15 var(--font-display);
+  color: var(--ink);
+}
+
+.blurb {
+  margin: 0;
+  max-width: 58ch;
+  font: 400 var(--text-body) / 1.55 var(--font-ui);
+  color: var(--ink-mid);
+}
+
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--essence) 32%, transparent);
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--essence) 8%, transparent);
+  font: 400 var(--text-small) / 1.55 var(--font-ui);
+  color: var(--ink-mid);
+}
+
+.fields {
+  display: grid;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.danger {
+  border-color: color-mix(in srgb, var(--hp-foe) 55%, transparent);
+  color: var(--hp-foe);
+}
+
+.error {
+  margin: 0;
+  font: 400 var(--text-small) / 1.5 var(--font-ui);
+  color: var(--hp-foe);
+}
+
+.hidden {
+  display: none;
+}
