@@ -76,7 +76,7 @@ function chunk<T>(items: readonly T[], size: number): T[][] {
 }
 
 /** Longest path from any root, so a node always sits below every prerequisite. */
-function rankNodes(nodes: readonly GraphNodeInput[]): Map<string, number> {
+export function rankNodes(nodes: readonly GraphNodeInput[]): Map<string, number> {
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const dependents = new Map<string, string[]>();
   const remaining = new Map<string, number>();
@@ -117,6 +117,21 @@ function rankNodes(nodes: readonly GraphNodeInput[]): Map<string, number> {
     throw new Error(`Graph has a prerequisite cycle involving: ${stuck.join(', ')}`);
   }
   return ranks;
+}
+
+export function boundsOf(boxes: Iterable<GraphBox>): Rect {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const box of boxes) {
+    minX = Math.min(minX, box.x);
+    minY = Math.min(minY, box.y);
+    maxX = Math.max(maxX, box.x + box.width);
+    maxY = Math.max(maxY, box.y + box.height);
+  }
+  if (!Number.isFinite(minX)) return { x: 0, y: 0, width: 0, height: 0 };
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
 }
 
 export function layoutGraph(

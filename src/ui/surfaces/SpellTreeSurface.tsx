@@ -101,6 +101,7 @@ export function SpellTreeSurface() {
       }}
       edgeTone={edgeTone}
       nodeTone={nodeTone}
+      edgeAnchor="centre"
       renderNode={(box) => {
         const node = SPELL_TREE_NODE_BY_ID.get(box.id);
         if (!node) return null;

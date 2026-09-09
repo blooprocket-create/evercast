@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SPELL_TREE_NODES } from '../../content/spellTree';
-import { SPELL_TREE_GRAPH, SPELL_TREE_LAYOUT_OPTIONS } from '../spellTree/spellTreeGraph';
+import { SPELL_TREE_GRAPH } from '../spellTree/spellTreeGraph';
+import type { LayoutOptions } from './layoutGraph';
 import { type GraphBox, type GraphNodeInput, layoutGraph } from './layoutGraph';
 
 const overlaps = (a: GraphBox, b: GraphBox): boolean =>
@@ -94,8 +95,15 @@ describe('layoutGraph', () => {
   });
 });
 
-describe('the real spell tree', () => {
-  const layout = layoutGraph(SPELL_TREE_GRAPH, SPELL_TREE_LAYOUT_OPTIONS);
+/**
+ * The spell tree renders radially now (see layoutRadial.test.ts), but the
+ * layered layout still has to hold up on the same shape - it is what the gear
+ * trees will use, and this is the graph with 27 nodes on one rank.
+ */
+const LAYERED: LayoutOptions = { spanLane: 'core', gapX: 16, gapY: 54, laneGap: 88, maxPerRow: 3 };
+
+describe('the real spell tree, laid out in layers', () => {
+  const layout = layoutGraph(SPELL_TREE_GRAPH, LAYERED);
 
   it('is the size we think it is', () => {
     expect(SPELL_TREE_NODES).toHaveLength(67);
@@ -174,7 +182,7 @@ describe('the real spell tree', () => {
   });
 
   it('is deterministic across runs', () => {
-    const again = layoutGraph(SPELL_TREE_GRAPH, SPELL_TREE_LAYOUT_OPTIONS);
+    const again = layoutGraph(SPELL_TREE_GRAPH, LAYERED);
     for (const [id, box] of layout.boxes) {
       expect(again.boxes.get(id)).toEqual(box);
     }

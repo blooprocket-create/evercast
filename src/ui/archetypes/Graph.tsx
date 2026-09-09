@@ -19,6 +19,12 @@ interface GraphProps {
   renderNode: (box: GraphBox) => React.ReactNode;
   edgeTone: (from: string, to: string) => EdgeTone;
   nodeTone?: (id: string) => string;
+  /**
+   * A layered graph reads best with edges leaving the bottom of a node and
+   * arriving at the top of the next. A radial one has no top or bottom, so its
+   * edges run centre to centre.
+   */
+  edgeAnchor?: 'stack' | 'centre';
   toolbar?: React.ReactNode;
   inspector?: React.ReactNode;
   /** Called with a node box when something asks to centre on it. */
@@ -36,6 +42,7 @@ export function Graph({
   renderNode,
   edgeTone,
   nodeTone,
+  edgeAnchor = 'stack',
   toolbar,
   inspector,
   focusRef,
@@ -80,9 +87,9 @@ export function Graph({
                   <line
                     key={`${edge.from}->${edge.to}`}
                     x1={from.x - bounds.x + from.width / 2}
-                    y1={from.y - bounds.y + from.height}
+                    y1={from.y - bounds.y + (edgeAnchor === 'centre' ? from.height / 2 : from.height)}
                     x2={to.x - bounds.x + to.width / 2}
-                    y2={to.y - bounds.y}
+                    y2={to.y - bounds.y + (edgeAnchor === 'centre' ? to.height / 2 : 0)}
                     stroke={tone.stroke}
                     strokeWidth={tone.width}
                     strokeLinecap="round"
