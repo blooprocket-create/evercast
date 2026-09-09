@@ -15,7 +15,7 @@ import { Button } from '../primitives/Button';
 import { useCommand } from '../state/CommandContext';
 import { useSnapshot } from '../state/snapshot';
 import { spellNodeStatuses, spellTreeStateKey } from '../spellTree/spellNodeStatuses';
-import { SPELL_TREE_LAYOUT } from '../spellTree/spellTreeGraph';
+import { LABELLED_KINDS, SPELL_TREE_LAYOUT } from '../spellTree/spellTreeGraph';
 import { projectNode } from '../spellTree/spellDps';
 import { effectiveDps } from '../format/dps';
 import styles from './SpellTreeSurface.module.css';
@@ -115,10 +115,12 @@ export function SpellTreeSurface() {
             className={classes.filter(Boolean).join(' ')}
             onClick={() => setSelectedId(box.id)}
             title={`${node.name} - ${STATUS_NOTE[nodeStatus]}`}
+            aria-label={`${node.name}: ${STATUS_NOTE[nodeStatus]}`}
             aria-pressed={box.id === selected.id}
           >
-            <span className={styles.kind}>{KIND_LABEL[node.kind] ?? node.kind}</span>
-            <span className={styles.name}>{node.name}</span>
+            {LABELLED_KINDS.has(node.kind) && (
+              <span className={styles.name}>{node.name}</span>
+            )}
           </button>
         );
       }}

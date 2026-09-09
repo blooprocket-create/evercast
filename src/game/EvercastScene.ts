@@ -81,10 +81,15 @@ export class EvercastScene {
     // Babylon measures focus distance in millimetres, and the camera radius is
     // pinned, so the plane of focus sits exactly on the road.
     presentation.depthOfFieldEnabled = true;
-    presentation.depthOfFieldBlurLevel = DepthOfFieldEffectBlurLevel.Low;
-    presentation.depthOfField.focusDistance = camera.radius * 1000;
-    presentation.depthOfField.focalLength = 62;
-    presentation.depthOfField.fStop = 1.8;
+    presentation.depthOfFieldBlurLevel = DepthOfFieldEffectBlurLevel.Medium;
+    // The mage sits ~17.4 units from the camera and the far end of a lane ~20.8,
+    // so the plane of focus goes through the middle of the road. Aperture is
+    // what actually decides how much is soft: lensSize / fStop. The Babylon
+    // default of 50mm at f/1.4 leaves the whole scene inside the sharp band.
+    presentation.depthOfField.focusDistance = 18500;
+    presentation.depthOfField.focalLength = 85;
+    presentation.depthOfField.fStop = 1.35;
+    presentation.depthOfField.lensSize = 410;
     this.scene.imageProcessingConfiguration.toneMappingEnabled = true;
     this.scene.imageProcessingConfiguration.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
     this.scene.imageProcessingConfiguration.exposure = 1.2;

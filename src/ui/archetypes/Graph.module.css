@@ -59,15 +59,17 @@
   pointer-events: none;
 }
 
+/*
+ * The wrapper is exactly the box the layout computed - no padding. Insetting it
+ * squeezed square nodes into vertical ellipses, because the width lost the
+ * padding and the height did not.
+ */
 .node {
   position: absolute;
   display: grid;
-  place-items: center;
-  gap: 2px;
-  border-radius: var(--radius-card);
+  place-items: stretch;
   cursor: pointer;
   text-align: center;
-  padding: 0 var(--space-2);
 }
 
 .controls {

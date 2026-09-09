@@ -9,14 +9,29 @@ import { type RadialOptions, layoutRadial } from '../graph/layoutRadial';
  * `src/content/spellTree.ts` stays free of geometry.
  */
 
+/**
+ * Circles rather than labelled boxes. Wide boxes forced the rings apart - a
+ * ring has to be big enough for its widest node - so the tree sprawled and
+ * every label ended up truncated anyway. A circle carries the state in its
+ * fill, and the name goes underneath only where it earns the room.
+ */
 const SIZE: Record<SpellTreeNodeKind, { width: number; height: number }> = {
-  root: { width: 132, height: 46 },
-  route: { width: 124, height: 44 },
-  identity: { width: 116, height: 40 },
-  minor: { width: 96, height: 34 },
-  mutation: { width: 112, height: 40 },
-  fusion: { width: 124, height: 42 },
+  root: { width: 72, height: 72 },
+  route: { width: 60, height: 60 },
+  identity: { width: 50, height: 50 },
+  minor: { width: 26, height: 26 },
+  mutation: { width: 44, height: 44 },
+  fusion: { width: 48, height: 48 },
 };
+
+/** Kinds worth naming on the canvas; the rest are read in the inspector. */
+export const LABELLED_KINDS = new Set<SpellTreeNodeKind>([
+  'root',
+  'route',
+  'identity',
+  'mutation',
+  'fusion',
+]);
 
 export const SPELL_TREE_GRAPH: GraphNodeInput[] = SPELL_TREE_NODES.map((node) => ({
   id: node.id,
@@ -32,11 +47,12 @@ export const SPELL_TREE_GRAPH: GraphNodeInput[] = SPELL_TREE_NODES.map((node) =>
  */
 export const SPELL_TREE_LAYOUT_OPTIONS: RadialOptions = {
   spanLane: 'core',
-  gap: 22,
-  minRingRadius: 190,
-  // Wide enough that the three routes read as three arms, and wide enough
-  // that neighbouring wedges cannot collide on a shared ring.
-  laneGapAngle: 0.58,
+  gap: 26,
+  ringSpacing: 104,
+  firstRingRadius: 132,
+  // A full turn. Anything less pushes the picture off to one side, because the
+  // mouth is empty but the bounds still have to contain it.
+  sweep: Math.PI * 2,
   startAngle: -Math.PI / 2,
 };
 

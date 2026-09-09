@@ -83,13 +83,41 @@ export function Graph({
                 const to = layout.boxes.get(edge.to);
                 if (!from || !to) return null;
                 const tone = EDGE_STROKE[edgeTone(edge.from, edge.to)];
+                const radial = edgeAnchor === 'centre';
+                const x1 = from.x - bounds.x + from.width / 2;
+                const y1 = from.y - bounds.y + (radial ? from.height / 2 : from.height);
+                const x2 = to.x - bounds.x + to.width / 2;
+                const y2 = to.y - bounds.y + (radial ? to.height / 2 : 0);
+
+                if (!radial) {
+                  return (
+                    <line
+                      key={`${edge.from}->${edge.to}`}
+                      x1={x1}
+                      y1={y1}
+                      x2={x2}
+                      y2={y2}
+                      stroke={tone.stroke}
+                      strokeWidth={tone.width}
+                      strokeLinecap="round"
+                    />
+                  );
+                }
+
+                // Bow toward the middle. Straight spokes between rings cross each
+                // other and read as a web; a curve that leans inward reads as a
+                // branch leaving its parent.
+                const originX = -bounds.x;
+                const originY = -bounds.y;
+                const midX = (x1 + x2) / 2;
+                const midY = (y1 + y2) / 2;
+                const controlX = midX + (originX - midX) * 0.22;
+                const controlY = midY + (originY - midY) * 0.22;
                 return (
-                  <line
+                  <path
                     key={`${edge.from}->${edge.to}`}
-                    x1={from.x - bounds.x + from.width / 2}
-                    y1={from.y - bounds.y + (edgeAnchor === 'centre' ? from.height / 2 : from.height)}
-                    x2={to.x - bounds.x + to.width / 2}
-                    y2={to.y - bounds.y + (edgeAnchor === 'centre' ? to.height / 2 : 0)}
+                    d={`M ${x1} ${y1} Q ${controlX} ${controlY} ${x2} ${y2}`}
+                    fill="none"
                     stroke={tone.stroke}
                     strokeWidth={tone.width}
                     strokeLinecap="round"
