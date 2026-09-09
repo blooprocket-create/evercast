@@ -1,6 +1,7 @@
 import type { Destination } from './destinations';
 import { OverviewSurface } from '../surfaces/OverviewSurface';
-import { LegacyGearSurface, LegacyTreeSurface } from '../surfaces/LegacySurfaces';
+import { LegacyTreeSurface } from '../surfaces/LegacySurfaces';
+import { GearSurface } from '../surfaces/GearSurface';
 
 /**
  * Adding a feature is one entry here plus its data. No shelf change, no new
@@ -35,7 +36,7 @@ export const DESTINATIONS: RegisteredDestination[] = [
     label: 'Gear',
     icon: 'gear',
     archetype: 'detail',
-    Component: LegacyGearSurface,
+    Component: GearSurface,
   },
 ];
 

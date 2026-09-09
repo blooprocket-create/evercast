@@ -98,6 +98,47 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <circle cx="19" cy="12" r="1.5" />
     </>
   ),
+  slotHelm: (
+    <>
+      <path d="M6 20V9a6 6 0 0 1 12 0v11" />
+      <path d="M6 14h12" />
+    </>
+  ),
+  slotStaff: (
+    <>
+      <path d="M12 8v13" />
+      <circle cx="12" cy="5" r="3" />
+    </>
+  ),
+  slotSpellbook: (
+    <>
+      <path d="M5 5h9l5 5v9H5z" />
+      <path d="M14 5v5h5" />
+      <path d="M8 13h6" />
+    </>
+  ),
+  slotRobe: (
+    <>
+      <path d="m8 4 4 3 4-3 3 4-3 3v9H8v-9L5 8z" />
+    </>
+  ),
+  slotBoots: (
+    <>
+      <path d="M6 5h5l1 8 6 3v3H6z" />
+    </>
+  ),
+  slotNecklace: (
+    <>
+      <path d="M6 4a6 8 0 0 0 12 0" />
+      <path d="m12 12 2.5 3-2.5 3-2.5-3z" />
+    </>
+  ),
+  slotRing: (
+    <>
+      <circle cx="12" cy="14" r="6" />
+      <path d="m9 8 3-4 3 4" />
+    </>
+  ),
 };
 
 interface IconProps {

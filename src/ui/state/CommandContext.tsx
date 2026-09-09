@@ -4,24 +4,35 @@ import type { EngineCommand } from '../../engine/types';
 /**
  * The single point through which the interface mutates the simulation.
  * Everything returns whether the engine accepted the command, so a surface can
- * show a rejection without duplicating the engine's rules.
+ * reflect a rejection without reimplementing the engine's rules.
  */
 export type RunCommand = (command: EngineCommand) => boolean;
+export type RunCommandRepeated = (command: EngineCommand, limit: number) => number;
 
-const noop: RunCommand = () => false;
+export interface CommandApi {
+  run: RunCommand;
+  runMany: RunCommandRepeated;
+}
 
-const CommandContext = createContext<RunCommand>(noop);
+const inert: CommandApi = { run: () => false, runMany: () => 0 };
+
+const CommandContext = createContext<CommandApi>(inert);
 
 export function CommandProvider({
-  run,
+  value,
   children,
 }: {
-  run: RunCommand;
+  value: CommandApi;
   children: React.ReactNode;
 }) {
-  return <CommandContext.Provider value={run}>{children}</CommandContext.Provider>;
+  return <CommandContext.Provider value={value}>{children}</CommandContext.Provider>;
 }
 
 export function useCommand(): RunCommand {
-  return useContext(CommandContext);
+  return useContext(CommandContext).run;
+}
+
+/** Buy-many, applied in one batch: one publish, one save. */
+export function useRepeatCommand(): RunCommandRepeated {
+  return useContext(CommandContext).runMany;
 }

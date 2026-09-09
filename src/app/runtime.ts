@@ -35,3 +35,19 @@ export function runCommand(command: EngineCommand): boolean {
   saveGame();
   return true;
 }
+
+/**
+ * Applies the same command until the engine refuses or `limit` is reached,
+ * publishing and saving once at the end rather than on every step. The engine
+ * stays the authority on affordability, so the interface never has to
+ * reimplement the cost curve to know how many levels a player can buy.
+ */
+export function runCommandRepeated(command: EngineCommand, limit: number): number {
+  let applied = 0;
+  while (applied < limit && simulation.execute(command)) applied += 1;
+  if (applied > 0) {
+    snapshotStore.publish(simulation.getSnapshot());
+    saveGame();
+  }
+  return applied;
+}

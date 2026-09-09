@@ -19,6 +19,13 @@ export const ICON_NAMES = [
   'settings',
   'about',
   'more',
+  'slotHelm',
+  'slotStaff',
+  'slotSpellbook',
+  'slotRobe',
+  'slotBoots',
+  'slotNecklace',
+  'slotRing',
 ] as const;
 
 export type IconName = (typeof ICON_NAMES)[number];

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { startGameLoop } from './app/GameLoop';
-import { initialOfflineSummary, runCommand } from './app/runtime';
+import { initialOfflineSummary, runCommand, runCommandRepeated } from './app/runtime';
 import type { OfflineSummary } from './engine/offline/OfflineProgressor';
 import { EvercastScene } from './game/EvercastScene';
 import { AppShell } from './ui/shell/AppShell';
@@ -23,15 +23,22 @@ export default function App() {
     };
   }, []);
 
-  const run = (command: Parameters<typeof runCommand>[0]) => {
-    const applied = runCommand(command);
-    // Acting on the game dismisses the away-progress banner.
-    if (applied) setAwayProgress(null);
-    return applied;
+  const commands = {
+    run: (command: Parameters<typeof runCommand>[0]) => {
+      const applied = runCommand(command);
+      // Acting on the game dismisses the away-progress banner.
+      if (applied) setAwayProgress(null);
+      return applied;
+    },
+    runMany: (command: Parameters<typeof runCommand>[0], limit: number) => {
+      const applied = runCommandRepeated(command, limit);
+      if (applied > 0) setAwayProgress(null);
+      return applied;
+    },
   };
 
   return (
-    <CommandProvider run={run}>
+    <CommandProvider value={commands}>
       <AppShell canvasRef={canvasRef} awayProgress={awayProgress} />
     </CommandProvider>
   );
