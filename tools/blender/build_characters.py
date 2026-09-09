@@ -287,6 +287,41 @@ def wisp():
     return root,j
 
 CLIPS={'idle':48,'walk':24,'attack':20,'hit':10,'death':26}
+
+# Motion curves. The clips used to be pure sine, which is why every action read
+# as soft: a sine rises and falls symmetrically, so there is no anticipation
+# before a strike, no snap in it, and no follow-through after. These three
+# shapes are the whole difference between a gesture and a hit.
+def clamp01(t): return 0. if t<0 else 1. if t>1 else t
+def ease_out(t,p=3): return 1-(1-clamp01(t))**p
+def ease_in(t,p=3): return clamp01(t)**p
+def damp(t,freq=1.8,decay=4.5): return math.sin(t*math.tau*freq)*math.exp(-t*decay)
+
+# The projectile leaves the staff at exactly half the clip - CombatVfxPlan sets
+# release to castDuration * 0.5 - so the strike is timed to peak there: wind
+# back through the first third, snap through the next fifth, arrive at 0.5.
+WIND=.32; SNAP=.18
+def strike(t):
+    t=clamp01(t)
+    if t<WIND: return -.55*ease_out(t/WIND,2)
+    if t<WIND+SNAP: return -.55+1.55*ease_out((t-WIND)/SNAP,3)
+    u=(t-WIND-SNAP)/(1-WIND-SNAP)
+    # Settles rather than stopping; the overshoot is the follow-through.
+    return (1-ease_out(u,2))*(1+.35*damp(u))
+
+def recoil(t):
+    # A hit is already over by the time it starts, so this is full at the first
+    # frame and springs back through rest instead of easing in from it.
+    t=clamp01(t)
+    return (1-ease_in(t,2))*math.cos(t*math.tau*1.15)*math.exp(-t*3.1)
+
+def collapse(t):
+    # Rears back, then falls under its own weight and settles.
+    t=clamp01(t)
+    if t<.18: return -.10*math.sin(t/.18*math.pi)
+    u=(t-.18)/.82
+    return ease_in(u,1.6)*(1+.05*damp(u,1.2,6))
+
 def animate(root,joints):
     # Named NLA tracks merge into one glTF animation per state, with all rigid joints.
     for name,frames in CLIPS.items():
@@ -294,28 +329,43 @@ def animate(root,joints):
             base=o.location.copy();scale=o.scale.copy();rot=o.rotation_euler.copy()
             o.animation_data_create();action=bpy.data.actions.new(root.name+'_'+name+'_'+role);o.animation_data.action=action
             for frame in range(1,frames+2):
-                t=(frame-1)/frames;wave=math.sin(t*math.tau);pulse=math.sin(t*math.pi)
+                t=(frame-1)/frames;wave=math.sin(t*math.tau)
                 o.location=base;o.rotation_euler=rot;o.scale=scale
                 s=-1 if '-1' in role else 1
                 if name=='idle':
+                    # The head trails the body's breath rather than moving with it.
                     if role=='body':o.location.z+=.024*wave
                     if role.startswith('arm'):o.rotation_euler.y=s*.035*wave
-                    if role=='head':o.rotation_euler.z=.025*wave
+                    if role=='head':o.rotation_euler.z=.025*math.sin((t-.09)*math.tau)
                 elif name=='walk':
                     if role=='body':o.location.z+=.028*(1-math.cos(t*math.tau*2));o.rotation_euler.y=.035*wave
                     if role.startswith('leg'):o.rotation_euler.x=.35*wave*s*(-1 if role.endswith('_1') else 1)
                     if role.startswith('arm'):o.rotation_euler.x=-.20*wave*s
+                    # Counter-rotating against the roll is what stops a walk
+                    # reading as the whole model swinging as one piece.
+                    if role=='head':o.rotation_euler.y=-.05*math.sin((t-.07)*math.tau)
                 elif name=='attack':
-                    if role=='body':o.location.y-=.22*pulse;o.rotation_euler.x=.16*pulse
-                    if role.startswith('arm'):o.rotation_euler.x=-.72*pulse;o.rotation_euler.y=-s*.14*pulse
-                    if role=='head':o.rotation_euler.x=-.12*pulse
+                    # The arm leads, the body drives, the head follows through.
+                    lead=strike(t+.05);drive=strike(t);trail=strike(t-.07)
+                    if role=='body':o.location.y-=.30*drive;o.rotation_euler.x=.22*drive
+                    if role.startswith('arm'):o.rotation_euler.x=-.95*lead;o.rotation_euler.y=-s*.18*lead
+                    if role=='head':o.rotation_euler.x=-.16*trail
+                    # Braced, so the lunge has something to push against.
+                    if role.startswith('leg'):o.rotation_euler.x=-.14*drive*s
                 elif name=='hit':
-                    if role=='body':o.location.y+=.12*pulse;o.rotation_euler.x=-.18*pulse
+                    r=recoil(t)
+                    if role=='body':o.location.y+=.22*r;o.rotation_euler.x=-.30*r
+                    if role=='head':o.rotation_euler.x=-.34*recoil(t-.08)
+                    if role.startswith('arm'):o.rotation_euler.x=.28*recoil(t-.05);o.rotation_euler.y=s*.2*r
                 elif name=='death':
-                    if role=='body':o.location.z-=base.z*.7*t;o.rotation_euler.y=1.45*t;o.scale=tuple(1-.20*t for _ in range(3))
-                    if role.startswith('arm'):o.rotation_euler.y=s*.5*t
-                if root.name=='moss_slime' and role=='body' and name in ['idle','walk','attack']:
-                    amount=.06*wave if name!='attack' else -.2*pulse;o.scale=(1+amount,1+amount,1-amount)
+                    k=collapse(t)
+                    if role=='body':o.location.z-=base.z*.7*k;o.rotation_euler.y=1.45*k;o.scale=tuple(1-.20*max(0.,k) for _ in range(3))
+                    if role.startswith('arm'):o.rotation_euler.y=s*.5*k;o.rotation_euler.x=-.4*collapse(t-.06)
+                    if role=='head':o.rotation_euler.x=.5*collapse(t-.1)
+                if root.name=='moss_slime' and role=='body' and name in ['idle','walk','attack','hit']:
+                    # A slime has no skeleton to brace with, so it deforms instead.
+                    amount=.06*wave if name in ('idle','walk') else (-.22*strike(t) if name=='attack' else .18*recoil(t))
+                    o.scale=(1+amount,1+amount,1-amount)
                 if root.name=='hollow_crow' and role.startswith('arm') and name in ['idle','walk','attack']:
                     o.rotation_euler.y=s*(.18+wave*.48)
                 o.keyframe_insert(data_path='location',frame=frame);o.keyframe_insert(data_path='rotation_euler',frame=frame);o.keyframe_insert(data_path='scale',frame=frame)
