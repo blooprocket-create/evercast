@@ -1,6 +1,7 @@
 import {
   AssetContainer,
   Color3,
+  Constants,
   Geometry,
   LoadAssetContainerAsync,
   Mesh,
@@ -40,6 +41,26 @@ type Slot = {
 };
 export type VfxLoader = (url: string, scene: Scene) => Promise<AssetContainer>;
 
+/**
+ * Spell effects add light rather than blending over what is behind them.
+ *
+ * Alpha blending made them disappear into the scene: a translucent purple ring
+ * over green grass is a slightly different green. Adding instead means
+ * overlapping effects build towards a white-hot centre, which is what makes
+ * them read as light - and it is what puts them over the bloom threshold, so
+ * the glow comes from the effect being bright rather than from a wider blur.
+ *
+ * Depth writes go off with it: an additive effect that occludes the effect
+ * behind it punches a hole in its own glow.
+ */
+function additive(material: StandardMaterial): void {
+  material.alphaMode = Constants.ALPHA_ADD;
+  material.disableDepthWrite = true;
+  // A little under one, so a dense stack still has somewhere to go before the
+  // tone mapper flattens it.
+  material.alpha = 0.92;
+}
+
 /** Fixed ceilings, shared geometry/materials, reusable slots. No per-hit GPU allocation after warmup. */
 export class VfxPool {
   readonly budget;
@@ -64,7 +85,7 @@ export class VfxPool {
     this.heart = new StandardMaterial('VFX / arcane heart', scene);
     this.heart.disableLighting = true;
     this.heart.emissiveColor = new Color3(0.92, 0.82, 1);
-    this.heart.alpha = 0.9;
+    additive(this.heart);
     for (const school of Object.keys(COLORS) as School[]) {
       const mat = new StandardMaterial(`VFX / ${school}`, scene);
       mat.disableLighting = true;
@@ -72,7 +93,7 @@ export class VfxPool {
       mat.diffuseColor = Color3.Black();
       mat.specularColor = Color3.Black();
       mat.backFaceCulling = false;
-      mat.alpha = 0.88;
+      additive(mat);
       this.materials.set(school, mat);
     }
     this.ready = Promise.all(

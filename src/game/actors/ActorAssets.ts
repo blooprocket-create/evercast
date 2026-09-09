@@ -3,6 +3,7 @@ import '@babylonjs/core/Rendering/outlineRenderer';
 import '@babylonjs/loaders/glTF/2.0/glTFLoader';
 import '@babylonjs/loaders/glTF/2.0/Extensions/KHR_materials_specular';
 import type { GearSnapshot } from '../../engine/types';
+import { stylizeActorMaterial } from '../render/StylizedMaterials';
 import manifest from '../../../public/models/characters/manifest.json';
 
 export type ActorState = 'idle' | 'walk' | 'attack' | 'hit' | 'death';
@@ -28,13 +29,7 @@ export class ActorAssets {
         if (this.disposed || this.scene.isDisposed) { container.dispose(); return undefined; }
         for (const mesh of container.meshes) { mesh.isPickable = false; mesh.receiveShadows = true; }
         for (const material of container.materials) {
-          if (!(material instanceof PBRMaterial)) continue;
-          const metal = material.name.startsWith('Iron /');
-          material.metallic = metal ? 0.35 : 0;
-          material.roughness = metal ? 0.78 : 1;
-          material.specularIntensity = metal ? 0.2 : 0;
-          material.metallicF0Factor = metal ? 0.4 : 0;
-          material.environmentIntensity = 0;
+          if (material instanceof PBRMaterial) stylizeActorMaterial(material);
         }
         this.containers.add(container);
         return container;

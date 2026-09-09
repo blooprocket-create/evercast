@@ -47,6 +47,18 @@ const DEFAULT_DEPTH_OF_FIELD = 0.75;
  */
 const LIGHTS_PER_MATERIAL = 6;
 
+/**
+ * The finish, per quality tier. Measured at about 5% of median frame rate on a
+ * mid-range desktop for the whole stack, which is cheap - but "low" exists for
+ * machines where it is not, so the tier drops the effects that are pure polish
+ * and keeps bloom, which is doing structural work for the spell VFX.
+ */
+const FINISH = {
+  low: { samples: 1, bloomKernel: 32, grain: 0, sharpen: 0, aberration: 0 },
+  medium: { samples: 4, bloomKernel: 48, grain: 4.5, sharpen: 0.22, aberration: 2.5 },
+  high: { samples: 4, bloomKernel: 64, grain: 5.5, sharpen: 0.3, aberration: 3.2 },
+} as const;
+
 export class EvercastScene {
   private readonly engine: Engine;
   private readonly scene: Scene;
@@ -88,9 +100,10 @@ export class EvercastScene {
     camera.maxZ = 180;
     camera.inputs.clear();
 
+    const finish = FINISH[quality];
     const presentation = new DefaultRenderingPipeline('environment finish', true, this.scene, [camera]);
     this.presentation = presentation;
-    presentation.samples = 4;
+    presentation.samples = finish.samples;
     presentation.fxaaEnabled = true;
 
     // Bloom is what makes the spell work read as light rather than as coloured
@@ -99,21 +112,21 @@ export class EvercastScene {
     presentation.bloomEnabled = true;
     presentation.bloomThreshold = 0.7;
     presentation.bloomWeight = 0.45;
-    presentation.bloomKernel = 48;
+    presentation.bloomKernel = finish.bloomKernel;
     presentation.bloomScale = 0.6;
 
     // A little edge definition back after FXAA and the depth-of-field blur,
     // which is what keeps low-poly geometry reading as deliberate rather than
     // soft. Grain and aberration are almost subliminal at rest; CombatFeel
     // drives the aberration up on impact.
-    presentation.sharpenEnabled = true;
-    presentation.sharpen.edgeAmount = 0.22;
+    presentation.sharpenEnabled = finish.sharpen > 0;
+    presentation.sharpen.edgeAmount = finish.sharpen;
     presentation.sharpen.colorAmount = 1;
-    presentation.grainEnabled = true;
-    presentation.grain.intensity = 4.5;
+    presentation.grainEnabled = finish.grain > 0;
+    presentation.grain.intensity = finish.grain;
     presentation.grain.animated = true;
-    presentation.chromaticAberrationEnabled = true;
-    presentation.chromaticAberration.aberrationAmount = 2.5;
+    presentation.chromaticAberrationEnabled = finish.aberration > 0;
+    presentation.chromaticAberration.aberrationAmount = finish.aberration;
     presentation.chromaticAberration.radialIntensity = 0.8;
 
     // Depth of field holds the combat lane sharp and softens the far hills and

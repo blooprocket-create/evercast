@@ -36,6 +36,7 @@ export class CombatFxPresenter {
     this.numbers.show(hit, position);
     const school = hit.source === 'chain' ? 'storm' : hit.source === 'splash' ? 'fire' : 'arcane';
     this.burst(position, school, hit.critical ? 1.45 : 0.7, hit.critical);
+    if (hit.critical) this.impactFrame(position, 1);
     if ((hit.controlDelaySeconds ?? 0) > 0) {
       const previous = this.chill.get(hit.instanceId);
       this.chill.set(hit.instanceId, {
@@ -58,7 +59,42 @@ export class CombatFxPresenter {
     this.numbers.show({ ...event, critical: !!event.empowered }, position);
     actor?.flash(!!event.empowered);
     if (event.effect === 'dot') this.burst(position, 'plague', 0.35);
-    else actor?.play('hit');
+    else {
+      actor?.play('hit');
+      this.impactFrame(position, event.effect === 'meteor' ? 1.6 : 1.1);
+    }
+  }
+
+  /**
+   * The anime impact frame: a white-hot core that appears and is gone inside a
+   * tenth of a second, under a shockwave ring that outruns it. The two together
+   * are what make a hit land - the burst says what school the damage was, this
+   * says how hard it hit.
+   */
+  impactFrame(position: Vector3, size = 1): void {
+    const key = `impact:${position.x.toFixed(1)}:${position.z.toFixed(1)}`;
+    if (this.burstCooldowns.has(key)) return;
+    this.burstCooldowns.set(key, 0.09);
+    // arcane_core_b is the one template the pool gives the white heart material.
+    this.pool.emit(
+      'arcane_core_b',
+      'arcane',
+      0.11,
+      (t, m) => {
+        m.position.copyFrom(position);
+        m.scaling.setAll(size * (0.2 + t * 1.05));
+        m.visibility = 1 - t * t;
+      },
+      true,
+      key,
+    );
+    this.pool.emit('arcane_ring_b', 'arcane', 0.26, (t, m) => {
+      m.position.copyFrom(position);
+      m.rotation.x = Math.PI / 2;
+      m.scaling.setAll(size * (0.3 + t * 3));
+      // Thins as it widens, so the ring reads as a wave rather than a disc.
+      m.visibility = (1 - t) * (1 - t) * 0.9;
+    });
   }
 
   burst(position: Vector3, school: School, size = 1, critical = false): void {
