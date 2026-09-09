@@ -1,0 +1,75 @@
+.host {
+  position: absolute;
+  inset: 0 0 var(--shelf-height) 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-veil);
+  backdrop-filter: blur(18px);
+  pointer-events: auto;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  height: 76px;
+  flex: none;
+  padding: 0 var(--space-5);
+  border-bottom: 1px solid var(--line);
+}
+
+.title {
+  margin: 0;
+  font: 500 25px / 1 var(--font-display);
+  color: var(--ink);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.wallets {
+  display: flex;
+  gap: var(--space-4);
+  align-items: baseline;
+}
+
+.walletItem {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font: 500 var(--text-body) / 1 var(--font-display);
+}
+
+.gold {
+  color: var(--gold);
+}
+
+.essence {
+  color: var(--essence);
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.surface {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (max-width: 860px) {
+  .body {
+    flex-direction: column;
+  }
+
+  .header {
+    height: auto;
+    padding: var(--space-3);
+    flex-wrap: wrap;
+  }
+}

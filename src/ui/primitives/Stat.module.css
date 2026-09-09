@@ -1,0 +1,40 @@
+.stat {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--veil-1);
+}
+
+.emphasis {
+  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+
+.label {
+  font: 600 var(--text-label) / 1 var(--font-ui);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-low);
+}
+
+.emphasis .label {
+  color: var(--accent);
+}
+
+.value {
+  font: 500 var(--text-value) / 1 var(--font-display);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.emphasis .value {
+  color: var(--accent);
+}
+
+.detail {
+  font: 400 var(--text-small) / 1.4 var(--font-ui);
+  color: var(--ink-low);
+  font-variant-numeric: tabular-nums;
+}

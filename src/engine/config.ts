@@ -12,6 +12,18 @@ export interface EngineConfig {
   maxAliveEnemies: number;
   maxNormalWaveEnemies: number;
   bossAddCount: number;
+  /** Enemies approach down one of this many lanes. */
+  laneCount: number;
+  /** World-space gap between lane centres. */
+  laneSpacing: number;
+  /** How far out an enemy appears, in world units from the mage. */
+  enemySpawnDistance: number;
+  /** World units per second an enemy closes while it is out of range. */
+  enemyApproachSpeed: number;
+  /** How close an enemy must be before it can swing. */
+  enemyAttackRange: number;
+  /** How far the Evercast reaches. Longer than melee, which is the point. */
+  spellRange: number;
 }
 
 export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
@@ -29,4 +41,10 @@ export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
   maxAliveEnemies: 6,
   maxNormalWaveEnemies: 6,
   bossAddCount: 4,
+  laneCount: 3,
+  laneSpacing: 1.35,
+  enemySpawnDistance: 13,
+  enemyApproachSpeed: 2.4,
+  enemyAttackRange: 1.75,
+  spellRange: 9,
 };

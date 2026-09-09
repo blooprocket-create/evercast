@@ -1,0 +1,128 @@
+/*
+ * The only file in src/ui allowed to contain a colour, a type step, a radius
+ * or a spacing value. src/ui/architecture.test.ts fails the build otherwise.
+ *
+ * Colours are lifted from what the game already draws: the parchment ink and
+ * olive hairlines were already in styles.css, and the biome accents are the
+ * authored Color3 accents in src/game/world/WorldGenerator.ts.
+ */
+
+:root {
+  /* Surfaces, from the Greenfields sky darkened toward black. */
+  --bg: #070d10;
+  --panel: #0d181b;
+  --raised: #142226;
+  --line: rgba(190, 202, 177, 0.14);
+  --line-strong: rgba(190, 202, 177, 0.3);
+  --scrim: rgba(7, 13, 16, 0.72);
+
+  /* Ink. Parchment on deep pine, as the HUD already reads. */
+  --ink: #eee5c9;
+  --ink-mid: #c7cdbd;
+  --ink-low: #8e9a86;
+  --ink-dim: #657062;
+  --ink-num: #e6cfb4;
+
+  /* Meaning. This set is closed: a feature may not add to it. */
+  --gold: #e0b45c;
+  --essence: #a98cff;
+  --hp-you: #78b99d;
+  --hp-you-deep: #4e8571;
+  --hp-foe: #c4593c;
+  --hp-foe-deep: #8a3220;
+  --crit: #ff9a4d;
+  --route: #63dcff;
+
+  /*
+   * Biome accents, exactly as authored in WorldGenerator.ts:
+   *   greenfields       Color3(0.72, 0.80, 0.35)
+   *   whispering_woods  Color3(0.34, 0.72, 0.46)
+   *   gravehollow       Color3(0.50, 0.38, 0.62)
+   * Ashen Road has no authored biome in the renderer yet; this is provisional
+   * and drawn from the road and trunk browns already in the scene.
+   */
+  --accent-greenfields: #b8cc59;
+  --accent-whispering-woods: #57b875;
+  --accent-gravehollow: #80619e;
+  --accent-ashen-road: #c98a4e;
+
+  /* Set per-zone on the shell root; everything downstream reads var(--accent). */
+  --accent: var(--accent-greenfields);
+
+  /* Translucent fills. Components may not invent these. */
+  --veil-0: rgb(255 255 255 / 2%);
+  --veil-1: rgb(255 255 255 / 2.2%);
+  --veil-2: rgb(255 255 255 / 3%);
+  --veil-3: rgb(255 255 255 / 4%);
+  --track: rgb(255 255 255 / 9%);
+  --glass: rgb(9 17 20 / 70%);
+  --glass-mid: rgb(9 17 20 / 80%);
+  --glass-strong: rgb(8 15 17 / 82%);
+  --slot: rgb(20 34 38 / 70%);
+  --shelf-top: rgb(9 17 20 / 92%);
+  --shelf-bottom: rgb(7 13 16 / 98.5%);
+  --surface-veil: rgb(7 13 16 / 97%);
+  --hud-fade: rgb(10 18 19 / 60%);
+  --pill: rgb(8 17 19 / 35%);
+  --wordmark-shadow: rgb(6 14 16 / 90%);
+
+  /* Type: six steps. The UI this replaces used fourteen. */
+  --text-label: 10px;
+  --text-small: 12px;
+  --text-body: 14px;
+  --text-lead: 17px;
+  --text-value: 24px;
+  --text-title: 34px;
+
+  --font-display: Georgia, 'Times New Roman', serif;
+  --font-ui: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* Radius: four values. The UI this replaces used seventeen. */
+  --radius-chip: 3px;
+  --radius-card: 6px;
+  --radius-panel: 12px;
+  --radius-pill: 999px;
+
+  /* Space */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  /* Every number reserves this much room, whatever its magnitude. */
+  --value-width: 10ch;
+
+  --shelf-height: 132px;
+  /*
+   * Three pinned destinations plus More. This is the invariant the whole
+   * shell rests on, not a layout guess - src/ui/architecture.test.ts asserts
+   * SHELF_SLOTS is 3, and the grid reads this rather than hardcoding a count.
+   */
+  --shelf-slot-count: 4;
+  --control-height: 38px;
+  --touch-target: 44px;
+}
+
+/* Uppercase micro-label. The one place 10px is allowed. */
+.uiLabel {
+  font: 600 var(--text-label) / 1 var(--font-ui);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-low);
+}
+
+/* Numbers are tabular and right-aligned everywhere, without exception. */
+.uiValue {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* The shelf stacks on a phone, so the insets everything else uses grow with it. */
+@media (max-width: 620px) {
+  :root {
+    --shelf-height: 168px;
+  }
+}

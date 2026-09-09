@@ -25,6 +25,13 @@ export interface EnemyState {
   attackDamage: Decimal;
   attackInterval: number;
   attackCooldown: number;
+  /**
+   * Where the enemy entered from, and the clock reading when it did. Position
+   * is derived from these rather than accumulated, so a run simulated in one
+   * pass, in chunks, or resumed from a save lands on identical coordinates.
+   */
+  approachFrom?: number;
+  approachSince?: number;
 }
 
 export interface EncounterState {

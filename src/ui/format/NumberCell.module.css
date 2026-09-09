@@ -1,0 +1,11 @@
+.cell {
+  display: inline-block;
+  min-width: var(--value-width);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--ink-num);
+}
+
+.inline {
+  min-width: 0;
+}

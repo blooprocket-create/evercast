@@ -1,0 +1,24 @@
+.badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  font: 700 var(--text-label) / 1 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.dot {
+  min-width: 9px;
+  width: 9px;
+  height: 9px;
+  padding: 0;
+}
+
+.urgent {
+  background: var(--hp-foe);
+  color: var(--ink);
+}

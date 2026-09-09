@@ -1,0 +1,43 @@
+.dashboard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-5);
+  padding: var(--space-5);
+  overflow-y: auto;
+  overflow-x: hidden;
+  align-content: start;
+}
+
+.withAside {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 24rem);
+}
+
+.main {
+  display: grid;
+  gap: var(--space-5);
+  align-content: start;
+  min-width: 0;
+}
+
+/*
+ * auto-fill, never a fixed track count: a sixth stat wraps cleanly instead of
+ * leaving the orphan the old four-column grid produced with five cards.
+ */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: var(--space-3);
+}
+
+.aside {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+  min-width: 0;
+}
+
+@media (max-width: 860px) {
+  .withAside {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

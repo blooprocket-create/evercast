@@ -27,6 +27,8 @@ export interface EnemySnapshot {
   hp: QuantitySnapshot;
   maxHp: QuantitySnapshot;
   hpPercent: number;
+  /** Still closing the distance, so the renderer can walk it in. */
+  approaching: boolean;
 }
 
 export interface SimulationSnapshot {
@@ -83,6 +85,7 @@ export interface SimulationSnapshot {
   progressToNextEncounter: number;
   highestStageEver: number;
   rebirths: number;
+  rebirthKnowledgeGain: QuantitySnapshot;
   canRebirth: boolean;
   gear: GearSnapshot[];
   lastEvent: string;

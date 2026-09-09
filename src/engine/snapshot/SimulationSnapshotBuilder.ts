@@ -1,3 +1,4 @@
+import type Decimal from 'break_eternity.js';
 import type { EngineConfig } from '../config';
 import type { ContentCatalog } from '../../content/types';
 import { requireEnemy } from '../../content/catalog';
@@ -9,13 +10,14 @@ import { compileSpell } from '../spell/SpellCompiler';
 import { spellPointCost } from '../spellTree/SpellTreeCatalog';
 import { totalSpellPoints, unspentSpellPoints } from '../spellTree/SpellTreeSystem';
 import type { SimulationSnapshot } from '../types';
-import { effectiveCastInterval } from '../combat/SpellCombatState';
+import { effectiveCastInterval, inAttackRange } from '../combat/SpellCombatState';
 
 export interface SimulationSnapshotBuildContext {
   state: GameState;
   config: EngineConfig;
   catalog: ContentCatalog;
   canRebirth: boolean;
+  rebirthKnowledgeGain: Decimal;
   lastEvent: string;
 }
 
@@ -24,6 +26,7 @@ export function buildSimulationSnapshot({
   config,
   catalog,
   canRebirth,
+  rebirthKnowledgeGain,
   lastEvent,
 }: SimulationSnapshotBuildContext): SimulationSnapshot {
   const run = state.run;
@@ -68,6 +71,7 @@ export function buildSimulationSnapshot({
       hp: quantity(enemy.hp),
       maxHp: quantity(enemy.maxHp),
       hpPercent: enemy.maxHp.cmp(0) > 0 ? percent(enemy.hp.div(enemy.maxHp).toNumber()) : 0,
+      approaching: !inAttackRange(enemy, config.enemyAttackRange),
     })),
     encounterTotalEnemies: run.encounter?.totalEnemies ?? 0,
     encounterSpawnedEnemies: run.encounter?.spawnedEnemies ?? 0,
@@ -83,7 +87,7 @@ export function buildSimulationSnapshot({
     spellBaseDamage: quantity(big(compiledSpell.damage)),
     gearDamageBonus: quantity(gearStats.baseDamageBonus),
     gearHealthBonus: quantity(gearStats.maxHpBonus),
-    castInterval: effectiveCastInterval(run),
+    castInterval: effectiveCastInterval(run, compiledSpell),
     critChance: compiledSpell.critChance,
     critMultiplier: compiledSpell.critMultiplier,
     pierceTargets: compiledSpell.pierceTargets,
@@ -103,6 +107,7 @@ export function buildSimulationSnapshot({
     highestStageEver: state.meta.highestStageEver,
     rebirths: state.meta.rebirths,
     canRebirth,
+    rebirthKnowledgeGain: quantity(rebirthKnowledgeGain),
     gear: GEAR_SLOT_ORDER.map((slot) => {
       const data = gearDisplayData(state.equipment, slot);
       return {

@@ -1,0 +1,200 @@
+.graph {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.main {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* On a wide screen the toolbar floats over the graph; there is room to spare. */
+.toolbar {
+  position: absolute;
+  left: var(--space-3);
+  top: var(--space-3);
+  right: var(--space-3);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+
+.toolbar > * {
+  pointer-events: auto;
+}
+
+/* One transformed layer inside a hidden box: never two scroll axes. */
+.viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+  background:
+    radial-gradient(ellipse 70% 55% at 46% 42%, color-mix(in srgb, var(--route) 6%, transparent), transparent 70%);
+}
+
+.dragging {
+  cursor: grabbing;
+}
+
+.canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.edges {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/*
+ * The wrapper is exactly the box the layout computed - no padding. Insetting it
+ * squeezed square nodes into vertical ellipses, because the width lost the
+ * padding and the height did not.
+ */
+.node {
+  position: absolute;
+  display: grid;
+  place-items: stretch;
+  cursor: pointer;
+  text-align: center;
+}
+
+.controls {
+  position: absolute;
+  right: var(--space-3);
+  bottom: var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--glass-mid);
+}
+
+.control {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: var(--radius-chip);
+  background: transparent;
+  color: var(--ink-mid);
+  font-size: var(--text-lead);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.control:hover {
+  color: var(--ink);
+  background: var(--veil-3);
+}
+
+.zoomLevel {
+  min-width: 44px;
+  text-align: center;
+  font: 600 var(--text-label) / 1 var(--font-ui);
+  letter-spacing: 0.12em;
+  color: var(--ink-low);
+  font-variant-numeric: tabular-nums;
+}
+
+.fit {
+  width: auto;
+  padding: 0 var(--space-3);
+  font: 600 var(--text-label) / 1 var(--font-ui);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.minimap {
+  position: absolute;
+  right: var(--space-3);
+  top: 64px;
+  width: 150px;
+  height: 104px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-chip);
+  background: var(--glass-mid);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.minimapDot {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: var(--radius-pill);
+  transform: translate(-50%, -50%);
+}
+
+.minimapWindow {
+  position: absolute;
+  border: 1px solid var(--accent);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.inspector {
+  width: 320px;
+  flex: none;
+  border-left: 1px solid var(--line);
+  padding: var(--space-4);
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+  background: var(--veil-1);
+}
+
+@media (max-width: 860px) {
+  .graph {
+    flex-direction: column;
+  }
+
+  .inspector {
+    width: 100%;
+    max-height: 45%;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+
+  /*
+   * The toolbar floats over the graph on a wide screen, where there is room
+   * to spare. On a phone it wraps, so it takes its own row instead of sitting
+   * on top of the nodes.
+   */
+  .main {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .toolbar {
+    position: static;
+    flex-wrap: wrap;
+    padding: var(--space-2);
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+  }
+
+  .viewport {
+    position: relative;
+    inset: auto;
+    flex: 1;
+    min-height: 0;
+  }
+}
