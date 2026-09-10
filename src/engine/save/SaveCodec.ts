@@ -211,14 +211,17 @@ export class SaveCodec {
     };
     state.run.spell = buildSpellFromTree(state.spellTree);
     if (version === 5) clearSpellCombat(state.run);
-    ensurePositions(state.run);
+    ensurePositions(state.run, this.config.enemyAttackRange);
     return { savedAt: new Date(envelope.savedAt ?? Date.now()), state };
   }
 }
 
 function serializeEnemy(enemy: EnemyState): SerializedEnemy {
+  // `telegraphed` says the renderer has been told about a swing, which cannot
+  // be true of a session that has not started yet.
+  const { telegraphed: _presentationOnly, ...rest } = enemy;
   return {
-    ...enemy,
+    ...rest,
     statuses: enemy.statuses ? structuredClone(enemy.statuses) : undefined,
     position: enemy.position ? { ...enemy.position } : undefined,
     hp: enemy.hp.toString(),

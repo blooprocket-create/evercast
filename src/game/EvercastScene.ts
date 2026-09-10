@@ -93,6 +93,9 @@ export class EvercastScene {
       new Vector3(0.9, 1.15, 1),
       this.scene,
     );
+    // Pinned, and depended upon elsewhere: resize() below derives its portrait
+    // fov from `2 * radius`, and CombatFeel's shake is calibrated against the
+    // 12.4 units of visible height this radius and fov produce.
     camera.lowerRadiusLimit = 17.5;
     camera.upperRadiusLimit = 17.5;
     camera.fov = 0.68;
@@ -134,11 +137,14 @@ export class EvercastScene {
     // Babylon measures focus distance in millimetres, and the camera radius is
     // pinned, so the plane of focus sits exactly on the road.
     presentation.depthOfFieldBlurLevel = DepthOfFieldEffectBlurLevel.Medium;
-    // The mage sits ~17.4 units from the camera and the far end of a lane ~20.8,
-    // so the plane of focus goes through the middle of the road. Aperture is
-    // what actually decides how much is soft: lensSize / fStop. The Babylon
-    // default of 50mm at f/1.4 leaves the whole scene inside the sharp band.
-    presentation.depthOfField.focusDistance = 18500;
+    // Measured to feet level: the mage sits ~16.9 units from the camera, the
+    // contact arc 16.2-17.5, the edge of spell range ~18.7 and the far end of a
+    // lane ~20.8. The plane of focus therefore belongs just past the fight, not
+    // out on the road - further back and the enemies still walking in are the
+    // sharp ones. Aperture is what actually decides how much is soft:
+    // lensSize / fStop. The Babylon default of 50mm at f/1.4 leaves the whole
+    // scene inside the sharp band.
+    presentation.depthOfField.focusDistance = 17300;
     presentation.depthOfField.focalLength = 85;
     presentation.depthOfField.fStop = 1.35;
     this.setDepthOfField(DEFAULT_DEPTH_OF_FIELD);
@@ -208,7 +214,10 @@ export class EvercastScene {
     this.world = new WorldGenerator(this.scene, skyLight, sun, this.shadows);
     this.actors = new ActorAssets(this.scene, this.shadows);
     this.mage = this.actors.create('mage', 'mage-character', true);
-    this.mage.root.position.set(-3.2, 0.025, 0);
+    // The engine holds the mage at the origin and measures every reach from
+    // there. Standing him anywhere else silently adds that offset to the reach
+    // of every enemy in the game, on screen if not in the simulation.
+    this.mage.root.position.set(0, 0.025, 0);
     this.mage.root.rotation.y = Math.PI * 0.68;
     const pool = new VfxPool(this.scene, quality);
     this.healthBars = new EnemyHealthBars(this.scene);
@@ -304,10 +313,11 @@ export class EvercastScene {
     this.healthBars.update();
     for (const event of events) {
       if (event.type === 'spell_cast') this.mage.play('attack', castDuration(snapshot.castInterval));
-      if (event.type === 'enemy_attack') {
-        this.enemyMeshes.get(event.instanceId)?.play('attack');
-        this.mage.play('hit');
-      }
+      // The swing is played from the windup so it leads the blow, rather than
+      // animating a hit the mage has already taken.
+      if (event.type === 'enemy_windup')
+        this.enemyMeshes.get(event.instanceId)?.play('attack', event.durationSeconds);
+      if (event.type === 'enemy_attack') this.mage.play('hit');
       if (event.type === 'mage_defeated') {
         this.mage.play('death');
         this.mageRecovery = 1.2;
@@ -421,17 +431,23 @@ export class EvercastScene {
       if (!actor) {
         const id = enemy.modelKey.split('/').pop()!.replaceAll('-', '_');
         actor = this.actors.create(id, `enemy-${enemy.instanceId}`);
-        actor.root.rotation.y = -Math.PI * 0.68;
         actor.root.scaling.setAll(enemy.boss ? 1.12 : 1);
-        actor.root.position.copyFrom(destination).addInPlace(new Vector3(1.2, 0, 0));
+        actor.root.position.copyFrom(destination).addInPlace(new Vector3(0.45, 0, 0));
         this.enemyMeshes.set(enemy.instanceId, actor);
       }
+      // The scene gets a fresh snapshot every frame, so this smoothing is pure
+      // lag against a position already known exactly; at rate 7 it trailed by
+      // 0.34 units, a third of melee reach. Kept, but tight - it also runs on
+      // presentation time, so hit-stop freezes the actors with the picture.
       Vector3.LerpToRef(
         actor.root.position,
         destination,
-        1 - Math.exp(-deltaSeconds * 7),
+        1 - Math.exp(-deltaSeconds * 18),
         actor.root.position,
       );
+      // Face the mage, then bias toward the camera by the same angle the old
+      // fixed yaw used, so a flanker turns in without going full profile.
+      actor.root.rotation.y = Math.atan2(-actor.root.position.x, -actor.root.position.z) - 0.565;
       actor.setLocomotion(Vector3.DistanceSquared(actor.root.position, destination) > 0.004);
     });
   }

@@ -20,8 +20,11 @@ export interface EngineConfig {
   enemySpawnDistance: number;
   /** World units per second an enemy closes while it is out of range. */
   enemyApproachSpeed: number;
-  /** How close an enemy must be before it can swing. */
+  /** How close an ordinary melee enemy comes before it can swing. Enemies that
+   * fight at a distance carry their own reach in `src/content`. */
   enemyAttackRange: number;
+  /** How long a swing is telegraphed before it lands. */
+  enemyWindupSeconds: number;
   /** How far the Evercast reaches. Longer than melee, which is the point. */
   spellRange: number;
 }
@@ -45,6 +48,7 @@ export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
   laneSpacing: 1.35,
   enemySpawnDistance: 13,
   enemyApproachSpeed: 2.4,
-  enemyAttackRange: 1.75,
+  enemyAttackRange: 1.1,
+  enemyWindupSeconds: 0.3,
   spellRange: 9,
 };

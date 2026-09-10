@@ -68,7 +68,7 @@ function refill() {
     attackInterval: 2,
     attackCooldown: 2,
   }));
-  ensurePositions(state.run);
+  ensurePositions(state.run, DEFAULT_ENGINE_CONFIG.enemyAttackRange);
   state.run.castCooldown = 0;
   events.push({
     type: 'encounter_started',

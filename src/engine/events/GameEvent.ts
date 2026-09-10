@@ -84,6 +84,13 @@ export type GameEvent =
       powerScale?: number;
       terminal?: boolean;
     }
+  | {
+      type: 'enemy_windup';
+      time: number;
+      instanceId: number;
+      /** Seconds until the blow lands, so the clip can be fitted to it. */
+      durationSeconds: number;
+    }
   | { type: 'enemy_attack'; time: number; instanceId: number; damage: string }
   | { type: 'enemy_killed'; time: number; stage: number; instanceId: number; enemyId: string; gold: string }
   | { type: 'mage_defeated'; time: number; stage: number }

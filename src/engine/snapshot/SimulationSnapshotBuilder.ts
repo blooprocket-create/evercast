@@ -10,7 +10,8 @@ import { compileSpell } from '../spell/SpellCompiler';
 import { spellPointCost } from '../spellTree/SpellTreeCatalog';
 import { totalSpellPoints, unspentSpellPoints } from '../spellTree/SpellTreeSystem';
 import type { SimulationSnapshot } from '../types';
-import { effectiveCastInterval, inAttackRange } from '../combat/SpellCombatState';
+// prettier-ignore
+import { effectiveCastInterval, hasArrived, livingByDistance } from '../combat/SpellCombatState';
 
 export interface SimulationSnapshotBuildContext {
   state: GameState;
@@ -30,7 +31,9 @@ export function buildSimulationSnapshot({
   lastEvent,
 }: SimulationSnapshotBuildContext): SimulationSnapshot {
   const run = state.run;
-  const target = run.enemies[0];
+  // The same enemy the spell is aimed at, or the readout names one thing while
+  // the mage shoots another.
+  const target = livingByDistance(run)[0];
   const compiledSpell = compileSpell(run.spell);
   const gearStats = compileGearStats(state.equipment);
   const finalDamage = big(compiledSpell.damage)
@@ -71,7 +74,7 @@ export function buildSimulationSnapshot({
       hp: quantity(enemy.hp),
       maxHp: quantity(enemy.maxHp),
       hpPercent: enemy.maxHp.cmp(0) > 0 ? percent(enemy.hp.div(enemy.maxHp).toNumber()) : 0,
-      approaching: !inAttackRange(enemy, config.enemyAttackRange),
+      approaching: !hasArrived(enemy, config.enemyAttackRange),
     })),
     encounterTotalEnemies: run.encounter?.totalEnemies ?? 0,
     encounterSpawnedEnemies: run.encounter?.spawnedEnemies ?? 0,

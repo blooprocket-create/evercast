@@ -9,6 +9,7 @@ import { resolveEffects } from '../spell/EffectResolver';
 import { compileSpell } from '../spell/SpellCompiler';
 import type { CompiledSpell } from '../spell/types';
 import { EvolvingCombat } from './EvolvingCombat';
+import { livingByDistance } from './SpellCombatState';
 
 export interface CombatResult {
   killedEnemyIds: number[];
@@ -188,6 +189,9 @@ export class CombatSystem {
     const controlDelaySeconds = enemy.hp.cmp(0) > 0 ? spell.controlDelaySeconds : 0;
     if (spell.controlDelaySeconds > 0 && enemy.hp.cmp(0) > 0) {
       enemy.attackCooldown += spell.controlDelaySeconds;
+      // The swing it had already raised is no longer imminent, so let it
+      // telegraph again rather than land the next one unannounced.
+      enemy.telegraphed = false;
     }
     if (spell.leechFraction > 0 && actualDamage.cmp(0) > 0) {
       const healed = actualDamage.mul(spell.leechFraction);
@@ -246,11 +250,13 @@ export class CombatSystem {
 }
 
 function firstLivingEnemy(run: RunState): EnemyState | undefined {
-  return run.enemies.find((enemy) => enemy.hp.cmp(0) > 0);
+  return livingByDistance(run)[0];
 }
 
 function livingEnemiesExcluding(run: RunState, excluded: ReadonlySet<number>): EnemyState[] {
-  return run.enemies.filter((enemy) => enemy.hp.cmp(0) > 0 && !excluded.has(enemy.instanceId));
+  // Nearest first, so pierce, chain and splash spend themselves on the enemies
+  // closest to the mage rather than on whatever spawned earliest.
+  return livingByDistance(run, new Set(excluded));
 }
 
 function decimalMaxZero(value: ReturnType<typeof big>) {

@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_ENGINE_CONFIG } from '../config';
 import { EvercastSimulation } from '../EvercastSimulation';
-import { inAttackRange, laneZ, positionOf, soonestRangeChange, timeToRange } from './SpellCombatState';
+// prettier-ignore
+import { hasArrived, inAttackRange, laneZ, positionOf, soonestRangeChange, timeToRange } from './SpellCombatState';
+import { contactPoint } from './Contact';
+import { advanceApproach, distanceSquared } from './SpellCombatState';
+import { SaveCodec } from '../save/SaveCodec';
+import { quantity } from '../numbers';
+import { ENEMIES } from '../../content/enemies';
+import { ZONES } from '../../content/zones';
+import type { EnemyState } from '../model';
+
+const stopOf = (enemy: EnemyState) => contactPoint(enemy, config.enemyAttackRange);
 
 const config = DEFAULT_ENGINE_CONFIG;
 
@@ -58,8 +68,13 @@ describe('approach', () => {
 
   it('closes the distance and stops at reach', () => {
     const simulation = runFor(40);
-    for (const enemy of simulation.getSnapshot().enemies) {
-      expect(enemy.position!.x).toBeGreaterThanOrEqual(config.enemyAttackRange - 1e-6);
+    for (const enemy of simulation.getState().run.enemies) {
+      // Its own reach and slot, not one line everything shares.
+      expect(enemy.position!.x).toBeGreaterThanOrEqual(stopOf(enemy).x - 1e-6);
+      if (hasArrived(enemy, config.enemyAttackRange)) {
+        expect(enemy.position!.x).toBeCloseTo(stopOf(enemy).x, 9);
+        expect(enemy.position!.z).toBeCloseTo(stopOf(enemy).z, 9);
+      }
     }
     // Something has to have arrived by now, or nothing is ever fighting.
     const arrived = runFor(40).getSnapshot().enemies.filter((enemy) => !enemy.approaching);
@@ -69,10 +84,10 @@ describe('approach', () => {
   it('reports approach state so the renderer can walk them in', () => {
     const early = new EvercastSimulation();
     early.update(config.travelSeconds + 0.05);
-    const fresh = early.getSnapshot().enemies[0];
+    const fresh = early.getState().run.enemies[0];
     if (fresh) {
-      expect(fresh.approaching).toBe(true);
-      expect(fresh.position!.x).toBeGreaterThan(config.enemyAttackRange);
+      expect(early.getSnapshot().enemies[0].approaching).toBe(true);
+      expect(fresh.position!.x).toBeGreaterThan(stopOf(fresh).x);
     }
   });
 
@@ -84,6 +99,8 @@ describe('approach', () => {
     // A save-and-resume takes different step sizes than a live frame loop.
     expect(positions(1 / 30)).toEqual(positions(1 / 60));
     expect(positions(1 / 120)).toEqual(positions(1 / 60));
+    // An odd step, so nothing can be passing by lining up on halves.
+    expect(positions(1 / 45)).toEqual(positions(1 / 60));
   });
 });
 
@@ -100,7 +117,7 @@ describe('range', () => {
     const melee = config.enemyAttackRange;
     const spell = config.spellRange;
     // The spell threshold is crossed first, so it is the next event.
-    expect(soonestRangeChange(run, [melee, spell], config.enemyApproachSpeed)).toBeCloseTo(
+    expect(soonestRangeChange(run, spell, melee, config.enemyApproachSpeed)).toBeCloseTo(
       (13 - spell) / config.enemyApproachSpeed,
       9,
     );
@@ -110,11 +127,13 @@ describe('range', () => {
     const simulation = new EvercastSimulation();
     simulation.update(config.travelSeconds + 0.05);
     const before = simulation.getSnapshot();
-    const distant = before.enemies.find((enemy) => enemy.approaching);
+    const distant = simulation
+      .getState()
+      .run.enemies.find((enemy) => !hasArrived(enemy, config.enemyAttackRange));
     if (!distant) return;
 
     // Advance less than it takes to close, and the mage must be untouched.
-    const closing = (distant.position!.x - config.enemyAttackRange) / config.enemyApproachSpeed;
+    const closing = (distant.position!.x - stopOf(distant).x) / config.enemyApproachSpeed;
     simulation.update(closing * 0.5);
     expect(simulation.getSnapshot().mageHp.raw).toBe(before.mageHp.raw);
   });
@@ -133,7 +152,11 @@ describe('range', () => {
     for (const enemy of state.run.enemies) {
       enemy.position = { x: 2.4, z: 0 };
       delete enemy.approachFrom;
+      delete enemy.approachFromZ;
       delete enemy.approachSince;
+      // A save from before per-enemy reach carries none of these either.
+      delete enemy.attackRange;
+      delete enemy.contactSlot;
     }
 
     const legacyIds = new Set(state.run.enemies.map((enemy) => enemy.instanceId));
@@ -148,9 +171,318 @@ describe('range', () => {
       if (!legacyIds.has(enemy.instanceId)) continue;
       expect(enemy.position!.x).toBeLessThanOrEqual(2.4 + 1e-6);
     }
+
+    // Adopting them must also have handed out distinct slots, or they would all
+    // stand on top of each other on the spot they share by default.
+    const resting = resumed
+      .getState()
+      .run.enemies.filter((enemy) => legacyIds.has(enemy.instanceId))
+      .map((enemy) => `${enemy.position!.x}:${enemy.position!.z}`);
+    expect(new Set(resting).size).toBe(resting.length);
   });
 
   it('positionOf falls back rather than throwing on a legacy enemy', () => {
     expect(positionOf({ } as never)).toEqual(expect.objectContaining({ x: expect.any(Number) }));
+  });
+});
+
+describe('reach', () => {
+  const reach = config.enemyAttackRange;
+
+  it('lets a caster hold its ground where a melee enemy is still walking', () => {
+    const spot = { position: { x: 4.6, z: 0 }, contactSlot: 0 };
+    const caster = { ...spot, attackRange: 4.6 } as EnemyState;
+    const brawler = { ...spot, attackRange: reach } as EnemyState;
+
+    expect(hasArrived(caster, reach)).toBe(true);
+    expect(hasArrived(brawler, reach)).toBe(false);
+  });
+
+  it('walks each enemy to its own resting place, not to a shared line', () => {
+    const walked = (attackRange: number | undefined, contactSlot: number, fromZ: number) => ({
+      position: { x: 13, z: fromZ },
+      attackRange,
+      contactSlot,
+      approachFrom: 13,
+      approachFromZ: fromZ,
+      approachSince: 0,
+    });
+    // Long after everything has had time to arrive.
+    const run = {
+      elapsedSeconds: 60,
+      enemies: [walked(4.6, 0, 1.35), walked(undefined, 1, -1.35)],
+    } as never as { enemies: EnemyState[] };
+
+    advanceApproach(run as never, reach, config.enemyApproachSpeed);
+
+    for (const enemy of run.enemies) {
+      expect(enemy.position!.x).toBeCloseTo(stopOf(enemy).x, 9);
+      // The lane it came down is gone by the time it plants itself.
+      expect(enemy.position!.z).toBeCloseTo(stopOf(enemy).z, 9);
+    }
+    expect(run.enemies[0].position!.x).toBeCloseTo(4.6, 9);
+    expect(run.enemies[1].position!.x).toBeGreaterThan(reach - 1e-9);
+    expect(run.enemies[1].position!.x).toBeLessThan(4.6);
+  });
+
+  it('gives an enemy carrying nothing a finite place to stand', () => {
+    // Older tests and older saves build enemies without any of these fields.
+    expect(contactPoint({} as never, reach)).toEqual({ x: reach, z: 0 });
+  });
+
+  it('does not let a melee enemy swing from across the road', () => {
+    const simulation = new EvercastSimulation();
+    const swings: { x: number; stop: number; melee: boolean }[] = [];
+
+    for (let frame = 0; frame < 45 * 60; frame += 1) {
+      simulation.update(1 / 60);
+      const attacks = simulation
+        .drainPresentationEvents()
+        .filter((event) => event.type === 'enemy_attack');
+      for (const attack of attacks) {
+        const enemy = simulation
+          .getState()
+          .run.enemies.find((candidate) => candidate.instanceId === attack.instanceId);
+        // An enemy that died in the same step no longer has a position to read.
+        if (enemy?.position)
+          swings.push({
+            x: enemy.position.x,
+            stop: stopOf(enemy).x,
+            melee: (enemy.attackRange ?? reach) <= reach,
+          });
+      }
+    }
+
+    expect(swings.length).toBeGreaterThan(0);
+    for (const swing of swings) {
+      expect(swing.x).toBeLessThanOrEqual(swing.stop + 1e-6);
+      // A character is about 1.55 tall and half a unit wide, so the whole melee
+      // crowd - front rank and the rank leaning in behind it - fits inside 1.8.
+      if (swing.melee) expect(swing.x).toBeLessThanOrEqual(1.8);
+    }
+    // And somebody has to be fighting from the front rank rather than the whole
+    // crowd hanging back, or this is just a shorter standoff. The front slots
+    // sit on the reach itself; the rank behind them is half a unit deeper.
+    const closest = Math.min(...swings.filter((swing) => swing.melee).map((swing) => swing.x));
+    expect(closest).toBeLessThan(config.enemyAttackRange + 0.5);
+  });
+
+  it('does not let two enemies come to rest on the same spot', () => {
+    const simulation = new EvercastSimulation();
+    let shared = 0;
+    let crowded = 0;
+
+    for (let frame = 0; frame < 90 * 60; frame += 1) {
+      simulation.update(1 / 60);
+      const enemies = simulation.getState().run.enemies;
+      for (let a = 0; a < enemies.length; a += 1)
+        for (let b = a + 1; b < enemies.length; b += 1) {
+          const gap = distanceSquared(enemies[a].position!, enemies[b].position!);
+          if (gap === 0) shared += 1;
+          // Two bodies of radius ~0.3. Enemies still walking may pass close.
+          const resting = hasArrived(enemies[a], reach) && hasArrived(enemies[b], reach);
+          if (resting && gap < 0.36) crowded += 1;
+        }
+    }
+
+    expect(shared).toBe(0);
+    expect(crowded).toBe(0);
+  });
+});
+
+describe('windup', () => {
+  it('telegraphs a swing before it lands', () => {
+    const simulation = new EvercastSimulation();
+    const raised = new Map<number, number>();
+    const gaps: number[] = [];
+    let untelegraphed = 0;
+
+    for (let frame = 0; frame < 45 * 60; frame += 1) {
+      simulation.update(1 / 60);
+      for (const event of simulation.drainPresentationEvents()) {
+        if (event.type === 'enemy_windup') raised.set(event.instanceId, event.time);
+        if (event.type === 'enemy_attack') {
+          const at = raised.get(event.instanceId);
+          if (at === undefined) untelegraphed += 1;
+          else gaps.push(event.time - at);
+          raised.delete(event.instanceId);
+        }
+      }
+    }
+
+    expect(gaps.length).toBeGreaterThan(0);
+    expect(untelegraphed).toBe(0);
+    for (const gap of gaps) expect(gap).toBeCloseTo(config.enemyWindupSeconds, 6);
+  });
+});
+
+describe('saves', () => {
+  it('resumes a mid-fight save on the same positions', () => {
+    const live = runFor(20);
+    const codec = new SaveCodec(config);
+    const resumed = new EvercastSimulation({
+      initialState: codec.decode(codec.encode(live.getState())).state,
+    });
+
+    const positions = (simulation: EvercastSimulation) =>
+      simulation
+        .getState()
+        .run.enemies.map((enemy) => `${enemy.instanceId}:${enemy.position!.x}:${enemy.position!.z}`);
+
+    expect(positions(resumed)).toEqual(positions(live));
+
+    // And a save-and-resume must not drift from a run that never stopped.
+    for (let frame = 0; frame < 10 * 60; frame += 1) {
+      live.update(1 / 60);
+      resumed.update(1 / 60);
+    }
+    expect(positions(resumed)).toEqual(positions(live));
+  });
+});
+
+describe('content', () => {
+  /** A run where every spawn is the named enemy, so its own reach is the only one on the road. */
+  function runOf(enemyId: string) {
+    const catalog = {
+      enemies: new Map(ENEMIES.map((enemy) => [enemy.id, enemy])),
+      zones: [{ ...ZONES[0], enemyIds: [enemyId], bossEnemyId: enemyId }],
+    };
+    return new EvercastSimulation({ catalog });
+  }
+
+  it.each([
+    ['moss_slime', config.enemyAttackRange],
+    ['hollow_crow', 3],
+    ['ember_wisp', 4.6],
+  ])('walks a %s in to its authored reach', (enemyId, reach) => {
+    // Enemies come and go, so watch where they plant themselves rather than
+    // hoping any particular one is still alive at the end.
+    const simulation = runOf(enemyId);
+    const rested: number[] = [];
+    for (let frame = 0; frame < 60 * 60; frame += 1) {
+      simulation.update(1 / 60);
+      for (const enemy of simulation.getState().run.enemies) {
+        expect(enemy.attackRange).toBe(reach);
+        if (hasArrived(enemy, config.enemyAttackRange)) rested.push(enemy.position!.x);
+      }
+    }
+
+    expect(rested.length).toBeGreaterThan(0);
+    // Front slot sits on the reach itself; the ranks behind it are deeper.
+    expect(Math.min(...rested)).toBeCloseTo(reach, 9);
+    expect(Math.max(...rested)).toBeLessThan(reach + 1);
+  });
+
+  it('keeps every authored reach inside what the Evercast can answer', () => {
+    for (const enemy of ENEMIES) {
+      expect(enemy.attackRange ?? config.enemyAttackRange).toBeLessThan(config.spellRange);
+    }
+  });
+});
+
+describe('targeting', () => {
+  it('names the enemy the spell is actually aimed at', () => {
+    const simulation = new EvercastSimulation();
+    let checked = 0;
+
+    for (let frame = 0; frame < 60 * 60; frame += 1) {
+      simulation.update(1 / 60);
+      const living = simulation.getState().run.enemies.filter((enemy) => enemy.hp.cmp(0) > 0);
+      if (living.length === 0) continue;
+
+      const nearest = living.reduce((closest, enemy) =>
+        positionOf(enemy).x ** 2 + positionOf(enemy).z ** 2 <
+        positionOf(closest).x ** 2 + positionOf(closest).z ** 2
+          ? enemy
+          : closest,
+      );
+      const snapshot = simulation.getSnapshot();
+      expect(snapshot.enemyName).toBe(nearest.name);
+      // Names repeat within a wave; the health is what pins it to one enemy.
+      expect(snapshot.enemyHp.raw).toBe(quantity(nearest.hp).raw);
+      checked += 1;
+    }
+
+    expect(checked).toBeGreaterThan(0);
+  });
+});
+
+describe('boss waves', () => {
+  it('keeps a boss clear of the adds that arrive behind it', () => {
+    // Every stage a boss stage, so the boss and its four adds are on the road
+    // together. The boss reaches further than they do, which is exactly the mix
+    // the slot table's own spacing does not cover: it separates enemies that
+    // reach the same distance, and the boss comes to rest where a second-rank
+    // add would.
+    const simulation = new EvercastSimulation({ config: { bossCadence: 1 } });
+    const reach = config.enemyAttackRange;
+    let crowded = 0;
+    let bossesSeen = 0;
+
+    for (let frame = 0; frame < 120 * 60; frame += 1) {
+      simulation.update(1 / 60);
+      const enemies = simulation.getState().run.enemies;
+      if (enemies.some((enemy) => enemy.boss)) bossesSeen += 1;
+      for (let a = 0; a < enemies.length; a += 1)
+        for (let b = a + 1; b < enemies.length; b += 1) {
+          if (!hasArrived(enemies[a], reach) || !hasArrived(enemies[b], reach)) continue;
+          if (distanceSquared(enemies[a].position!, enemies[b].position!) < 0.36) crowded += 1;
+        }
+    }
+
+    expect(bossesSeen).toBeGreaterThan(0);
+    expect(crowded).toBe(0);
+  });
+});
+
+describe('telegraphs', () => {
+  it('re-announces a swing the renderer never saw', () => {
+    const simulation = new EvercastSimulation();
+    // Play until something has visibly raised a weapon.
+    let frames = 0;
+    while (!simulation.getState().run.enemies.some((enemy) => enemy.telegraphed)) {
+      simulation.update(1 / 60);
+      expect((frames += 1)).toBeLessThan(120 * 60);
+    }
+
+    // Then the tab goes away mid-swing, and catch-up advances with presentation
+    // suppressed - so the raised weapon reaches nobody. Stop short of the blow
+    // itself, or the flag would clear on its own and prove nothing.
+    const mid = simulation.getState().run.enemies.find((enemy) => enemy.telegraphed)!;
+    expect(mid.attackCooldown).toBeGreaterThan(0);
+    simulation.advance(mid.attackCooldown / 2, { presentationEvents: false });
+    simulation.drainPresentationEvents();
+    expect(simulation.getState().run.enemies.some((enemy) => enemy.telegraphed)).toBe(false);
+
+    const raised = new Set<number>();
+    let untelegraphed = 0;
+    let swings = 0;
+    for (let frame = 0; frame < 30 * 60; frame += 1) {
+      simulation.update(1 / 60);
+      for (const event of simulation.drainPresentationEvents()) {
+        if (event.type === 'enemy_windup') raised.add(event.instanceId);
+        if (event.type === 'enemy_attack') {
+          swings += 1;
+          if (!raised.has(event.instanceId)) untelegraphed += 1;
+          raised.delete(event.instanceId);
+        }
+      }
+    }
+
+    expect(swings).toBeGreaterThan(0);
+    expect(untelegraphed).toBe(0);
+  });
+
+  it('does not carry a telegraph into a session that never showed it', () => {
+    const live = runFor(20);
+    const state = live.getState();
+    for (const enemy of state.run.enemies) enemy.telegraphed = true;
+    expect(state.run.enemies.length).toBeGreaterThan(0);
+
+    const codec = new SaveCodec(config);
+    const resumed = new EvercastSimulation({
+      initialState: codec.decode(codec.encode(state)).state,
+    });
+    expect(resumed.getState().run.enemies.some((enemy) => enemy.telegraphed)).toBe(false);
   });
 });

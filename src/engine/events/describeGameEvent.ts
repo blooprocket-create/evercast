@@ -22,6 +22,8 @@ export function describeGameEvent(event: GameEvent): string {
       return `Evercast cast (${event.projectiles} projectile${event.projectiles === 1 ? '' : 's'}).`;
     case 'projectile_hit':
       return `${event.critical ? 'Critical! ' : ''}${hitLabel(event.source)} hits for ${n(event.damage)}.`;
+    case 'enemy_windup':
+      return 'An enemy raises a weapon.';
     case 'enemy_attack':
       return `An enemy hits for ${n(event.damage)}.`;
     case 'enemy_killed':

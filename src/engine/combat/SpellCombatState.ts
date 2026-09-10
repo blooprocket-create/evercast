@@ -2,6 +2,8 @@ import type { EnemyState, RunState } from '../model';
 import type { SpellMechanics } from '../spell/SpellMechanics';
 import type { CompiledSpell } from '../spell/types';
 import { compileSpell } from '../spell/SpellCompiler';
+// prettier-ignore
+import { contactPoint, convergedZ, distanceSquared, freeContactSlot, reachOf } from './Contact';
 
 export interface CombatPosition {
   x: number;
@@ -84,7 +86,18 @@ export function spawnPosition(lane: number, spacing: number, distance: number): 
   return { x: distance, z: laneZ(lane, spacing) };
 }
 
-/** Distance from the mage. Enemies only ever move along x. */
+/**
+ * Distance from the mage. The road *is* the distance axis, so this stays
+ * one-dimensional on purpose.
+ *
+ * Measuring it as a true 2D distance looks tempting and is a trap: enemies only
+ * travel along x, so a Euclidean reach `r` means stopping at `sqrt(r^2 - z^2)`,
+ * which has no solution once a lane sits further out than the reach - and it
+ * turns every threshold crossing into a quadratic solve inside the one function
+ * the whole determinism story rests on. Instead an enemy's lane offset fades to
+ * its contact slot as it closes (see `convergedZ`), so the one-dimensional
+ * reading and the real distance agree at the only moment anyone measures them.
+ */
 export function distanceToMage(enemy: EnemyState): number {
   return positionOf(enemy).x;
 }
@@ -97,8 +110,23 @@ export function distanceToMage(enemy: EnemyState): number {
  */
 export const RANGE_EPSILON = 1e-9;
 
+export { distanceSquared };
+
 export function inAttackRange(enemy: EnemyState, range: number): boolean {
   return distanceToMage(enemy) <= range + RANGE_EPSILON;
+}
+
+/**
+ * Whether an enemy has reached the spot it walked to, and may therefore swing.
+ *
+ * Routed through `inAttackRange` rather than re-implementing the comparison:
+ * `soonestRangeChange` schedules an arrival exactly when this is false, and
+ * `timeToRange` reports zero exactly when the gap is inside `RANGE_EPSILON`. If
+ * those two could ever disagree the loop would reschedule an 8e-16 second step
+ * forever, which is the failure this epsilon exists to prevent.
+ */
+export function hasArrived(enemy: EnemyState, defaultReach: number): boolean {
+  return inAttackRange(enemy, contactPoint(enemy, defaultReach).x);
 }
 
 export function anyInRange(run: RunState, range: number): boolean {
@@ -121,15 +149,16 @@ export function timeToRange(enemy: EnemyState, range: number, speed: number): nu
  */
 export function soonestRangeChange(
   run: RunState,
-  ranges: readonly number[],
+  spellRange: number,
+  defaultReach: number,
   speed: number,
 ): number {
   let soonest = Number.POSITIVE_INFINITY;
   for (const enemy of run.enemies) {
-    for (const range of ranges) {
-      if (inAttackRange(enemy, range)) continue;
-      soonest = Math.min(soonest, timeToRange(enemy, range, speed));
-    }
+    if (!inAttackRange(enemy, spellRange))
+      soonest = Math.min(soonest, timeToRange(enemy, spellRange, speed));
+    if (!hasArrived(enemy, defaultReach))
+      soonest = Math.min(soonest, timeToRange(enemy, contactPoint(enemy, defaultReach).x, speed));
   }
   return soonest;
 }
@@ -141,7 +170,7 @@ export function soonestRangeChange(
  * result depend on how the run was chunked, and floating point then disagrees
  * between a single pass, a chunked pass, and a save-and-resume.
  */
-export function advanceApproach(run: RunState, range: number, speed: number): void {
+export function advanceApproach(run: RunState, defaultReach: number, speed: number): void {
   if (speed <= 0) return;
   for (const enemy of run.enemies) {
     const position = enemy.position;
@@ -154,25 +183,30 @@ export function advanceApproach(run: RunState, range: number, speed: number): vo
       enemy.approachFrom = position.x;
       enemy.approachSince = run.elapsedSeconds;
     }
+    enemy.approachFromZ ??= position.z;
 
+    const stop = contactPoint(enemy, defaultReach);
     const travelled = speed * Math.max(0, run.elapsedSeconds - enemy.approachSince);
-    position.x = Math.max(range, enemy.approachFrom - travelled);
+    position.x = Math.max(stop.x, enemy.approachFrom - travelled);
+    position.z = convergedZ(enemy.approachFromZ, stop.z, position.x, stop.x);
   }
 }
-export function ensurePositions(run: RunState): void {
-  for (const enemy of run.enemies)
+export function ensurePositions(run: RunState, defaultReach: number): void {
+  for (const enemy of run.enemies) {
     if (!enemy.position) {
       let i = 0;
       while (run.enemies.some((e) => e.position && distanceSquared(e.position, formationSlot(i)) < 0.001))
         i++;
       enemy.position = formationSlot(i);
     }
+    // Slots are handed out at spawn so the loop can derive the same stop twice
+    // in one step. An enemy from a save written before them needs one now, or
+    // it would silently share slot zero with everything else on the road.
+    enemy.contactSlot ??= freeContactSlot(run, reachOf(enemy, defaultReach), defaultReach);
+  }
 }
 export function positionOf(enemy: EnemyState): CombatPosition {
   return enemy.position ?? formationSlot(0);
-}
-export function distanceSquared(a: CombatPosition, b: CombatPosition): number {
-  return (a.x - b.x) ** 2 + (a.z - b.z) ** 2;
 }
 export function nearby(
   run: RunState,
@@ -193,6 +227,24 @@ export function nearby(
         a.instanceId - b.instanceId,
     );
 }
+
+/** Where the mage stands. Every distance the engine measures is measured from here. */
+const MAGE_POSITION: CombatPosition = { x: 0, z: 0 };
+
+/**
+ * Living enemies, nearest the mage first.
+ *
+ * Spawn order used to be a good enough stand-in for this: everything closed at
+ * the same speed, so the oldest enemy on the road was also the nearest one. Per
+ * enemy reach broke that - a caster that stops at 4.6 keeps its place at the
+ * head of the queue while a slime walks past it to 1.1 - so distance is now
+ * measured rather than assumed. Ties break on `instanceId`, so the order is
+ * total and the same every run.
+ */
+export function livingByDistance(run: RunState, exclude?: Set<number>): EnemyState[] {
+  return nearby(run, MAGE_POSITION, Number.POSITIVE_INFINITY, exclude);
+}
+
 export function effectiveCastInterval(run: RunState, compiled?: CompiledSpell): number {
   const spell = compiled ?? compileSpell(run.spell),
     m = spell.mechanics,

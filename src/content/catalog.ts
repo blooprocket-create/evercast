@@ -44,6 +44,12 @@ export function validateCatalog(catalog: ContentCatalog): string[] {
   if (catalog.zones.length === 0) errors.push('At least one zone is required.');
   if (catalog.enemies.size === 0) errors.push('At least one enemy is required.');
 
+  for (const enemy of catalog.enemies.values()) {
+    if (enemy.attackRange !== undefined && !(enemy.attackRange > 0)) {
+      errors.push(`Enemy ${enemy.id} has a non-positive attackRange.`);
+    }
+  }
+
   for (const zone of catalog.zones) {
     if (zone.enemyIds.length === 0) errors.push(`Zone ${zone.id} has no enemies.`);
     for (const enemyId of [...zone.enemyIds, zone.bossEnemyId]) {
