@@ -2,7 +2,8 @@ import type { EnemyState, RunState } from '../model';
 import type { SpellMechanics } from '../spell/SpellMechanics';
 import type { CompiledSpell } from '../spell/types';
 import { compileSpell } from '../spell/SpellCompiler';
-import { contactPoint, convergedZ, freeContactSlot } from './Contact';
+// prettier-ignore
+import { contactPoint, convergedZ, distanceSquared, freeContactSlot, reachOf } from './Contact';
 
 export interface CombatPosition {
   x: number;
@@ -109,6 +110,8 @@ export function distanceToMage(enemy: EnemyState): number {
  */
 export const RANGE_EPSILON = 1e-9;
 
+export { distanceSquared };
+
 export function inAttackRange(enemy: EnemyState, range: number): boolean {
   return distanceToMage(enemy) <= range + RANGE_EPSILON;
 }
@@ -188,7 +191,7 @@ export function advanceApproach(run: RunState, defaultReach: number, speed: numb
     position.z = convergedZ(enemy.approachFromZ, stop.z, position.x, stop.x);
   }
 }
-export function ensurePositions(run: RunState): void {
+export function ensurePositions(run: RunState, defaultReach: number): void {
   for (const enemy of run.enemies) {
     if (!enemy.position) {
       let i = 0;
@@ -199,14 +202,11 @@ export function ensurePositions(run: RunState): void {
     // Slots are handed out at spawn so the loop can derive the same stop twice
     // in one step. An enemy from a save written before them needs one now, or
     // it would silently share slot zero with everything else on the road.
-    enemy.contactSlot ??= freeContactSlot(run);
+    enemy.contactSlot ??= freeContactSlot(run, reachOf(enemy, defaultReach), defaultReach);
   }
 }
 export function positionOf(enemy: EnemyState): CombatPosition {
   return enemy.position ?? formationSlot(0);
-}
-export function distanceSquared(a: CombatPosition, b: CombatPosition): number {
-  return (a.x - b.x) ** 2 + (a.z - b.z) ** 2;
 }
 export function nearby(
   run: RunState,

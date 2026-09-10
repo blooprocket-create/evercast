@@ -14,13 +14,13 @@ import { TimedSpellEffects } from './TimedSpellEffects';
 export class EvolvingCombat {
   readonly effects: TimedSpellEffects;
   constructor(
-    config: EngineConfig,
+    private readonly config: EngineConfig,
     private emit: (event: GameEvent) => void,
   ) {
     this.effects = new TimedSpellEffects(config, emit);
   }
   cast(run: RunState, equipment: EquipmentState): number[] {
-    ensurePositions(run);
+    ensurePositions(run, this.config.enemyAttackRange);
     const spell = compileSpell(run.spell),
       m = spell.mechanics!,
       state = combatState(run);

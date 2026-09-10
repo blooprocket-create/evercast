@@ -4,7 +4,7 @@ import { CombatSystem } from './combat/CombatSystem';
 // prettier-ignore
 import { advanceApproach, anyInRange, clearSpellCombat, effectiveCastInterval, ensurePositions, soonestRangeChange } from './combat/SpellCombatState';
 // prettier-ignore
-import { nextEnemyBeat, resolveEnemyBeats, tickEnemyCooldowns } from './combat/EnemyTurns';
+import { clearTelegraphs, nextEnemyBeat, resolveEnemyBeats, tickEnemyCooldowns } from './combat/EnemyTurns';
 import type { EngineConfig } from './config';
 import { DEFAULT_ENGINE_CONFIG } from './config';
 import { EncounterSystem } from './encounters/EncounterSystem';
@@ -61,7 +61,7 @@ export class EvercastSimulation {
     this.spellTreeSystem = new SpellTreeSystem(emit);
     this.gearSystem.syncMageStats(this.state);
     this.spellTreeSystem.syncSpell(this.state);
-    ensurePositions(this.state.run);
+    ensurePositions(this.state.run, this.config.enemyAttackRange);
   }
 
   update(deltaSeconds: number): void {
@@ -87,6 +87,7 @@ export class EvercastSimulation {
         remaining -= consumed;
       }
     } finally {
+      if (!this.recordPresentationEvents) clearTelegraphs(this.state.run);
       this.recordPresentationEvents = previousRecording;
     }
   }

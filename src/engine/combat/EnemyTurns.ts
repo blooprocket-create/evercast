@@ -72,3 +72,17 @@ export function resolveEnemyBeats(
   }
   return due;
 }
+
+/**
+ * Forgets that any swing has been announced.
+ *
+ * `telegraphed` records that the *renderer* has been told, so it is only true
+ * for as long as the presentation that saw the event is still around. Offline
+ * catch-up advances with presentation events suppressed, and a save restored
+ * into a fresh session never replayed them at all; leaving the flag set in
+ * either case lands the first swing afterwards with no wind-up in front of it.
+ * Cooldowns are untouched, so the blow still falls at exactly the same moment.
+ */
+export function clearTelegraphs(run: RunState): void {
+  for (const enemy of run.enemies) enemy.telegraphed = false;
+}

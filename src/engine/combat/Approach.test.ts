@@ -406,3 +406,83 @@ describe('targeting', () => {
     expect(checked).toBeGreaterThan(0);
   });
 });
+
+describe('boss waves', () => {
+  it('keeps a boss clear of the adds that arrive behind it', () => {
+    // Every stage a boss stage, so the boss and its four adds are on the road
+    // together. The boss reaches further than they do, which is exactly the mix
+    // the slot table's own spacing does not cover: it separates enemies that
+    // reach the same distance, and the boss comes to rest where a second-rank
+    // add would.
+    const simulation = new EvercastSimulation({ config: { bossCadence: 1 } });
+    const reach = config.enemyAttackRange;
+    let crowded = 0;
+    let bossesSeen = 0;
+
+    for (let frame = 0; frame < 120 * 60; frame += 1) {
+      simulation.update(1 / 60);
+      const enemies = simulation.getState().run.enemies;
+      if (enemies.some((enemy) => enemy.boss)) bossesSeen += 1;
+      for (let a = 0; a < enemies.length; a += 1)
+        for (let b = a + 1; b < enemies.length; b += 1) {
+          if (!hasArrived(enemies[a], reach) || !hasArrived(enemies[b], reach)) continue;
+          if (distanceSquared(enemies[a].position!, enemies[b].position!) < 0.36) crowded += 1;
+        }
+    }
+
+    expect(bossesSeen).toBeGreaterThan(0);
+    expect(crowded).toBe(0);
+  });
+});
+
+describe('telegraphs', () => {
+  it('re-announces a swing the renderer never saw', () => {
+    const simulation = new EvercastSimulation();
+    // Play until something has visibly raised a weapon.
+    let frames = 0;
+    while (!simulation.getState().run.enemies.some((enemy) => enemy.telegraphed)) {
+      simulation.update(1 / 60);
+      expect((frames += 1)).toBeLessThan(120 * 60);
+    }
+
+    // Then the tab goes away mid-swing, and catch-up advances with presentation
+    // suppressed - so the raised weapon reaches nobody. Stop short of the blow
+    // itself, or the flag would clear on its own and prove nothing.
+    const mid = simulation.getState().run.enemies.find((enemy) => enemy.telegraphed)!;
+    expect(mid.attackCooldown).toBeGreaterThan(0);
+    simulation.advance(mid.attackCooldown / 2, { presentationEvents: false });
+    simulation.drainPresentationEvents();
+    expect(simulation.getState().run.enemies.some((enemy) => enemy.telegraphed)).toBe(false);
+
+    const raised = new Set<number>();
+    let untelegraphed = 0;
+    let swings = 0;
+    for (let frame = 0; frame < 30 * 60; frame += 1) {
+      simulation.update(1 / 60);
+      for (const event of simulation.drainPresentationEvents()) {
+        if (event.type === 'enemy_windup') raised.add(event.instanceId);
+        if (event.type === 'enemy_attack') {
+          swings += 1;
+          if (!raised.has(event.instanceId)) untelegraphed += 1;
+          raised.delete(event.instanceId);
+        }
+      }
+    }
+
+    expect(swings).toBeGreaterThan(0);
+    expect(untelegraphed).toBe(0);
+  });
+
+  it('does not carry a telegraph into a session that never showed it', () => {
+    const live = runFor(20);
+    const state = live.getState();
+    for (const enemy of state.run.enemies) enemy.telegraphed = true;
+    expect(state.run.enemies.length).toBeGreaterThan(0);
+
+    const codec = new SaveCodec(config);
+    const resumed = new EvercastSimulation({
+      initialState: codec.decode(codec.encode(state)).state,
+    });
+    expect(resumed.getState().run.enemies.some((enemy) => enemy.telegraphed)).toBe(false);
+  });
+});

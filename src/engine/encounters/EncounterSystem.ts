@@ -64,6 +64,7 @@ export class EncounterSystem {
           run.mode === 'push' ? 1 : 2,
         );
     const definition = requireEnemy(this.catalog, enemyId);
+    const reach = definition.attackRange ?? this.config.enemyAttackRange;
     const stageExponent = Math.max(0, encounter.stage - 1);
     const worldTierMultiplier = big(1.75).pow(resolvedZone.worldTier);
     const bossHealthMultiplier = isBoss ? big(4.5) : big(1);
@@ -93,9 +94,9 @@ export class EncounterSystem {
       attackCooldown: definition.attackInterval,
       // Resolved here rather than left undefined so a live enemy always carries
       // a concrete reach, and the fallback stays a pure legacy-save path.
-      attackRange: definition.attackRange ?? this.config.enemyAttackRange,
+      attackRange: reach,
       // Claimed before the push, so the scan cannot see this enemy itself.
-      contactSlot: freeContactSlot(run),
+      contactSlot: freeContactSlot(run, reach, this.config.enemyAttackRange),
     };
 
     // Which lane it comes down is deterministic but unpredictable, so a wave
@@ -115,7 +116,7 @@ export class EncounterSystem {
     enemy.approachSince = run.elapsedSeconds;
 
     run.enemies.push(enemy);
-    ensurePositions(run);
+    ensurePositions(run, this.config.enemyAttackRange);
     encounter.spawnedEnemies += 1;
     encounter.spawnCooldown = encounter.spawnInterval;
     return enemy;

@@ -25,6 +25,12 @@ export const CONTACT_SLOTS: readonly { xPad: number; z: number }[] = [
 /** How far behind the slots an overflow rank waits. */
 const RANK_DEPTH = 0.7;
 
+/** Clear space two resting bodies need between them; they are ~0.3 in radius. */
+const MIN_CONTACT_GAP = 0.6;
+
+/** How far the search will queue enemies back before it gives up and stacks them. */
+const SLOT_SEARCH_LIMIT = CONTACT_SLOTS.length * 4;
+
 /**
  * How much of the final approach an enemy spends angling out of its lane into
  * its slot. A distance rather than a fixed x, so a caster that stops at 4.6
@@ -47,20 +53,41 @@ export function reachOf(enemy: EnemyState, defaultReach: number): number {
  * would part ways with a single pass.
  */
 export function contactPoint(enemy: EnemyState, defaultReach: number): CombatPosition {
-  const index = enemy.contactSlot ?? 0;
-  const slot = CONTACT_SLOTS[index % CONTACT_SLOTS.length];
-  const rank = Math.floor(index / CONTACT_SLOTS.length);
-  return { x: reachOf(enemy, defaultReach) + slot.xPad + rank * RANK_DEPTH, z: slot.z };
+  return slotPoint(enemy.contactSlot ?? 0, reachOf(enemy, defaultReach));
 }
 
-/** The lowest slot no living enemy is holding, so a kill frees up the front. */
-export function freeContactSlot(run: RunState): number {
-  const taken = new Set(
-    run.enemies.filter((e) => e.hp.cmp(0) > 0 && e.contactSlot !== undefined).map((e) => e.contactSlot),
-  );
-  let index = 0;
-  while (taken.has(index)) index += 1;
-  return index;
+/** Where a slot puts an enemy that reaches this far. */
+function slotPoint(index: number, reach: number): CombatPosition {
+  const slot = CONTACT_SLOTS[index % CONTACT_SLOTS.length];
+  const rank = Math.floor(index / CONTACT_SLOTS.length);
+  return { x: reach + slot.xPad + rank * RANK_DEPTH, z: slot.z };
+}
+
+export function distanceSquared(a: CombatPosition, b: CombatPosition): number {
+  return (a.x - b.x) ** 2 + (a.z - b.z) ** 2;
+}
+
+/**
+ * The first slot whose resting place clears everything already standing there.
+ *
+ * It compares resolved points rather than slot indices, which is what makes it
+ * hold for a wave of mixed reach. The table's own spacing only separates
+ * enemies that reach the same distance: a boss reaching 1.6 comes to rest 0.32
+ * from where a second-rank add reaching 1.1 would, so on a boss stage the two
+ * would stand inside each other. Slots free on death, so a kill opens the front
+ * up again.
+ */
+export function freeContactSlot(run: RunState, reach: number, defaultReach: number): number {
+  const taken = run.enemies
+    .filter((e) => e.hp.cmp(0) > 0 && e.contactSlot !== undefined)
+    .map((e) => contactPoint(e, defaultReach));
+  for (let index = 0; index < SLOT_SEARCH_LIMIT; index += 1) {
+    const point = slotPoint(index, reach);
+    if (taken.every((other) => distanceSquared(point, other) >= MIN_CONTACT_GAP ** 2)) return index;
+  }
+  // Further back than anything else on the road. `maxAliveEnemies` would have to
+  // grow several times over before a wave could exhaust the search.
+  return SLOT_SEARCH_LIMIT;
 }
 
 /**
