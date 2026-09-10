@@ -2,6 +2,7 @@ import { DEFAULT_ENGINE_CONFIG } from '../engine/config';
 import { EvercastSimulation } from '../engine/EvercastSimulation';
 import { OfflineProgressor, type OfflineSummary } from '../engine/offline/OfflineProgressor';
 import type { EngineCommand } from '../engine/types';
+import { AudioEngine } from '../game/audio/AudioEngine';
 import { BrowserSaveStore } from './BrowserSaveStore';
 import { SnapshotStore } from './SnapshotStore';
 import { UiSettingsStore } from './UiSettingsStore';
@@ -25,6 +26,17 @@ export const snapshotStore = new SnapshotStore(simulation.getSnapshot());
 export const uiSettings = new UiSettingsStore(
   typeof localStorage === 'undefined' ? null : localStorage,
 );
+
+/**
+ * Sound outlives the scene. Effect quality rebuilds `EvercastScene` and with it
+ * the game loop, and an AudioContext torn down alongside it would cut the music
+ * mid-bar and then need another click to come back - so the engine is owned
+ * here, started once, and bound straight to the settings it belongs to.
+ */
+export const audio = new AudioEngine();
+audio.setMix(uiSettings.getSettings().audio);
+uiSettings.subscribe(() => audio.setMix(uiSettings.getSettings().audio));
+audio.start();
 
 export function saveGame(): void {
   saveStore.save(simulation.getState());

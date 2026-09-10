@@ -2,6 +2,7 @@ import {
   ArcRotateCamera,
   Color3,
   Color4,
+  ColorCurves,
   DirectionalLight,
   DefaultRenderingPipeline,
   DepthOfFieldEffectBlurLevel,
@@ -9,6 +10,7 @@ import {
   GlowLayer,
   HemisphericLight,
   ImageProcessingConfiguration,
+  Material,
   PBRMaterial,
   Scene,
   ShadowGenerator,
@@ -29,12 +31,33 @@ import { CombatFxPresenter } from './vfx/CombatFxPresenter';
 import { EnemyHealthBars } from './vfx/EnemyHealthBars';
 import { SpellVfxPresenter } from './vfx/SpellVfxPresenter';
 import { castDuration } from './vfx/CombatVfxPlan';
+import { BossTracker } from './BossTracker';
+import { CombatFeel } from './render/CombatFeel';
 
 /** Roughly head height above an enemy's feet. */
 const HEALTH_BAR_OFFSET = new Vector3(0, 1.55, 0);
 
 /** Matches DEFAULT_UI_SETTINGS.display.depthOfField; the store is the authority. */
 const DEFAULT_DEPTH_OF_FIELD = 0.75;
+
+/**
+ * Sky, sun, rim, and up to two landmark lanterns already exceed Babylon's
+ * default of four lights per material, and the excess is dropped silently -
+ * so an actor walking past a shrine would lose its rim light with no error.
+ */
+const LIGHTS_PER_MATERIAL = 6;
+
+/**
+ * The finish, per quality tier. Measured at about 5% of median frame rate on a
+ * mid-range desktop for the whole stack, which is cheap - but "low" exists for
+ * machines where it is not, so the tier drops the effects that are pure polish
+ * and keeps bloom, which is doing structural work for the spell VFX.
+ */
+const FINISH = {
+  low: { samples: 1, bloomKernel: 32, grain: 0, sharpen: 0, aberration: 0 },
+  medium: { samples: 4, bloomKernel: 48, grain: 4.5, sharpen: 0.22, aberration: 2.5 },
+  high: { samples: 4, bloomKernel: 64, grain: 5.5, sharpen: 0.3, aberration: 3.2 },
+} as const;
 
 export class EvercastScene {
   private readonly engine: Engine;
@@ -47,6 +70,8 @@ export class EvercastScene {
   private readonly retiring: { id: number; actor: ActorVisual; remaining: number }[] = [];
   private readonly presentation: DefaultRenderingPipeline;
   private readonly healthBars: EnemyHealthBars;
+  private readonly feel: CombatFeel;
+  private readonly bosses = new BossTracker();
   readonly vfx: SpellVfxPresenter;
   private readonly transientAnchors = new Map<number, { position: Vector3; remaining: number }>();
   private gearSignature = '';
@@ -75,11 +100,34 @@ export class EvercastScene {
     camera.maxZ = 180;
     camera.inputs.clear();
 
+    const finish = FINISH[quality];
     const presentation = new DefaultRenderingPipeline('environment finish', true, this.scene, [camera]);
     this.presentation = presentation;
-    presentation.samples = 4;
+    presentation.samples = finish.samples;
     presentation.fxaaEnabled = true;
-    presentation.bloomEnabled = false;
+
+    // Bloom is what makes the spell work read as light rather than as coloured
+    // geometry, so it is threshold-led: only the emissive VFX and the brightest
+    // sky cross the line, and the diorama itself stays crisp underneath it.
+    presentation.bloomEnabled = true;
+    presentation.bloomThreshold = 0.7;
+    presentation.bloomWeight = 0.45;
+    presentation.bloomKernel = finish.bloomKernel;
+    presentation.bloomScale = 0.6;
+
+    // A little edge definition back after FXAA and the depth-of-field blur,
+    // which is what keeps low-poly geometry reading as deliberate rather than
+    // soft. Grain and aberration are almost subliminal at rest; CombatFeel
+    // drives the aberration up on impact.
+    presentation.sharpenEnabled = finish.sharpen > 0;
+    presentation.sharpen.edgeAmount = finish.sharpen;
+    presentation.sharpen.colorAmount = 1;
+    presentation.grainEnabled = finish.grain > 0;
+    presentation.grain.intensity = finish.grain;
+    presentation.grain.animated = true;
+    presentation.chromaticAberrationEnabled = finish.aberration > 0;
+    presentation.chromaticAberration.aberrationAmount = finish.aberration;
+    presentation.chromaticAberration.radialIntensity = 0.8;
 
     // Depth of field holds the combat lane sharp and softens the far hills and
     // the near verge, which is what makes the diorama read as a diorama.
@@ -102,6 +150,25 @@ export class EvercastScene {
     this.scene.imageProcessingConfiguration.vignetteWeight = 1.25;
     this.scene.imageProcessingConfiguration.vignetteColor = new Color4(0.04, 0.055, 0.045, 0);
 
+    // The film grade: warm highlights against cool shadows. It is the cheapest
+    // thing in the whole pipeline that reads as "graded" rather than "rendered",
+    // and it costs no texture - a LUT would be another binary asset.
+    const grade = new ColorCurves();
+    grade.globalSaturation = 8;
+    grade.highlightsHue = 38;
+    grade.highlightsDensity = 22;
+    grade.highlightsSaturation = -6;
+    grade.shadowsHue = 222;
+    grade.shadowsDensity = 34;
+    grade.shadowsSaturation = 16;
+    this.scene.imageProcessingConfiguration.colorCurves = grade;
+    this.scene.imageProcessingConfiguration.colorCurvesEnabled = true;
+
+    this.scene.onNewMaterialAddedObservable.add((material: Material) => {
+      if (material instanceof PBRMaterial || material instanceof StandardMaterial)
+        material.maxSimultaneousLights = LIGHTS_PER_MATERIAL;
+    });
+
     const skyLight = new HemisphericLight('sky', new Vector3(0, 1, 0), this.scene);
     skyLight.intensity = 0.65;
     const sun = new DirectionalLight('sun', new Vector3(0.5, -1, 0.45), this.scene);
@@ -116,6 +183,16 @@ export class EvercastScene {
     this.shadows.bias = 0.0005;
     this.shadows.normalBias = 0.04;
     this.shadows.setDarkness(0.22);
+
+    // The rim: a cool backlight from behind and above the lane, opposite the
+    // sun. It contributes almost nothing to overall exposure and everything to
+    // the silhouette, which is the whole trick behind the stylised look - the
+    // characters are separated from the background by a line of light rather
+    // than by an outline drawn on top of them.
+    const rim = new DirectionalLight('rim', new Vector3(-0.38, -0.42, -0.86), this.scene);
+    rim.intensity = 1.35;
+    rim.diffuse = new Color3(0.56, 0.71, 1);
+    rim.specular = new Color3(0.82, 0.89, 1);
 
     const glow = new GlowLayer('glow', this.scene, { blurKernelSize: 24 });
     glow.intensity = 0.32;
@@ -135,7 +212,12 @@ export class EvercastScene {
     this.mage.root.rotation.y = Math.PI * 0.68;
     const pool = new VfxPool(this.scene, quality);
     this.healthBars = new EnemyHealthBars(this.scene);
-    this.vfx = new SpellVfxPresenter(pool, new CombatFxPresenter(pool, this.scene, camera), {
+    this.feel = new CombatFeel({
+      camera,
+      pipeline: presentation,
+      imageProcessing: this.scene.imageProcessingConfiguration,
+    });
+    this.vfx = new SpellVfxPresenter(pool, new CombatFxPresenter(pool, this.scene), {
       staff: () => this.mage.socketPosition('socket_spell', new Vector3(0.55, 1.65, 0)),
       mage: () => this.mage.root.position.add(new Vector3(0, 1, 0)),
       target: (id) =>
@@ -144,13 +226,24 @@ export class EvercastScene {
       actor: (id) => this.enemyActor(id),
     });
 
+    // A handle for tuning the look from the console - toggling an effect off
+    // and back on is the only honest way to tell whether it is earning its
+    // place. Alongside the existing DEV-only biome key, and stripped in a
+    // production build.
+    if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).evercastScene = this;
     this.resize();
     this.engine.runRenderLoop(() => this.scene.render());
     window.addEventListener('resize', this.resize);
     window.addEventListener('keydown', this.keydown);
   }
 
-  sync(snapshot: SimulationSnapshot, deltaSeconds: number, events: readonly GameEvent[]): void {
+  sync(snapshot: SimulationSnapshot, realDeltaSeconds: number, events: readonly GameEvent[]): void {
+    this.bosses.note(events);
+    this.feel.ingest(events, this.bosses.has);
+    // Everything below runs on presentation time, which hit-stop can freeze or
+    // slow. The simulation has already advanced on the real delta, so nothing
+    // here can change what is true - only when it is drawn.
+    const deltaSeconds = this.feel.update(realDeltaSeconds);
     const walking = snapshot.phase === 'travel';
     this.syncJourney(snapshot, deltaSeconds, walking);
     const gearSignature = snapshot.gear.map((g) => `${g.slot}:${g.evolutionTier}`).join('|');
@@ -224,6 +317,7 @@ export class EvercastScene {
     }
     this.vfx.update(deltaSeconds);
     this.vfx.ingest(snapshot, events);
+    this.bosses.forget(events);
     if (this.mageRecovery > 0) {
       this.mageRecovery -= deltaSeconds;
       if (this.mageRecovery <= 0) this.mage.revive(walking);
@@ -251,6 +345,8 @@ export class EvercastScene {
   }
 
   dispose(): void {
+    this.feel.dispose();
+    this.bosses.clear();
     window.removeEventListener('resize', this.resize);
     window.removeEventListener('keydown', this.keydown);
     this.vfx.dispose();
