@@ -2,6 +2,7 @@ import type { EnemyState, RunState } from '../model';
 import type { SpellMechanics } from '../spell/SpellMechanics';
 import type { CompiledSpell } from '../spell/types';
 import { compileSpell } from '../spell/SpellCompiler';
+import { contactPoint, convergedZ, freeContactSlot } from './Contact';
 
 export interface CombatPosition {
   x: number;
@@ -84,7 +85,18 @@ export function spawnPosition(lane: number, spacing: number, distance: number): 
   return { x: distance, z: laneZ(lane, spacing) };
 }
 
-/** Distance from the mage. Enemies only ever move along x. */
+/**
+ * Distance from the mage. The road *is* the distance axis, so this stays
+ * one-dimensional on purpose.
+ *
+ * Measuring it as a true 2D distance looks tempting and is a trap: enemies only
+ * travel along x, so a Euclidean reach `r` means stopping at `sqrt(r^2 - z^2)`,
+ * which has no solution once a lane sits further out than the reach - and it
+ * turns every threshold crossing into a quadratic solve inside the one function
+ * the whole determinism story rests on. Instead an enemy's lane offset fades to
+ * its contact slot as it closes (see `convergedZ`), so the one-dimensional
+ * reading and the real distance agree at the only moment anyone measures them.
+ */
 export function distanceToMage(enemy: EnemyState): number {
   return positionOf(enemy).x;
 }
@@ -99,6 +111,19 @@ export const RANGE_EPSILON = 1e-9;
 
 export function inAttackRange(enemy: EnemyState, range: number): boolean {
   return distanceToMage(enemy) <= range + RANGE_EPSILON;
+}
+
+/**
+ * Whether an enemy has reached the spot it walked to, and may therefore swing.
+ *
+ * Routed through `inAttackRange` rather than re-implementing the comparison:
+ * `soonestRangeChange` schedules an arrival exactly when this is false, and
+ * `timeToRange` reports zero exactly when the gap is inside `RANGE_EPSILON`. If
+ * those two could ever disagree the loop would reschedule an 8e-16 second step
+ * forever, which is the failure this epsilon exists to prevent.
+ */
+export function hasArrived(enemy: EnemyState, defaultReach: number): boolean {
+  return inAttackRange(enemy, contactPoint(enemy, defaultReach).x);
 }
 
 export function anyInRange(run: RunState, range: number): boolean {
@@ -121,15 +146,16 @@ export function timeToRange(enemy: EnemyState, range: number, speed: number): nu
  */
 export function soonestRangeChange(
   run: RunState,
-  ranges: readonly number[],
+  spellRange: number,
+  defaultReach: number,
   speed: number,
 ): number {
   let soonest = Number.POSITIVE_INFINITY;
   for (const enemy of run.enemies) {
-    for (const range of ranges) {
-      if (inAttackRange(enemy, range)) continue;
-      soonest = Math.min(soonest, timeToRange(enemy, range, speed));
-    }
+    if (!inAttackRange(enemy, spellRange))
+      soonest = Math.min(soonest, timeToRange(enemy, spellRange, speed));
+    if (!hasArrived(enemy, defaultReach))
+      soonest = Math.min(soonest, timeToRange(enemy, contactPoint(enemy, defaultReach).x, speed));
   }
   return soonest;
 }
@@ -141,7 +167,7 @@ export function soonestRangeChange(
  * result depend on how the run was chunked, and floating point then disagrees
  * between a single pass, a chunked pass, and a save-and-resume.
  */
-export function advanceApproach(run: RunState, range: number, speed: number): void {
+export function advanceApproach(run: RunState, defaultReach: number, speed: number): void {
   if (speed <= 0) return;
   for (const enemy of run.enemies) {
     const position = enemy.position;
@@ -154,19 +180,27 @@ export function advanceApproach(run: RunState, range: number, speed: number): vo
       enemy.approachFrom = position.x;
       enemy.approachSince = run.elapsedSeconds;
     }
+    enemy.approachFromZ ??= position.z;
 
+    const stop = contactPoint(enemy, defaultReach);
     const travelled = speed * Math.max(0, run.elapsedSeconds - enemy.approachSince);
-    position.x = Math.max(range, enemy.approachFrom - travelled);
+    position.x = Math.max(stop.x, enemy.approachFrom - travelled);
+    position.z = convergedZ(enemy.approachFromZ, stop.z, position.x, stop.x);
   }
 }
 export function ensurePositions(run: RunState): void {
-  for (const enemy of run.enemies)
+  for (const enemy of run.enemies) {
     if (!enemy.position) {
       let i = 0;
       while (run.enemies.some((e) => e.position && distanceSquared(e.position, formationSlot(i)) < 0.001))
         i++;
       enemy.position = formationSlot(i);
     }
+    // Slots are handed out at spawn so the loop can derive the same stop twice
+    // in one step. An enemy from a save written before them needs one now, or
+    // it would silently share slot zero with everything else on the road.
+    enemy.contactSlot ??= freeContactSlot(run);
+  }
 }
 export function positionOf(enemy: EnemyState): CombatPosition {
   return enemy.position ?? formationSlot(0);

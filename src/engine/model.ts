@@ -26,11 +26,25 @@ export interface EnemyState {
   attackInterval: number;
   attackCooldown: number;
   /**
+   * How close this enemy plants itself, copied from its definition at spawn the
+   * way `attackInterval` is. Absent on a save written before per-enemy reach,
+   * which falls back to the engine default.
+   */
+  attackRange?: number;
+  /** Which spot around the mage it walked to, so a wave presses in rather than
+   * stacking six bodies on one coordinate. */
+  contactSlot?: number;
+  /** Whether its next swing has already been telegraphed to the renderer. */
+  telegraphed?: boolean;
+  /**
    * Where the enemy entered from, and the clock reading when it did. Position
    * is derived from these rather than accumulated, so a run simulated in one
    * pass, in chunks, or resumed from a save lands on identical coordinates.
+   * `approachFromZ` is the lane it entered by; its z blends from there to its
+   * contact slot as it closes.
    */
   approachFrom?: number;
+  approachFromZ?: number;
   approachSince?: number;
 }
 

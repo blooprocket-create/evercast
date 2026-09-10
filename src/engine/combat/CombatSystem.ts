@@ -188,6 +188,9 @@ export class CombatSystem {
     const controlDelaySeconds = enemy.hp.cmp(0) > 0 ? spell.controlDelaySeconds : 0;
     if (spell.controlDelaySeconds > 0 && enemy.hp.cmp(0) > 0) {
       enemy.attackCooldown += spell.controlDelaySeconds;
+      // The swing it had already raised is no longer imminent, so let it
+      // telegraph again rather than land the next one unannounced.
+      enemy.telegraphed = false;
     }
     if (spell.leechFraction > 0 && actualDamage.cmp(0) > 0) {
       const healed = actualDamage.mul(spell.leechFraction);

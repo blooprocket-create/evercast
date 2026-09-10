@@ -53,6 +53,8 @@ export const ENEMIES: readonly EnemyDefinition[] = [
     baseAttack: '1.8',
     attackGrowth: 1.09,
     attackInterval: 1.55,
+    // Harries from above and never lands: about two character heights out.
+    attackRange: 3,
     modelKey: 'enemy/hollow-crow',
     tags: ['flying'],
   },
@@ -64,6 +66,8 @@ export const ENEMIES: readonly EnemyDefinition[] = [
     baseAttack: '2.2',
     attackGrowth: 1.09,
     attackInterval: 1.9,
+    // A larger body and a guardian's polearm: a visibly wider stance.
+    attackRange: 1.6,
     modelKey: 'boss/road-warden',
     tags: ['boss', 'guardian'],
   },
@@ -86,6 +90,9 @@ export const ENEMIES: readonly EnemyDefinition[] = [
     baseAttack: '2',
     attackGrowth: 1.09,
     attackInterval: 1.45,
+    // Unmistakably a caster, and still well inside the Evercast's own reach,
+    // so the mage always opens fire first.
+    attackRange: 4.6,
     modelKey: 'enemy/ember-wisp',
     tags: ['elemental'],
   },

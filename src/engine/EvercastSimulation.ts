@@ -2,7 +2,9 @@ import { createDefaultCatalog, validateCatalog } from '../content/catalog';
 import type { ContentCatalog } from '../content/types';
 import { CombatSystem } from './combat/CombatSystem';
 // prettier-ignore
-import { advanceApproach, anyInRange, clearSpellCombat, effectiveCastInterval, inAttackRange, soonestRangeChange } from './combat/SpellCombatState';
+import { advanceApproach, anyInRange, clearSpellCombat, effectiveCastInterval, ensurePositions, soonestRangeChange } from './combat/SpellCombatState';
+// prettier-ignore
+import { nextEnemyBeat, resolveEnemyBeats, tickEnemyCooldowns } from './combat/EnemyTurns';
 import type { EngineConfig } from './config';
 import { DEFAULT_ENGINE_CONFIG } from './config';
 import { EncounterSystem } from './encounters/EncounterSystem';
@@ -59,6 +61,7 @@ export class EvercastSimulation {
     this.spellTreeSystem = new SpellTreeSystem(emit);
     this.gearSystem.syncMageStats(this.state);
     this.spellTreeSystem.syncSpell(this.state);
+    ensurePositions(this.state.run);
   }
 
   update(deltaSeconds: number): void {
@@ -194,16 +197,11 @@ export class EvercastSimulation {
     const nextCast = anyInRange(run, this.config.spellRange)
       ? Math.max(0, run.castCooldown)
       : Number.POSITIVE_INFINITY;
-    const nextAttack = run.enemies.reduce(
-      (soonest, enemy) =>
-        inAttackRange(enemy, reach) ? Math.min(soonest, Math.max(0, enemy.attackCooldown)) : soonest,
-      Number.POSITIVE_INFINITY,
-    );
     const nextAction = Math.min(
       nextSpawn,
       nextCast,
-      nextAttack,
-      soonestRangeChange(run, [reach, this.config.spellRange], this.config.enemyApproachSpeed),
+      nextEnemyBeat(run, this.config),
+      soonestRangeChange(run, this.config.spellRange, reach, this.config.enemyApproachSpeed),
       this.combatSystem.evolving.effects.nextDelay(run),
     );
 
@@ -219,7 +217,7 @@ export class EvercastSimulation {
     // pass and a save-and-resume in agreement.
     if (anyInRange(run, this.config.spellRange)) run.castCooldown -= consumed;
     // An enemy still closing is not winding up a swing.
-    for (const enemy of run.enemies) if (inAttackRange(enemy, reach)) enemy.attackCooldown -= consumed;
+    tickEnemyCooldowns(run, this.config, consumed);
     if (canSpawn) encounter.spawnCooldown -= consumed;
     advanceApproach(run, reach, this.config.enemyApproachSpeed);
 
@@ -244,10 +242,10 @@ export class EvercastSimulation {
       return consumed || Math.min(available, EPSILON);
     }
 
-    for (const enemy of [...run.enemies]) {
-      if (enemy.attackCooldown > EPSILON || !inAttackRange(enemy, reach)) continue;
+    for (const enemy of resolveEnemyBeats(run, this.config, (event) => this.eventBus.emit(event))) {
       const result = this.combatSystem.enemyAttack(run, enemy);
       enemy.attackCooldown += enemy.attackInterval;
+      enemy.telegraphed = false;
       if (result.mageDefeated) {
         this.progressionSystem.handleDefeat(this.state);
         break;
@@ -286,7 +284,9 @@ export class EvercastSimulation {
   }
 
   private captureEvent(event: GameEvent): void {
-    this.lastEvent = event;
+    // A telegraph is something for the renderer to animate, not a line of
+    // narration - it would otherwise displace the blow it precedes.
+    if (event.type !== 'enemy_windup') this.lastEvent = event;
     if (this.recordPresentationEvents) this.presentationEvents.push(event);
   }
 }

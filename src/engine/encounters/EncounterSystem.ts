@@ -4,7 +4,8 @@ import type { EngineConfig } from '../config';
 import type { EncounterState, EnemyState, RunState } from '../model';
 import { big } from '../numbers';
 import { chooseDeterministic } from '../random/DeterministicRandom';
-import { ensurePositions, spawnPosition } from '../combat/SpellCombatState';
+import { ensurePositions, laneZ, spawnPosition } from '../combat/SpellCombatState';
+import { freeContactSlot } from '../combat/Contact';
 
 const LANES = [0, 1, 2, 3, 4, 5];
 
@@ -90,6 +91,11 @@ export class EncounterSystem {
       attackDamage,
       attackInterval: definition.attackInterval,
       attackCooldown: definition.attackInterval,
+      // Resolved here rather than left undefined so a live enemy always carries
+      // a concrete reach, and the fallback stays a pure legacy-save path.
+      attackRange: definition.attackRange ?? this.config.enemyAttackRange,
+      // Claimed before the push, so the scan cannot see this enemy itself.
+      contactSlot: freeContactSlot(run),
     };
 
     // Which lane it comes down is deterministic but unpredictable, so a wave
@@ -105,6 +111,7 @@ export class EncounterSystem {
     const from = isBoss ? this.config.enemySpawnDistance * 0.72 : this.config.enemySpawnDistance;
     enemy.position = spawnPosition(lane, this.config.laneSpacing, from);
     enemy.approachFrom = from;
+    enemy.approachFromZ = laneZ(lane, this.config.laneSpacing);
     enemy.approachSince = run.elapsedSeconds;
 
     run.enemies.push(enemy);
