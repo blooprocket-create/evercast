@@ -6,6 +6,7 @@ import { hasArrived, inAttackRange, laneZ, positionOf, soonestRangeChange, timeT
 import { contactPoint } from './Contact';
 import { advanceApproach, distanceSquared } from './SpellCombatState';
 import { SaveCodec } from '../save/SaveCodec';
+import { quantity } from '../numbers';
 import { ENEMIES } from '../../content/enemies';
 import { ZONES } from '../../content/zones';
 import type { EnemyState } from '../model';
@@ -376,5 +377,32 @@ describe('content', () => {
     for (const enemy of ENEMIES) {
       expect(enemy.attackRange ?? config.enemyAttackRange).toBeLessThan(config.spellRange);
     }
+  });
+});
+
+describe('targeting', () => {
+  it('names the enemy the spell is actually aimed at', () => {
+    const simulation = new EvercastSimulation();
+    let checked = 0;
+
+    for (let frame = 0; frame < 60 * 60; frame += 1) {
+      simulation.update(1 / 60);
+      const living = simulation.getState().run.enemies.filter((enemy) => enemy.hp.cmp(0) > 0);
+      if (living.length === 0) continue;
+
+      const nearest = living.reduce((closest, enemy) =>
+        positionOf(enemy).x ** 2 + positionOf(enemy).z ** 2 <
+        positionOf(closest).x ** 2 + positionOf(closest).z ** 2
+          ? enemy
+          : closest,
+      );
+      const snapshot = simulation.getSnapshot();
+      expect(snapshot.enemyName).toBe(nearest.name);
+      // Names repeat within a wave; the health is what pins it to one enemy.
+      expect(snapshot.enemyHp.raw).toBe(quantity(nearest.hp).raw);
+      checked += 1;
+    }
+
+    expect(checked).toBeGreaterThan(0);
   });
 });

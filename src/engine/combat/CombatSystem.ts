@@ -9,6 +9,7 @@ import { resolveEffects } from '../spell/EffectResolver';
 import { compileSpell } from '../spell/SpellCompiler';
 import type { CompiledSpell } from '../spell/types';
 import { EvolvingCombat } from './EvolvingCombat';
+import { livingByDistance } from './SpellCombatState';
 
 export interface CombatResult {
   killedEnemyIds: number[];
@@ -249,11 +250,13 @@ export class CombatSystem {
 }
 
 function firstLivingEnemy(run: RunState): EnemyState | undefined {
-  return run.enemies.find((enemy) => enemy.hp.cmp(0) > 0);
+  return livingByDistance(run)[0];
 }
 
 function livingEnemiesExcluding(run: RunState, excluded: ReadonlySet<number>): EnemyState[] {
-  return run.enemies.filter((enemy) => enemy.hp.cmp(0) > 0 && !excluded.has(enemy.instanceId));
+  // Nearest first, so pierce, chain and splash spend themselves on the enemies
+  // closest to the mage rather than on whatever spawned earliest.
+  return livingByDistance(run, new Set(excluded));
 }
 
 function decimalMaxZero(value: ReturnType<typeof big>) {

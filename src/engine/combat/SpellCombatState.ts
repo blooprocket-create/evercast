@@ -227,6 +227,24 @@ export function nearby(
         a.instanceId - b.instanceId,
     );
 }
+
+/** Where the mage stands. Every distance the engine measures is measured from here. */
+const MAGE_POSITION: CombatPosition = { x: 0, z: 0 };
+
+/**
+ * Living enemies, nearest the mage first.
+ *
+ * Spawn order used to be a good enough stand-in for this: everything closed at
+ * the same speed, so the oldest enemy on the road was also the nearest one. Per
+ * enemy reach broke that - a caster that stops at 4.6 keeps its place at the
+ * head of the queue while a slime walks past it to 1.1 - so distance is now
+ * measured rather than assumed. Ties break on `instanceId`, so the order is
+ * total and the same every run.
+ */
+export function livingByDistance(run: RunState, exclude?: Set<number>): EnemyState[] {
+  return nearby(run, MAGE_POSITION, Number.POSITIVE_INFINITY, exclude);
+}
+
 export function effectiveCastInterval(run: RunState, compiled?: CompiledSpell): number {
   const spell = compiled ?? compileSpell(run.spell),
     m = spell.mechanics,

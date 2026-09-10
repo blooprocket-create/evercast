@@ -191,17 +191,18 @@ describe('Twin Cast and timed effects', () => {
 describe('Piercing route', () => {
   it('requires a living enemy behind the primary in the line, otherwise halves the next interval', () => {
     const f = fixture({ route: 'piercing' }, [
-      { x: 2.4, z: 0 },
-      { x: 1, z: 0 },
-      { x: 3.6, z: 1 },
-      { x: 4.8, z: 0 },
+      { x: 1, z: 0 }, // the nearest, so the primary
+      { x: 3.6, z: 0 }, // behind it in the line
+      { x: 2.4, z: 1 }, // nearer than that, but off the line
     ]);
-    expect(f.cast().map((h) => h.instanceId)).toEqual([1, 4]);
+    // Straight through the one it is lined up with, not the one that happens
+    // to be closer.
+    expect(f.cast().map((h) => h.instanceId)).toEqual([1, 2]);
     expect(effectiveCastInterval(f.run)).toBe(1);
-    f.run.enemies[3].hp = big(0);
+    f.run.enemies[1].hp = big(0);
     expect(f.cast().map((h) => h.instanceId)).toEqual([1]);
     expect(effectiveCastInterval(f.run)).toBe(0.5);
-    f.run.enemies[3].hp = big(10000);
+    f.run.enemies[1].hp = big(10000);
     f.cast();
     expect(effectiveCastInterval(f.run)).toBe(1);
   });
@@ -362,4 +363,53 @@ describe('Charged route', () => {
       expect(gains).toEqual([1, 2, 3]);
     },
   );
+});
+
+describe('Targeting', () => {
+  it('answers the nearest enemy rather than the one that spawned first', () => {
+    // Exactly what per-enemy reach creates: a caster that arrived first and
+    // stopped a long way out, with a melee enemy that walked past it since.
+    const f = fixture({}, [
+      { x: 4.6, z: 0 },
+      { x: 1.1, z: 0 },
+    ]);
+    expect(f.cast().map((h) => h.instanceId)).toEqual([2]);
+  });
+
+  it('measures distance across the road, not just along it', () => {
+    // The flanker is further along the road but standing off to one side, so
+    // it is the further of the two.
+    const f = fixture({}, [
+      { x: 1.2, z: 0 },
+      { x: 1.15, z: -0.66 },
+    ]);
+    expect(f.cast().map((h) => h.instanceId)).toEqual([1]);
+  });
+
+  it('sends the twin route at the two nearest, in order', () => {
+    const f = fixture({ route: 'twin' }, [
+      { x: 4.6, z: 0 },
+      { x: 2.2, z: 0 },
+      { x: 1.1, z: 0 },
+    ]);
+    expect(f.cast().map((h) => h.instanceId)).toEqual([3, 2]);
+  });
+
+  it('breaks a tie on instance id, so the order is the same every run', () => {
+    const f = fixture({ route: 'twin' }, [
+      { x: 2, z: 0 },
+      { x: 2, z: 0 },
+    ]);
+    expect(f.cast().map((h) => h.instanceId)).toEqual([1, 2]);
+  });
+
+  it('moves on to whatever is closest once the nearest dies', () => {
+    const f = fixture({}, [
+      { x: 3, z: 0 },
+      { x: 1, z: 0 },
+    ]);
+    expect(f.cast().map((h) => h.instanceId)).toEqual([2]);
+    f.run.enemies[1].hp = big(0);
+    expect(f.cast().map((h) => h.instanceId)).toEqual([1]);
+  });
 });

@@ -6,7 +6,8 @@ import type { EnemyState, RunState } from '../model';
 import { big } from '../numbers';
 import { compileSpell } from '../spell/SpellCompiler';
 import type { SpellMechanics } from '../spell/SpellMechanics';
-import { combatState, ensurePositions, nearby, positionOf } from './SpellCombatState';
+// prettier-ignore
+import { combatState, ensurePositions, livingByDistance, nearby, positionOf } from './SpellCombatState';
 import { TimedSpellEffects } from './TimedSpellEffects';
 
 /** Resolves the three authored routes. All targets and proc results are engine facts. */
@@ -23,7 +24,9 @@ export class EvolvingCombat {
     const spell = compileSpell(run.spell),
       m = spell.mechanics!,
       state = combatState(run);
-    const living = run.enemies.filter((e) => e.hp.cmp(0) > 0),
+    // Nearest first, so the spell answers whatever is closest to the mage and
+    // the twin route's second bolt takes the one behind it.
+    const living = livingByDistance(run),
       primary = living[0];
     if (!primary) return [];
     state.nextCastHaste = false;
