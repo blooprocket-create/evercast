@@ -140,8 +140,23 @@ export type GameEvent =
       amount: string;
       /** Enemy instance ids or party slots the ability landed on. */
       targets: number[];
+      /**
+       * Damage actually dealt, per enemy. Empty for an ability that deals none
+       * - a debuff lands on a target without hurting it, and `amount` is a
+       * total, so neither can say what any one enemy took.
+       */
+      hits: { instanceId: number; damage: string }[];
     }
-  | { type: 'companion_damaged'; time: number; slot: number; instanceId: number; damage: string }
+  | {
+      type: 'companion_damaged';
+      time: number;
+      slot: number;
+      instanceId: number;
+      /** Health actually lost, after any shield and clamped at nothing left. */
+      damage: string;
+      /** The part of the blow a bulwark ate instead. */
+      absorbed: string;
+    }
   | { type: 'companion_downed'; time: number; slot: number; definitionId: string }
   | { type: 'companion_revived'; time: number; slot: number; definitionId: string }
   | {

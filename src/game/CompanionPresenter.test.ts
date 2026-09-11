@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { NullEngine, Scene, Vector3 } from '@babylonjs/core';
 import { CompanionPresenter } from './CompanionPresenter';
@@ -99,12 +101,15 @@ describe('companion combat is visible', () => {
         ability: 'mend',
         amount: '9',
         targets: [-1],
+        hits: [],
       },
     ]);
     expect(drawn).toContain('callout:MEND');
   });
 
   it('numbers a damaging ability on what it landed on, and a supportive one not', () => {
+    // Each enemy wears what it took, not the salvo's total: a 30-damage volley
+    // split 18/12 read as 30 on both when the presenter painted `amount`.
     feed([
       {
         type: 'companion_ability',
@@ -114,9 +119,16 @@ describe('companion combat is visible', () => {
         ability: 'volley',
         amount: '30',
         targets: [7, 8],
+        hits: [
+          { instanceId: 7, damage: '18' },
+          { instanceId: 8, damage: '12' },
+        ],
       },
     ]);
-    expect(drawn.filter((d) => d === 'damage:30')).toHaveLength(2);
+    expect(drawn.filter((entry) => entry.startsWith('damage:'))).toEqual([
+      'damage:18',
+      'damage:12',
+    ]);
     expect(drawn).toContain('callout:VOLLEY');
 
     drawn = [];
@@ -129,6 +141,7 @@ describe('companion combat is visible', () => {
         ability: 'rally',
         amount: '0.18',
         targets: [],
+        hits: [],
       },
     ]);
     expect(drawn).toEqual(['callout:RALLY']);
@@ -136,9 +149,39 @@ describe('companion combat is visible', () => {
 
   it('shows what a companion took when it is hit', () => {
     feed([
-      { type: 'companion_damaged', time: 1, slot: 0, instanceId: 7, damage: '6.25' },
+      { type: 'companion_damaged', time: 1, slot: 0, instanceId: 7, damage: '6.25', absorbed: '0' },
     ]);
     expect(drawn).toContain('damage:6.25');
+  });
+
+  it('gives a debuff its name and no damage number', () => {
+    // Hex and wither land on an enemy without hurting it, so the engine leaves
+    // `hits` empty. Reading damage off `amount` instead stamped a 0 on them.
+    for (const ability of ['hex', 'wither'] as const) {
+      drawn = [];
+      feed([
+        {
+          type: 'companion_ability',
+          time: 1,
+          slot: 0,
+          definitionId: 'hedge_warden',
+          ability,
+          amount: '0',
+          targets: [7],
+          hits: [],
+        },
+      ]);
+      expect(drawn).toEqual([`callout:${ability.toUpperCase()}`]);
+    }
+  });
+
+  it('says BLOCK rather than a number when a shield ate the whole blow', () => {
+    // Nothing came off the bar, so a damage number over an unmoving bar reads
+    // as the fight being broken. The bulwark is the story of that hit.
+    feed([
+      { type: 'companion_damaged', time: 1, slot: 0, instanceId: 7, damage: '0', absorbed: '40' },
+    ]);
+    expect(drawn).toEqual(['callout:BLOCK']);
   });
 
   it('calls out a knockout and a revival', () => {
@@ -182,6 +225,7 @@ describe('companion combat is visible', () => {
         ability: 'revive',
         amount: '10',
         targets: [],
+        hits: [],
       },
     ]);
     expect(drawn).toEqual([]);
@@ -212,5 +256,29 @@ describe('party health bars', () => {
 
   it('gives no bar to an empty slot', () => {
     expect(presenter.healthBarTargets(snapshot([null, null, null, null, null]))).toEqual([]);
+  });
+});
+
+/**
+ * The presenter reads the field through `enemyAnchor`, so it can only report a
+ * blow against a target the scene has already placed. That makes the order of
+ * the calls in `EvercastScene.sync` part of this class's contract rather than
+ * an incidental detail of that method, and worth asserting somewhere it will
+ * be read when someone rearranges them.
+ */
+describe("the scene's ordering contract", () => {
+  const scene = readFileSync(join(process.cwd(), 'src/game/EvercastScene.ts'), 'utf8');
+
+  it('places the enemies before letting the party react to hitting them', () => {
+    const react = scene.indexOf('this.companions.sync(');
+    const spawnAnchors = scene.indexOf('this.transientAnchors.set(');
+    const visuals = scene.indexOf('this.syncEnemyVisuals(snapshot');
+    expect(react).toBeGreaterThan(-1);
+
+    // An enemy can spawn, be hit by a companion and die inside one publish.
+    // Reacting first looked the target up before anything had placed it and
+    // dropped the number without a trace.
+    expect(react).toBeGreaterThan(spawnAnchors);
+    expect(react).toBeGreaterThan(visuals);
   });
 });

@@ -17,6 +17,8 @@ const CALLOUT = new Vector3(0, 1.75, 0);
 const ALLY_INK = '#78b99d';
 const HEAL_INK = '#9fe0c0';
 const DOWN_INK = '#c4593c';
+/** A bulwark eating a blow, in the same steel the interface uses for routes. */
+const SHIELD_INK = '#63dcff';
 
 /**
  * What each ability says when it fires.
@@ -191,16 +193,18 @@ export class CompanionPresenter {
             visual.root.position.add(CALLOUT),
             SUPPORTIVE.has(event.ability) ? HEAL_INK : ALLY_INK,
           );
-          // A damaging ability also owes a number on what it hit.
-          if (!SUPPORTIVE.has(event.ability)) {
-            for (const instanceId of event.targets) {
-              const target = enemyAnchor(instanceId);
-              if (target) {
-                numbers.show(
-                  { instanceId: -3000 - instanceId, critical: false, damage: event.amount },
-                  target,
-                );
-              }
+          // Per enemy, from `hits`, never from `amount`: a volley's amount is
+          // the sum across its targets, so painting it on each of them told
+          // the player every enemy took the whole salvo. A debuff lands in
+          // `targets` but never in `hits`, which is what keeps HEX and WITHER
+          // from stamping a 0 on what they touched.
+          for (const hit of event.hits) {
+            const target = enemyAnchor(hit.instanceId);
+            if (target) {
+              numbers.show(
+                { instanceId: -3000 - hit.instanceId, critical: false, damage: hit.damage },
+                target,
+              );
             }
           }
           break;
@@ -209,11 +213,17 @@ export class CompanionPresenter {
         case 'companion_damaged': {
           const visual = this.bySlot(event.slot);
           visual?.play('hit');
-          if (visual) {
+          if (!visual) break;
+          const where = visual.root.position.add(CALLOUT);
+          if (Number(event.damage) > 0) {
             numbers.show(
               { instanceId: -4000 - event.slot, critical: false, damage: event.damage },
-              visual.root.position.add(CALLOUT),
+              where,
             );
+          } else if (Number(event.absorbed) > 0) {
+            // Nothing came off the bar, so a number would read as a miss. The
+            // shield is the story of that hit and deserves to be the label.
+            numbers.callout(-7000 - event.slot, 'BLOCK', where, SHIELD_INK);
           }
           break;
         }

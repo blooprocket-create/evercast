@@ -291,7 +291,6 @@ export class EvercastScene {
     }
     this.mage.setLocomotion(walking);
     this.mage.update(deltaSeconds);
-    this.companions.sync(snapshot, deltaSeconds, events);
     for (let i = this.retiring.length - 1; i >= 0; i--) {
       const entry = this.retiring[i];
       entry.remaining -= deltaSeconds;
@@ -334,6 +333,12 @@ export class EvercastScene {
     }
 
     this.syncEnemyVisuals(snapshot, deltaSeconds);
+    // After the anchors, never before. A companion can hit an enemy that
+    // spawned in this same publish - and one that spawned and died in it - so
+    // reacting ahead of `transientAnchors` and `syncEnemyVisuals` looked up a
+    // target nothing had placed yet and silently dropped the number. This is
+    // where `vfx.ingest` already reads the field from, for the same reason.
+    this.companions.sync(snapshot, deltaSeconds, events);
     // Bars follow the meshes, not the snapshot: enemies are walking in, and the
     // interface only hears about them ten times a second.
     this.healthBars.sync(
