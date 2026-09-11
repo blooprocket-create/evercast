@@ -230,7 +230,7 @@ describe('companion persistence', () => {
 
   it('gives a version 6 save an empty roster rather than failing to load', () => {
     const codec = new SaveCodec(DEFAULT_ENGINE_CONFIG);
-    const envelope = codec.encode(createInitialGameState(DEFAULT_ENGINE_CONFIG)) as Record<string, unknown>;
+    const envelope = codec.encode(createInitialGameState(DEFAULT_ENGINE_CONFIG)) as unknown as Record<string, unknown>;
     const legacy = JSON.parse(JSON.stringify(envelope)) as {
       version: number;
       state: Record<string, unknown> & { run: Record<string, unknown> };

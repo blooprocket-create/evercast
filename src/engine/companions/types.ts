@@ -53,6 +53,15 @@ export const COMPANION_MODELS = [
 ] as const;
 export type CompanionModelKey = (typeof COMPANION_MODELS)[number];
 
+/**
+ * A party-wide, timed buff. One object rather than loose fields on `RunState`
+ * so it serializes and resets as a unit.
+ */
+export interface CompanionAura {
+  rallyAmount: number;
+  rallyUntil: number;
+}
+
 export const MAX_COMPANION_STARS = 5;
 export const PARTY_SIZE = 5;
 
@@ -108,13 +117,19 @@ export interface CompanionsState {
 export interface CompanionCombatant {
   slot: number;
   definitionId: string;
+  /**
+   * Copied from the roster at sync. Max health already bakes the star
+   * multiplier in, but threat is recomputed per swing, and ranking a 5-star
+   * vanguard level with a 1-star one would quietly undo half of ascending.
+   */
+  stars: number;
   hp: Decimal;
   maxHp: Decimal;
   attackCooldown: number;
   abilityCooldown: number;
   downed: boolean;
+  /** Absorbed before health. Granted by `bulwark`, spent by any blow. */
+  shield?: Decimal;
   /** A support may pull one ally back up per encounter. */
   revivedThisEncounter?: boolean;
-  /** Whether the renderer has already been told about this swing. */
-  telegraphed?: boolean;
 }

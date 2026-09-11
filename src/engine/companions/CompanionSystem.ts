@@ -42,7 +42,6 @@ export function restoreCompanions(run: RunState): void {
     companion.revivedThisEncounter = false;
     companion.attackCooldown = definition.attackInterval;
     companion.abilityCooldown = definition.ability.cooldown;
-    companion.telegraphed = false;
   }
 }
 
@@ -73,6 +72,7 @@ export class CompanionSystem {
       if (existing && existing.definitionId === definitionId) {
         next.push({
           ...existing,
+          stars: owned.stars,
           maxHp,
           hp: scaleHealth(existing.hp, existing.maxHp, maxHp),
         });
@@ -82,6 +82,7 @@ export class CompanionSystem {
       next.push({
         slot,
         definitionId,
+        stars: owned.stars,
         hp: big(maxHp),
         maxHp,
         attackCooldown: definition.attackInterval,

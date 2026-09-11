@@ -6,6 +6,7 @@ import { big } from '../numbers';
 import { chooseDeterministic } from '../random/DeterministicRandom';
 import { ensurePositions, laneZ, spawnPosition } from '../combat/SpellCombatState';
 import { freeContactSlot } from '../combat/Contact';
+import { hasLivingFrontline } from '../companions/Formation';
 
 const LANES = [0, 1, 2, 3, 4, 5];
 
@@ -64,7 +65,12 @@ export class EncounterSystem {
           run.mode === 'push' ? 1 : 2,
         );
     const definition = requireEnemy(this.catalog, enemyId);
-    const reach = definition.attackRange ?? this.config.enemyAttackRange;
+    // Captured once, here, and never recomputed. A wave that spawns while the
+    // line is held keeps its distance for life; one that spawns after the tank
+    // falls presses in toward the mage, which is what makes losing the front
+    // row something you watch happen rather than read in a number.
+    const frontlineOffset = hasLivingFrontline(run) ? this.config.frontlineStandoff : 0;
+    const reach = (definition.attackRange ?? this.config.enemyAttackRange) + frontlineOffset;
     const stageExponent = Math.max(0, encounter.stage - 1);
     const worldTierMultiplier = big(1.75).pow(resolvedZone.worldTier);
     const bossHealthMultiplier = isBoss ? big(4.5) : big(1);
@@ -94,7 +100,9 @@ export class EncounterSystem {
       attackCooldown: definition.attackInterval,
       // Resolved here rather than left undefined so a live enemy always carries
       // a concrete reach, and the fallback stays a pure legacy-save path.
-      attackRange: reach,
+      attackRange: definition.attackRange ?? this.config.enemyAttackRange,
+      frontlineOffset,
+      tags: [...definition.tags],
       // Claimed before the push, so the scan cannot see this enemy itself.
       contactSlot: freeContactSlot(run, reach, this.config.enemyAttackRange),
     };

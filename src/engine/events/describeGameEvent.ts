@@ -51,8 +51,6 @@ export function describeGameEvent(event: GameEvent): string {
       return `Rebirth ${event.rebirths}: +${n(event.knowledgeGained)} Knowledge.`;
     case 'companion_attack':
       return `${companionName(event.definitionId)} strikes for ${n(event.damage)}.`;
-    case 'companion_windup':
-      return 'A companion sets itself.';
     case 'companion_ability':
       return `${companionName(event.definitionId)} uses ${abilityLabel(event.ability)}.`;
     case 'companion_damaged':

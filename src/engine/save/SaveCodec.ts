@@ -278,10 +278,7 @@ function serializeEnemy(enemy: EnemyState): SerializedEnemy {
 }
 
 function serializeCompanion(companion: CompanionCombatant): SerializedCompanion {
-  // `telegraphed` records that the renderer was told about a swing, which
-  // cannot be true of a session that has not started yet.
-  const { telegraphed: _presentationOnly, ...rest } = companion;
-  return { ...rest, hp: companion.hp.toString(), maxHp: companion.maxHp.toString() };
+  return { ...companion, hp: companion.hp.toString(), maxHp: companion.maxHp.toString() };
 }
 
 function deserializeCompanion(companion: SerializedCompanion): CompanionCombatant {

@@ -3,7 +3,7 @@ import type { EquipmentState } from './gear/types';
 import type { SpellBuild } from './spell/types';
 import type { SpellTreeState } from './spellTree/types';
 import type { CombatPosition, EnemyStatuses, SpellCombatState } from './combat/SpellCombatState';
-import type { CompanionCombatant, CompanionsState } from './companions/types';
+import type { CompanionAura, CompanionCombatant, CompanionsState } from './companions/types';
 
 export type RunMode = 'push' | 'farm';
 export type CombatPhase = 'travel' | 'combat';
@@ -32,6 +32,12 @@ export interface EnemyState {
    * which falls back to the engine default.
    */
   attackRange?: number;
+  /**
+   * Authored tags, copied at spawn for the same reason. Targeting reads them to
+   * decide whether this enemy goes through the front line or around it, and
+   * combat must not need the content catalog to answer that.
+   */
+  tags?: string[];
   /** Which spot around the mage it walked to, so a wave presses in rather than
    * stacking six bodies on one coordinate. */
   contactSlot?: number;
@@ -84,6 +90,8 @@ export interface RunState {
    * not - exactly the split enemies already use.
    */
   companions: CompanionCombatant[];
+  /** Timed party buffs the companions have raised. */
+  companionAura?: CompanionAura;
   elapsedSeconds: number;
   frontierStage: number;
   highestStageThisRun: number;

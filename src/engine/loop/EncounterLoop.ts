@@ -2,6 +2,9 @@ import type { CombatSystem } from '../combat/CombatSystem';
 // prettier-ignore
 import { advanceApproach, anyInRange, effectiveCastInterval, soonestRangeChange } from '../combat/SpellCombatState';
 import { nextEnemyBeat, resolveEnemyBeats, tickEnemyCooldowns } from '../combat/EnemyTurns';
+// prettier-ignore
+import { nextCompanionBeat, resolveCompanionBeats, tickCompanionCooldowns } from '../companions/CompanionCombat';
+import { partyThresholds } from '../companions/Formation';
 import type { EngineConfig } from '../config';
 import type { EncounterSystem } from '../encounters/EncounterSystem';
 import type { GameEvent } from '../events/GameEvent';
@@ -95,11 +98,16 @@ export class EncounterLoop {
     const nextCast = anyInRange(run, this.config.spellRange)
       ? Math.max(0, run.castCooldown)
       : Number.POSITIVE_INFINITY;
+    // Every companion reach is another gate that changes behaviour, so each one
+    // has to be a moment the loop can stop on. Miss one and a companion opens
+    // fire at a different instant in a chunked run than in a single pass.
+    const thresholds = [this.config.spellRange, ...partyThresholds(run)];
     const nextAction = Math.min(
       nextSpawn,
       nextCast,
       nextEnemyBeat(run, this.config),
-      soonestRangeChange(run, [this.config.spellRange], reach, this.config.enemyApproachSpeed),
+      nextCompanionBeat(run),
+      soonestRangeChange(run, thresholds, reach, this.config.enemyApproachSpeed),
       this.systems.combat.evolving.effects.nextDelay(run),
     );
 
@@ -114,8 +122,10 @@ export class EncounterLoop {
     // in range for the whole step - which is what keeps a chunked run, a single
     // pass and a save-and-resume in agreement.
     if (anyInRange(run, this.config.spellRange)) run.castCooldown -= consumed;
-    // An enemy still closing is not winding up a swing.
+    // An enemy still closing is not winding up a swing, and a companion with
+    // nothing in reach is not drawing back for one.
     tickEnemyCooldowns(run, this.config, consumed);
+    tickCompanionCooldowns(run, consumed);
     if (canSpawn) encounter.spawnCooldown -= consumed;
     advanceApproach(run, reach, this.config.enemyApproachSpeed);
 
@@ -130,6 +140,13 @@ export class EncounterLoop {
       run.castCooldown += effectiveCastInterval(run);
       this.collectDeadEnemies(state, result.killedEnemyIds);
     }
+
+    // Companions swing after the mage, so a cast that clears the front rank
+    // lets them retarget in the same instant her own projectiles already do.
+    this.collectDeadEnemies(
+      state,
+      resolveCompanionBeats({ run, equipment: state.equipment, emit: this.emit }),
+    );
 
     if (
       run.encounter &&

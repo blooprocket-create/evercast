@@ -368,7 +368,7 @@ export const COMPANIONS: readonly CompanionDefinition[] = [
     modelKey: 'humanoid_light',
     attackInterval: 1,
     range: 3.4,
-    ability: { id: 'echo', magnitude: 0.25, cooldown: 0 },
+    ability: { id: 'echo', magnitude: 0.25, cooldown: 4 },
     tags: ['arcane', 'thief'],
   },
   {
@@ -396,7 +396,7 @@ export const COMPANIONS: readonly CompanionDefinition[] = [
     modelKey: 'floating_orb',
     attackInterval: 1.8,
     range: 9,
-    ability: { id: 'echo', magnitude: 0.45, cooldown: 0 },
+    ability: { id: 'echo', magnitude: 0.45, cooldown: 3 },
     tags: ['arcane', 'spirit'],
   },
   {
