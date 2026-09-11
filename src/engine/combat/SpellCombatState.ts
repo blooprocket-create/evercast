@@ -146,17 +146,24 @@ export function timeToRange(enemy: EnemyState, range: number, speed: number): nu
  * Every range that changes behaviour has to be an event the combat loop can
  * stop on - melee reach and spell reach both. Miss one and a chunked run
  * crosses it at a different moment than a single pass, and the two disagree.
+ *
+ * `thresholds` is a list rather than one spell range because companions fight
+ * from their own fixed formation slots, each with its own reach. A companion's
+ * threshold in enemy-x terms is a constant (`slot.x + range`), so the caller
+ * hands them all in and every gate in the step is an event the loop stops on.
  */
 export function soonestRangeChange(
   run: RunState,
-  spellRange: number,
+  thresholds: readonly number[],
   defaultReach: number,
   speed: number,
 ): number {
   let soonest = Number.POSITIVE_INFINITY;
   for (const enemy of run.enemies) {
-    if (!inAttackRange(enemy, spellRange))
-      soonest = Math.min(soonest, timeToRange(enemy, spellRange, speed));
+    for (const threshold of thresholds) {
+      if (!inAttackRange(enemy, threshold))
+        soonest = Math.min(soonest, timeToRange(enemy, threshold, speed));
+    }
     if (!hasArrived(enemy, defaultReach))
       soonest = Math.min(soonest, timeToRange(enemy, contactPoint(enemy, defaultReach).x, speed));
   }
