@@ -47,7 +47,7 @@ export const THREAT_PER_STAR = 0.15;
 
 /* ---------------------------------------------------------------- gacha --- */
 
-export const SUMMON_COST = 120;
+export const SUMMON_COST = 80;
 /** Ten pulls for the price of nine, the near-universal convention. */
 export const SUMMON_COST_TEN = SUMMON_COST * 9;
 
