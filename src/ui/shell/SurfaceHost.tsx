@@ -23,6 +23,7 @@ export function SurfaceHost({
 }: SurfaceHostProps) {
   const gold = useSnapshotSelector((s) => s.gold.display);
   const essence = useSnapshotSelector((s) => s.essence.display);
+  const starlight = useSnapshotSelector((s) => s.starlight.display);
   const Surface = destination.Component;
 
   return (
@@ -36,7 +37,7 @@ export function SurfaceHost({
         <div className={styles.wallets}>
           {/*
             The header covers the HUD, so it carries the only naming of these
-            two numbers on screen. Below 360px the labels give way to a
+            three numbers on screen. Below 360px the labels give way to a
             coloured dot - see SurfaceHost.module.css.
           */}
           <span className={`${styles.walletItem} ${styles.gold}`}>
@@ -46,6 +47,10 @@ export function SurfaceHost({
           <span className={`${styles.walletItem} ${styles.essence}`}>
             <span className={styles.walletLabel}>Essence</span>
             <NumberCell value={essence} inline />
+          </span>
+          <span className={`${styles.walletItem} ${styles.starlight}`}>
+            <span className={styles.walletLabel}>Starlight</span>
+            <NumberCell value={starlight} inline />
           </span>
         </div>
       </header>

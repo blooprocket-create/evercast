@@ -62,8 +62,8 @@
 }
 
 /*
- * The header covers the HUD, which is where Gold and Essence are named. Two
- * bare numbers in the corner are a riddle, so the labels come with them.
+ * The header covers the HUD, which is where the wallets are named. Three bare
+ * numbers in the corner are a riddle, so the labels come with them.
  */
 .walletLabel {
   font: 600 var(--text-label) / 1 var(--font-ui);
@@ -78,6 +78,11 @@
 
 .essence {
   color: var(--essence);
+}
+
+/* --route is the one meaning colour no companion rarity claims. */
+.starlight {
+  color: var(--route);
 }
 
 .body {

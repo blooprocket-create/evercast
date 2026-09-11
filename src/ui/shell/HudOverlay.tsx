@@ -15,6 +15,7 @@ export function HudOverlay() {
   const farmStage = useSnapshotSelector((s) => s.farmStage);
   const gold = useSnapshotSelector((s) => s.gold.display);
   const essence = useSnapshotSelector((s) => s.essence.display);
+  const starlight = useSnapshotSelector((s) => s.starlight.display);
   const phase = useSnapshotSelector((s) => s.phase);
   const enemyName = useSnapshotSelector((s) => s.enemyName);
   const enemyHp = useSnapshotSelector((s) => s.enemyHp.display);
@@ -53,6 +54,12 @@ export function HudOverlay() {
             <span className={styles.walletLabel}>Essence</span>
             <span className={styles.essence}>
               <NumberCell value={essence} />
+            </span>
+          </div>
+          <div className={styles.walletItem}>
+            <span className={styles.walletLabel}>Starlight</span>
+            <span className={styles.starlight}>
+              <NumberCell value={starlight} />
             </span>
           </div>
         </div>
@@ -94,6 +101,10 @@ export function ShelfVitals() {
   const percent = useSnapshotSelector((s) => s.mageHpPercent);
   const castInterval = useSnapshotSelector((s) => s.castInterval);
   const projectiles = useSnapshotSelector((s) => s.projectileCount);
+  const party = useSnapshotSelector((s) => s.party);
+
+  const standing = party.filter((member) => member && !member.downed).length;
+  const fielded = party.filter(Boolean).length;
 
   return (
     <>
@@ -113,6 +124,28 @@ export function ShelfVitals() {
         slim
         readout={`${castInterval.toFixed(2)}s - ${projectiles}x`}
       />
+      {fielded > 0 && (
+        <div className={styles.party}>
+          <span className={styles.partyLabel}>Party</span>
+          <span className={styles.partyPips}>
+            {party.map((member, slot) =>
+              member ? (
+                <span
+                  key={slot}
+                  className={member.downed ? `${styles.pip} ${styles.pipDown}` : styles.pip}
+                  style={{ '--fill': `${member.hpPercent ?? 100}%` } as React.CSSProperties}
+                  title={`${member.name} - ${member.downed ? 'down' : `${Math.round(member.hpPercent ?? 100)}%`}`}
+                />
+              ) : (
+                <span key={slot} className={`${styles.pip} ${styles.pipEmpty}`} />
+              ),
+            )}
+          </span>
+          <span className={styles.partyCount}>
+            {standing}/{fielded}
+          </span>
+        </div>
+      )}
     </>
   );
 }

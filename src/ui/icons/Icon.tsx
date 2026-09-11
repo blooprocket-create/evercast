@@ -139,6 +139,62 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <path d="m9 8 3-4 3 4" />
     </>
   ),
+  /* Two figures: the party, rather than the single figure `character` uses. */
+  companions: (
+    <>
+      <circle cx="9" cy="8.5" r="3.2" />
+      <path d="M3.5 20c0-3.3 2.5-5.2 5.5-5.2s5.5 1.9 5.5 5.2" />
+      <path d="M16 6.2a3 3 0 0 1 0 5.8" />
+      <path d="M17.2 14.4c2 .7 3.3 2.4 3.3 4.7" />
+    </>
+  ),
+  /* A star pulled out of a gate: the draw. */
+  summon: (
+    <>
+      <path d="m12 3 1.9 4.2L18.5 8l-3.4 3.2.9 4.6L12 13.6 8 15.8l.9-4.6L5.5 8l4.6-.8Z" />
+      <path d="M6 19.5h12" />
+    </>
+  ),
+  classVanguard: (
+    <>
+      <path d="M12 3.2 19 6v6.2c0 4-3.4 6.2-7 7.3-3.6-1.1-7-3.3-7-7.3V6Z" />
+      <path d="M12 8.5v6" />
+    </>
+  ),
+  classBruiser: (
+    <>
+      <path d="M4.5 19.5 15 9" />
+      <path d="m13 5.5 5.5 5.5-2.6 2.6L10.4 8Z" />
+      <path d="m4 17.5 2.5 2.5" />
+    </>
+  ),
+  classTrickster: (
+    <>
+      <path d="M5 5.5 14.5 15" />
+      <path d="M19 5.5 9.5 15" />
+      <circle cx="7.5" cy="17.5" r="2.2" />
+      <circle cx="16.5" cy="17.5" r="2.2" />
+    </>
+  ),
+  classRanger: (
+    <>
+      <path d="M5 19 19 5" />
+      <path d="M13.5 5H19v5.5" />
+      <path d="M7.5 6.5a8.5 8.5 0 0 1 0 11" />
+    </>
+  ),
+  classArcanist: (
+    <>
+      <circle cx="12" cy="9" r="4.2" />
+      <path d="M12 13.2V21" />
+      <path d="M9 17.5h6" />
+    </>
+  ),
+  classSupport: (
+    <>
+      <path d="M12 20.5S4.5 15.8 4.5 10.4A4.2 4.2 0 0 1 12 7.8a4.2 4.2 0 0 1 7.5 2.6c0 5.4-7.5 10.1-7.5 10.1Z" />
+    </>
+  ),
 };
 
 interface IconProps {

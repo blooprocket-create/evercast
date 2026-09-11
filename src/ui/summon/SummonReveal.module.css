@@ -1,0 +1,149 @@
+/*
+ * `--rarity` is set on the scrim by the best pull in the batch, and again on
+ * each card by its own. No colour is named here.
+ *
+ * Positioned with `inset: 0` rather than pixel offsets, and padded by the safe
+ * insets through their tokens, so it clears a notch without naming env().
+ */
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 6;
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  align-content: center;
+  justify-items: center;
+  gap: var(--space-4);
+  padding: max(var(--space-5), var(--safe-top)) max(var(--space-4), var(--safe-right))
+    max(var(--space-5), var(--safe-bottom)) max(var(--space-4), var(--safe-left));
+  background: var(--scrim);
+  backdrop-filter: blur(3px);
+  overflow-y: auto;
+  animation: fade 220ms ease-out;
+}
+
+/* The tell: a column in the colour of the best thing in the batch. */
+.beam {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: min(38vw, 320px);
+  background: linear-gradient(to top, transparent, var(--rarity), transparent);
+  opacity: 0.22;
+  filter: blur(22px);
+  animation: rise 900ms ease-out;
+  pointer-events: none;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 9.5rem));
+  gap: var(--space-3);
+  justify-content: center;
+  align-self: center;
+  max-width: 56rem;
+}
+
+/* A whole batch at once is a summary, so the cards can afford to be smaller. */
+.summary {
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 8.5rem));
+}
+
+.card {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: var(--space-1);
+  aspect-ratio: 3 / 4;
+  max-width: 100%;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--glass-strong);
+  text-align: center;
+}
+
+.cardShown {
+  border-color: var(--rarity);
+  box-shadow: 0 0 0 1px var(--rarity), 0 12px 30px -18px var(--rarity);
+  animation: turn 260ms ease-out;
+}
+
+.back {
+  width: 62%;
+  height: 62%;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-chip);
+  background: var(--veil-2);
+}
+
+.rarity {
+  font: 600 var(--text-label) / 1 var(--font-ui);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--rarity);
+}
+
+.cardName {
+  font: 500 var(--text-small) / 1.25 var(--font-display);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.stars {
+  color: var(--rarity);
+  font-size: var(--text-small);
+  letter-spacing: 0.06em;
+}
+
+.note {
+  font: 400 var(--text-label) / 1 var(--font-ui);
+  color: var(--ink-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.caption {
+  margin: 0;
+  font: 400 var(--text-small) / 1.4 var(--font-ui);
+  color: var(--ink-low);
+  text-align: center;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: scaleY(0.4);
+  }
+}
+
+@keyframes turn {
+  from {
+    opacity: 0;
+    transform: rotateY(90deg) scale(0.92);
+  }
+}
+
+/*
+ * Someone who has asked for less motion still gets the result; the component
+ * also skips straight to the summary, so this is belt and braces.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .scrim,
+  .beam,
+  .cardShown {
+    animation: none;
+  }
+}

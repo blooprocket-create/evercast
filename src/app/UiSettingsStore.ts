@@ -20,6 +20,8 @@ export interface DisplaySettings {
   depthOfField: number;
   vfxQuality: VfxQuality;
   damageNumbers: boolean;
+  /** Go straight to what a summon pulled, skipping the reveal. */
+  skipSummonAnimation: boolean;
 }
 
 export interface UiSettings {
@@ -29,7 +31,12 @@ export interface UiSettings {
 
 export const DEFAULT_UI_SETTINGS: UiSettings = {
   audio: { master: 0.8, music: 0.7, effects: 0.85, muted: false },
-  display: { depthOfField: 0.75, vfxQuality: 'medium', damageNumbers: true },
+  display: {
+    depthOfField: 0.75,
+    vfxQuality: 'medium',
+    damageNumbers: true,
+    skipSummonAnimation: false,
+  },
 };
 
 export const UI_SETTINGS_KEY = 'evercast.ui.v1';
@@ -67,6 +74,10 @@ export function sanitizeUiSettings(raw: unknown): UiSettings {
         ? (quality as VfxQuality)
         : DEFAULT_UI_SETTINGS.display.vfxQuality,
       damageNumbers: boolean(display.damageNumbers, DEFAULT_UI_SETTINGS.display.damageNumbers),
+      skipSummonAnimation: boolean(
+        display.skipSummonAnimation,
+        DEFAULT_UI_SETTINGS.display.skipSummonAnimation,
+      ),
     },
   };
 }
