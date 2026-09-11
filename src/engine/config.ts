@@ -29,7 +29,9 @@ export interface EngineConfig {
   spellRange: number;
   /**
    * Extra distance a wave keeps when a front-row companion is standing as it
-   * spawns. Without it there is no room in front of the mage for anyone.
+   * spawns. Without it there is no room in front of the mage for anyone, and
+   * it has to clear the whole front rank: the furthest-forward slot sits at
+   * x = 2.72, so a melee enemy resting at 1.1 + this stops well clear of it.
    */
   frontlineStandoff: number;
 }
@@ -56,5 +58,5 @@ export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
   enemyAttackRange: 1.1,
   enemyWindupSeconds: 0.3,
   spellRange: 9,
-  frontlineStandoff: 1.5,
+  frontlineStandoff: 2.3,
 };

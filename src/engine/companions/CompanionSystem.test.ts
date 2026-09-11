@@ -7,7 +7,9 @@ import { createInitialGameState } from '../state';
 // prettier-ignore
 import { COMPANIONS, COMPANIONS_BY_RARITY, companionMaxHp, companionThreat, powerMultiplier, requireCompanion, validateCompanions } from './CompanionCatalog';
 import { CompanionSystem, createInitialCompanionsState, restoreCompanions, starUpCost } from './CompanionSystem';
-import { companionIndices, formationPosition, hasLivingFrontline, partyThresholds } from './Formation';
+// prettier-ignore
+import { companionIndices, formationPosition, hasLivingFrontline, partyThresholds, reachThreshold } from './Formation';
+import { CONTACT_SLOTS } from '../combat/Contact';
 import { MAX_COMPANION_STARS, PARTY_SIZE } from './types';
 import type { GameState } from '../model';
 
@@ -87,6 +89,46 @@ describe('formation', () => {
     const two = stateWith('hedge_warden', 'cairn_tortoise');
     expect(companionIndices(one.run).get(0)).toBe(0);
     expect(companionIndices(two.run).get(0)).toBe(0);
+  });
+
+  it('keeps the front rank clear of where the wave comes to rest', () => {
+    /*
+     * The two numbers that make room for a front row are tuned against each
+     * other: move the standoff or a front slot without the other and the wave
+     * either stands inside the tanks or stops off in the distance. Bodies are
+     * about 0.3 in radius, so 0.6 is touching.
+     */
+    const { enemyAttackRange, frontlineStandoff } = DEFAULT_ENGINE_CONFIG;
+    const nearestEnemyRest = enemyAttackRange + frontlineStandoff + Math.min(...CONTACT_SLOTS.map((s) => s.xPad));
+    const furthestCompanion = Math.max(
+      ...[0, 1, 2, 3, 4].map((index) => formationPosition('front', index).x),
+    );
+    expect(nearestEnemyRest - furthestCompanion).toBeGreaterThan(0.6);
+  });
+
+  it('puts every companion within reach of where the wave stops', () => {
+    // A companion that cannot touch the contact arc from its own slot would
+    // stand there for the whole fight with its cooldown never ticking.
+    const { enemyAttackRange, frontlineStandoff } = DEFAULT_ENGINE_CONFIG;
+    const furthestEnemyRest =
+      enemyAttackRange + frontlineStandoff + Math.max(...CONTACT_SLOTS.map((s) => s.xPad));
+    for (const companion of COMPANIONS) {
+      for (const index of [0, 1, 2, 3, 4]) {
+        expect(
+          reachThreshold(companion.id, index),
+          `${companion.id} in row position ${index}`,
+        ).toBeGreaterThan(furthestEnemyRest);
+      }
+    }
+  });
+
+  it('separates the party along the road, where the camera can see it', () => {
+    // z is very nearly the depth axis at this camera angle, so a party laid
+    // out across it draws as one clump on top of the mage.
+    const xs = (['front', 'flank', 'back'] as const).map((row) => formationPosition(row, 0).x);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(3);
+    expect(formationPosition('front', 0).x).toBeGreaterThan(formationPosition('flank', 0).x);
+    expect(formationPosition('flank', 0).x).toBeGreaterThan(formationPosition('back', 0).x);
   });
 
   it('reports a frontline only while something in front is standing', () => {

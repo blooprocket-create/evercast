@@ -26,6 +26,7 @@ import {
 } from './world/JourneyProgress';
 import { WorldGenerator } from './world/WorldGenerator';
 import { ActorAssets, ActorVisual } from './actors/ActorAssets';
+import { CompanionPresenter } from './CompanionPresenter';
 import { VfxPool, type VfxQuality } from './vfx/VfxPool';
 import { CombatFxPresenter } from './vfx/CombatFxPresenter';
 import { EnemyHealthBars } from './vfx/EnemyHealthBars';
@@ -70,6 +71,7 @@ export class EvercastScene {
   private readonly retiring: { id: number; actor: ActorVisual; remaining: number }[] = [];
   private readonly presentation: DefaultRenderingPipeline;
   private readonly healthBars: EnemyHealthBars;
+  private readonly companions: CompanionPresenter;
   private readonly feel: CombatFeel;
   private readonly bosses = new BossTracker();
   readonly vfx: SpellVfxPresenter;
@@ -221,6 +223,7 @@ export class EvercastScene {
     this.mage.root.rotation.y = Math.PI * 0.68;
     const pool = new VfxPool(this.scene, quality);
     this.healthBars = new EnemyHealthBars(this.scene);
+    this.companions = new CompanionPresenter(this.scene, this.shadows);
     this.feel = new CombatFeel({
       camera,
       pipeline: presentation,
@@ -262,6 +265,7 @@ export class EvercastScene {
     }
     this.mage.setLocomotion(walking);
     this.mage.update(deltaSeconds);
+    this.companions.sync(snapshot, deltaSeconds, events);
     for (let i = this.retiring.length - 1; i >= 0; i--) {
       const entry = this.retiring[i];
       entry.remaining -= deltaSeconds;
@@ -367,6 +371,7 @@ export class EvercastScene {
     for (const entry of this.retiring) entry.actor.dispose();
     this.retiring.length = 0;
     this.mage.dispose();
+    this.companions.dispose();
     this.actors.dispose();
     this.world.dispose();
     this.scene.dispose();

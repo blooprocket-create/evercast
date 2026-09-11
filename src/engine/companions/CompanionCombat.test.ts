@@ -267,17 +267,31 @@ describe('knockouts', () => {
     expect(state.run.stats.deaths).toBe(deathsBefore);
   });
 
-  it('brings the party back for the next encounter', () => {
+  it('never carries a knockout across an encounter boundary', () => {
     const simulation = fresh(707);
     simulation.advance(20, { presentationEvents: false });
-    for (const companion of simulation.getState().run.companions) {
+    const run = simulation.getState().run;
+    for (const companion of run.companions) {
       companion.downed = true;
       companion.hp = big(0);
     }
-    // Far enough to clear the stage, which is where recovery happens.
-    simulation.advance(400, { presentationEvents: false });
-    const run = simulation.getState().run;
-    expect(run.companions.some((companion) => companion.downed)).toBe(false);
+    expect(run.companions.every((companion) => companion.downed)).toBe(true);
+
+    // Checked at the boundary itself. Sampling at some arbitrary later moment
+    // proves nothing: the party can be restored and then knocked down again,
+    // which is the system working rather than failing.
+    let crossings = 0;
+    for (let step = 0; step < 4000 && crossings < 3; step += 1) {
+      const wasFighting = simulation.getState().run.phase === 'combat';
+      simulation.advance(0.1, { presentationEvents: false });
+      const now = simulation.getState().run;
+      if (!wasFighting || now.phase !== 'travel') continue;
+      crossings += 1;
+      // Travel means the last encounter ended, one way or the other.
+      expect(now.companions.some((companion) => companion.downed)).toBe(false);
+      expect(now.companions.every((c) => c.hp.cmp(c.maxHp) === 0)).toBe(true);
+    }
+    expect(crossings).toBeGreaterThan(0);
   });
 
   it('reports a knockout so the renderer can drop the body', () => {

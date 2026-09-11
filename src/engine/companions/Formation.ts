@@ -18,28 +18,35 @@ import { PARTY_SIZE } from './types';
  *
  * Rows rake backwards as they widen, so five of one class read as an arc
  * around the mage rather than a wall across the road.
+ *
+ * Separation is mostly along x, for the reason `Contact.ts` gives about the
+ * enemy slots: the camera looks down the road from about 15 degrees above it,
+ * so z is very nearly the depth axis and a full lane of it is under 3% of
+ * screen height. Laid out mainly across z the party drew as one clump on top
+ * of the mage. z still does the work of depth ordering and of keeping bodies
+ * out of each other.
  */
 const FORMATION: Readonly<Record<FormationRow, readonly CombatPosition[]>> = {
   front: [
-    { x: 1.55, z: -0.62 },
-    { x: 1.55, z: 0.62 },
-    { x: 1.32, z: -1.58 },
-    { x: 1.32, z: 1.58 },
-    { x: 1.1, z: -2.5 },
+    { x: 2.3, z: -0.72 },
+    { x: 1.95, z: 0.74 },
+    { x: 2.5, z: -1.62 },
+    { x: 1.7, z: 1.64 },
+    { x: 2.72, z: -2.45 },
   ],
   flank: [
-    { x: 0.35, z: -1.25 },
-    { x: 0.35, z: 1.25 },
-    { x: 0.05, z: -2.05 },
-    { x: 0.05, z: 2.05 },
-    { x: -0.25, z: -2.85 },
+    { x: 0.72, z: -1.5 },
+    { x: 0.42, z: 1.52 },
+    { x: 1.05, z: -2.35 },
+    { x: 0.15, z: 2.38 },
+    { x: 1.3, z: -3.1 },
   ],
   back: [
-    { x: -1.15, z: 0 },
-    { x: -1.3, z: -0.95 },
-    { x: -1.3, z: 0.95 },
-    { x: -1.5, z: -1.9 },
-    { x: -1.5, z: 1.9 },
+    { x: -1.5, z: -0.35 },
+    { x: -1.15, z: 1.05 },
+    { x: -1.95, z: -1.25 },
+    { x: -1.6, z: 1.95 },
+    { x: -2.35, z: -2.15 },
   ],
 };
 

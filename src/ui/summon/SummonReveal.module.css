@@ -17,8 +17,14 @@
   gap: var(--space-4);
   padding: max(var(--space-5), var(--safe-top)) max(var(--space-4), var(--safe-right))
     max(var(--space-5), var(--safe-bottom)) max(var(--space-4), var(--safe-left));
-  background: var(--scrim);
-  backdrop-filter: blur(3px);
+  /*
+   * --scrim alone left the surface behind legible enough to read, which made
+   * the reveal feel like a tooltip over a menu rather than the thing that is
+   * happening. Two stacked layers plus a real blur put it out of focus without
+   * introducing a colour: the page underneath is context, not content.
+   */
+  background: linear-gradient(var(--glass-strong), var(--glass-strong)), var(--scrim);
+  backdrop-filter: blur(14px) saturate(0.7);
   overflow-y: auto;
   animation: fade 220ms ease-out;
 }
@@ -28,10 +34,10 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  width: min(38vw, 320px);
+  width: min(46vw, 380px);
   background: linear-gradient(to top, transparent, var(--rarity), transparent);
-  opacity: 0.22;
-  filter: blur(22px);
+  opacity: 0.38;
+  filter: blur(26px);
   animation: rise 900ms ease-out;
   pointer-events: none;
 }
