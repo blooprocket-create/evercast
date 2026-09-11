@@ -1,11 +1,17 @@
 .shelf {
   position: absolute;
   inset: auto 0 0 0;
-  height: var(--shelf-height);
+  /*
+   * The gradient runs the full height including the home indicator, but the
+   * slots stop above it - so the bar still reaches the bottom edge of the
+   * screen and nothing tappable sits under the indicator.
+   */
+  height: var(--shelf-inset);
   display: flex;
   align-items: center;
   gap: var(--space-5);
-  padding: 0 var(--space-5);
+  padding: 0 max(var(--space-5), var(--safe-right)) var(--safe-bottom)
+    max(var(--space-5), var(--safe-left));
   border-top: 1px solid var(--line);
   background: linear-gradient(180deg, var(--shelf-top), var(--shelf-bottom));
   backdrop-filter: blur(16px);
@@ -42,6 +48,7 @@
   gap: var(--space-2);
   width: 96px;
   height: 74px;
+  padding: 0 var(--space-1);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
   background: var(--slot);
@@ -116,7 +123,8 @@
     flex-direction: column;
     justify-content: center;
     gap: var(--space-3);
-    padding: var(--space-3);
+    padding: var(--space-3) max(var(--space-3), var(--safe-right))
+      calc(var(--space-3) + var(--safe-bottom)) max(var(--space-3), var(--safe-left));
   }
 
   .divider {
@@ -133,9 +141,54 @@
     width: 100%;
   }
 
-  /* Four across, never wider than a thumb reach and never below 44px. */
+  /*
+   * Four across, never wider than a thumb reach and never below 44px. A
+   * quarter of a 320px screen is 68px, so "Character" and "Spell Tree" need
+   * the tracking back and room for a second line rather than the 1-unit
+   * leading the wide shelf uses.
+   */
   .slot {
     width: auto;
     height: 60px;
+    line-height: 1.2;
+    letter-spacing: 0.06em;
+  }
+}
+
+/*
+ * Sideways on a phone: back to one row, with the vitals beside the slots
+ * rather than stacked over them. The shelf is 84px here (tokens.css), so a
+ * 390px-tall screen keeps three-quarters of itself for the diorama.
+ */
+@media (max-height: 520px) and (orientation: landscape) {
+  .shelf {
+    flex-direction: row;
+    gap: var(--space-3);
+    padding: 0 max(var(--space-3), var(--safe-right)) var(--safe-bottom)
+      max(var(--space-3), var(--safe-left));
+  }
+
+  .divider {
+    display: none;
+  }
+
+  .vitals {
+    width: 160px;
+    flex: 1;
+    max-width: 240px;
+  }
+
+  .slots {
+    display: flex;
+    gap: var(--space-2);
+    width: auto;
+  }
+
+  .slot {
+    width: 86px;
+    height: 64px;
+    gap: var(--space-1);
+    line-height: 1.2;
+    letter-spacing: 0.06em;
   }
 }

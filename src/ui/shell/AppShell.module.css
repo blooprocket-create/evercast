@@ -1,8 +1,26 @@
 .shell {
   position: relative;
-  width: 100vw;
+  /*
+   * 100% rather than 100vw: vw counts the classic scrollbar gutter, which is
+   * a horizontal overflow of a few pixels on any desktop browser that still
+   * reserves one.
+   */
+  width: 100%;
+  /*
+   * A mobile browser measures 100vh against the *large* viewport - the box it
+   * has when the URL bar is retracted - so the bottom of the shell, which is
+   * the entire nav, sits behind the URL bar until the user scrolls something.
+   * dvh tracks the box that is actually visible; vh stays as the fallback for
+   * anything that does not know the unit.
+   *
+   * There is deliberately no min-height floor here. A phone held sideways is
+   * 375-430px tall, and a 540px floor pushed the shelf past the bottom of the
+   * screen, where - the shell being overflow:hidden - nothing could reach it.
+   * Short viewports are handled by the layout instead: see the --shelf-height
+   * landscape rule in theme/tokens.css.
+   */
   height: 100vh;
-  min-height: 540px;
+  height: 100dvh;
   overflow: hidden;
   background: var(--bg);
   color: var(--ink);

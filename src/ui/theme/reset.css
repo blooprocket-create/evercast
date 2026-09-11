@@ -14,12 +14,21 @@ body,
 
 body {
   overflow: hidden;
+  /*
+   * Nothing in the shell scrolls the page, so a swipe that runs past the end of
+   * a panel must not pull-to-refresh the game or rubber-band the whole document
+   * over the diorama.
+   */
+  overscroll-behavior: none;
   background: var(--bg);
   color: var(--ink);
   font-family: var(--font-ui);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+  /* Rotating a phone into landscape must not inflate the type. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 button,
@@ -29,4 +38,30 @@ input {
 
 button {
   color: inherit;
+  /*
+   * Opting out of double-tap-to-zoom is what removes the 300ms wait before a
+   * tap registers; the grey flash that replaces the hover state on touch is
+   * noise over a dark UI. Pinch-zoom is untouched - the page still allows it.
+   */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/*
+ * A drag across a panel, a node or the shelf is a gesture, not a text
+ * selection: without this, dragging the spell tree paints the labels blue and
+ * leaves a selection behind when the finger lifts.
+ */
+button,
+nav,
+label {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Momentum, and no scrollbar gutter stealing width on a phone. */
+@media (pointer: coarse) {
+  * {
+    -webkit-overflow-scrolling: touch;
+  }
 }

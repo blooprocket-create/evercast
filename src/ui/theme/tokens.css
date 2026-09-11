@@ -74,6 +74,13 @@
   --text-value: 24px;
   --text-title: 34px;
 
+  /*
+   * Not a seventh type step: Safari zooms the page in when a focused input is
+   * smaller than this and never zooms back out, so touch inputs take it
+   * whatever the step says.
+   */
+  --text-input-min: 16px;
+
   --font-display: Georgia, 'Times New Roman', serif;
   --font-ui: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 
@@ -104,6 +111,25 @@
   --shelf-slot-count: 4;
   --control-height: 38px;
   --touch-target: 44px;
+
+  /*
+   * Notch, punch-hole and home-indicator insets. These read as 0px on every
+   * browser that has nothing to report, so the desktop layout is untouched;
+   * index.html asks for viewport-fit=cover, which is what makes them non-zero
+   * on a phone. Everything that touches an edge of the screen pads with
+   * max(<its own spacing>, <the inset>) rather than adding the two.
+   */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+
+  /*
+   * What the shelf actually occupies. The HUD and the surface host inset
+   * themselves by this, not by --shelf-height, so the home indicator never
+   * eats the bottom row of the nav.
+   */
+  --shelf-inset: calc(var(--shelf-height) + var(--safe-bottom));
 }
 
 /* Uppercase micro-label. The one place 10px is allowed. */
@@ -124,5 +150,28 @@
 @media (max-width: 620px) {
   :root {
     --shelf-height: 168px;
+  }
+}
+
+/*
+ * A phone held sideways is around 390px tall. The stacked shelf would take a
+ * third of that and the HUD most of the rest, so the shelf collapses back to a
+ * single row of slots with the vitals beside them. Last in the file on purpose:
+ * a 600x380 window matches the rule above as well, and this one must win.
+ */
+@media (max-height: 520px) and (orientation: landscape) {
+  :root {
+    --shelf-height: 84px;
+  }
+}
+
+/*
+ * A fingertip is about 9mm across; a mouse pointer is one pixel. Controls that
+ * are comfortable with a cursor grow to the target the rest of the shell
+ * already respects when the primary input is touch.
+ */
+@media (pointer: coarse) {
+  :root {
+    --control-height: var(--touch-target);
   }
 }

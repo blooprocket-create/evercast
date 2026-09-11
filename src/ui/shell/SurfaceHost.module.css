@@ -1,8 +1,15 @@
 .host {
   position: absolute;
-  inset: 0 0 var(--shelf-height) 0;
+  /* --shelf-inset, not --shelf-height: the shelf clears the home indicator. */
+  inset: 0 0 var(--shelf-inset) 0;
   display: flex;
   flex-direction: column;
+  /*
+   * The host is painted after the shelf, so anything that escapes this box
+   * lands on top of the nav. Clipping here means a surface that mismeasures
+   * loses its own overflow rather than the player's way out.
+   */
+  overflow: hidden;
   background: var(--surface-veil);
   backdrop-filter: blur(18px);
   pointer-events: auto;
@@ -14,12 +21,16 @@
   gap: var(--space-4);
   height: 76px;
   flex: none;
-  padding: 0 var(--space-5);
+  padding: 0 max(var(--space-5), var(--safe-right)) 0 max(var(--space-5), var(--safe-left));
   border-bottom: 1px solid var(--line);
 }
 
 .title {
   margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font: 500 25px / 1 var(--font-display);
   color: var(--ink);
 }
@@ -32,6 +43,7 @@
   display: flex;
   gap: var(--space-4);
   align-items: baseline;
+  flex: none;
 }
 
 .walletItem {
@@ -39,6 +51,17 @@
   align-items: baseline;
   gap: var(--space-2);
   font: 500 var(--text-body) / 1 var(--font-display);
+}
+
+/*
+ * The header covers the HUD, which is where Gold and Essence are named. Two
+ * bare numbers in the corner are a riddle, so the labels come with them.
+ */
+.walletLabel {
+  font: 600 var(--text-label) / 1 var(--font-ui);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-low);
 }
 
 .gold {
@@ -55,9 +78,17 @@
   display: flex;
 }
 
+/*
+ * min-height: 0 is load-bearing. A flex item defaults to min-height: auto,
+ * which is its content height - so when .body stacks into a column on a phone
+ * this box refused to shrink, the archetype's own overflow-y: auto container
+ * was handed its full content height, and every surface simply ran off the
+ * bottom of the screen with no way to scroll to it.
+ */
 .surface {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
@@ -67,9 +98,65 @@
     flex-direction: column;
   }
 
+  /*
+   * One row, still: wrapping put the wallet values on a line of their own
+   * where they read as two stray numbers. The title takes the slack and
+   * truncates instead.
+   */
   .header {
     height: auto;
-    padding: var(--space-3);
-    flex-wrap: wrap;
+    min-height: var(--touch-target);
+    gap: var(--space-3);
+    padding: var(--space-2) max(var(--space-3), var(--safe-right)) var(--space-2)
+      max(var(--space-3), var(--safe-left));
+  }
+
+  .title {
+    flex: 1;
+    font-size: var(--text-lead);
+  }
+
+  .spacer {
+    display: none;
+  }
+
+  .wallets {
+    gap: var(--space-3);
+  }
+}
+
+/* Narrow enough that two labels, two values and a title cannot share a line. */
+@media (max-width: 360px) {
+  .walletLabel {
+    display: none;
+  }
+
+  .walletItem::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    align-self: center;
+    border-radius: var(--radius-pill);
+    background: currentColor;
+  }
+}
+
+/*
+ * A phone held sideways is wide and short, not narrow - 844x390, of which the
+ * host owns 306. The max-width rules above stack the nav rail, the toolbar and
+ * the inspector into horizontal bands, and four of those spent that height
+ * before the surface itself got any: the spell tree came out 50px tall. So the
+ * wide layout comes back here, at landscape sizes. Width is the dimension
+ * there is plenty of.
+ */
+@media (max-height: 520px) and (orientation: landscape) {
+  .body {
+    flex-direction: row;
+  }
+
+  .header {
+    min-height: 0;
+    padding-top: var(--space-1);
+    padding-bottom: var(--space-1);
   }
 }
