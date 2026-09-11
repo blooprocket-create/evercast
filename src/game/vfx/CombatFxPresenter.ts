@@ -10,7 +10,9 @@ export class CombatFxPresenter {
   private chill = new Map<number, { left: number; strength: number; position: Vector3; tick: number }>();
   private light?: PointLight;
   private lightTime = 0;
-  private numbers: DamageNumbers;
+  /** Shared: the companion presenter writes its own labels into this pool, so
+   * the damage-numbers setting covers the whole field rather than half of it. */
+  readonly numbers: DamageNumbers;
   private burstCooldowns = new Map<string, number>();
   constructor(
     private pool: VfxPool,

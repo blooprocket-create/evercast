@@ -1,27 +1,48 @@
 import { Matrix, Scene, Vector3 } from '@babylonjs/core';
-import type { EnemySnapshot } from '../../engine/types';
+
 
 interface Bar {
   element: HTMLDivElement;
   fill: HTMLDivElement;
   readout: HTMLSpanElement;
   anchor: Vector3;
+  faded?: boolean;
 }
 
+/** Anything that can wear a bar: an enemy instance, or a party slot. */
+export interface HealthBarTarget {
+  id: number;
+  hpPercent: number;
+  hp: string;
+  maxHp: string;
+  /** A downed companion keeps its bar, dimmed, so you can see who is out. */
+  faded?: boolean;
+}
+
+/** Foes read red, the party reads green - the same split the HUD meters use. */
+export type HealthBarTone = 'foe' | 'ally';
+
 /**
- * A health bar over each enemy's head, projected from its world position every
- * frame.
+ * A health bar over each combatant's head, projected from its world position
+ * every frame.
  *
  * This lives in the renderer rather than in React for the same reason
  * DamageNumbers does: it has to track a moving target at frame rate, and the
- * interface only receives a snapshot ten times a second. Bosses are excluded -
- * they get the banner at the top of the screen instead.
+ * interface only receives a snapshot ten times a second. Bosses are excluded by
+ * the caller - they get the banner at the top of the screen instead.
+ *
+ * One class, two instances: the enemies and the party need identical
+ * projection and differ only in colour, and a companion whose bar is draining
+ * is the whole point of watching a fight it is in.
  */
-export class EnemyHealthBars {
+export class WorldHealthBars {
   private readonly bars = new Map<number, Bar>();
   private root?: HTMLDivElement;
 
-  constructor(private readonly scene: Scene) {
+  constructor(
+    private readonly scene: Scene,
+    private readonly tone: HealthBarTone = 'foe',
+  ) {
     if (typeof document === 'undefined' || !scene.getEngine().getRenderingCanvas()) return;
     this.root = document.createElement('div');
     this.root.setAttribute('aria-hidden', 'true');
@@ -47,9 +68,13 @@ export class EnemyHealthBars {
       'background:rgba(7,13,16,.72);box-shadow:0 0 0 1px rgba(190,202,177,.22);';
 
     const fill = document.createElement('div');
+    const ramp =
+      this.tone === 'ally'
+        ? 'var(--hp-you-deep,#4e8571),var(--hp-you,#78b99d)'
+        : 'var(--hp-foe-deep,#8a3220),var(--hp-foe,#c4593c)';
     fill.style.cssText =
       'height:100%;border-radius:inherit;transition:width 100ms linear;' +
-      'background:linear-gradient(90deg,var(--hp-foe-deep,#8a3220),var(--hp-foe,#c4593c));';
+      `background:linear-gradient(90deg,${ramp});`;
 
     track.append(fill);
     element.append(readout, track);
@@ -57,26 +82,25 @@ export class EnemyHealthBars {
     return { element, fill, readout, anchor: Vector3.Zero() };
   }
 
-  /** `heightOf` gives the world-space head height for an enemy instance. */
-  sync(enemies: readonly EnemySnapshot[], heightOf: (instanceId: number) => Vector3 | null): void {
+  /** `heightOf` gives the world-space head height for a target id. */
+  sync(targets: readonly HealthBarTarget[], heightOf: (id: number) => Vector3 | null): void {
     if (!this.root) return;
 
     const living = new Set<number>();
-    for (const enemy of enemies) {
-      // The boss owns the banner at the top of the screen, not a floating bar.
-      if (enemy.boss) continue;
-      living.add(enemy.instanceId);
+    for (const target of targets) {
+      living.add(target.id);
 
-      let bar = this.bars.get(enemy.instanceId);
+      let bar = this.bars.get(target.id);
       if (!bar) {
         bar = this.create();
-        this.bars.set(enemy.instanceId, bar);
+        this.bars.set(target.id, bar);
       }
 
-      const head = heightOf(enemy.instanceId);
+      const head = heightOf(target.id);
       if (head) bar.anchor.copyFrom(head);
-      bar.fill.style.width = `${Math.max(0, Math.min(100, enemy.hpPercent))}%`;
-      bar.readout.textContent = `${enemy.hp.display} / ${enemy.maxHp.display}`;
+      bar.fill.style.width = `${Math.max(0, Math.min(100, target.hpPercent))}%`;
+      bar.readout.textContent = `${target.hp} / ${target.maxHp}`;
+      bar.faded = target.faded === true;
     }
 
     for (const [id, bar] of this.bars) {
@@ -105,7 +129,7 @@ export class EnemyHealthBars {
         viewport,
       );
       const behindCamera = projected.z < 0 || projected.z > 1;
-      bar.element.style.opacity = behindCamera ? '0' : '1';
+      bar.element.style.opacity = behindCamera ? '0' : bar.faded ? '0.4' : '1';
       if (behindCamera) continue;
       bar.element.style.transform = `translate(${
         rect.left + (projected.x / width) * rect.width - 48

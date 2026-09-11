@@ -29,6 +29,10 @@
   gap: var(--space-4);
   height: 76px;
   flex: none;
+  /* A fourth wallet, or a longer label, clips here instead of dragging the
+   * whole host wider than the screen and taking the surface with it. */
+  min-width: 0;
+  overflow: hidden;
   padding: 0 max(var(--space-5), var(--safe-right)) 0 max(var(--space-5), var(--safe-left));
   border-bottom: 1px solid var(--line);
 }
@@ -138,8 +142,15 @@
   }
 }
 
-/* Narrow enough that two labels, two values and a title cannot share a line. */
-@media (max-width: 360px) {
+/*
+ * Narrow enough that three labels, three values and a title cannot share a
+ * line. The threshold was 360px when there were two wallets; Starlight made it
+ * three, and between 361 and 420 the third one was pushed clean off the right
+ * edge - value and all - because `.wallets` is deliberately `flex: none` and so
+ * widens the header rather than shrinking. Measured: three labelled wallets
+ * plus Back and a title need about 560px.
+ */
+@media (max-width: 560px) {
   .walletLabel {
     display: none;
   }

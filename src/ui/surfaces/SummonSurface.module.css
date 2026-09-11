@@ -1,20 +1,18 @@
-.eyebrow {
-  font: 600 var(--text-label) / 1 var(--font-ui);
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--accent);
-}
+/*
+ * Rarity arrives as `--rarity` from `companions/rarity.ts`; Starlight takes
+ * --route, the one meaning colour no rarity claims. No colour is named here.
+ */
 
 .name {
   margin: 0;
-  font: 500 var(--text-value) / 1.15 var(--font-display);
+  font: 500 var(--text-lead) / 1.2 var(--font-display);
   color: var(--ink);
 }
 
 .description {
   margin: 0;
   max-width: 52ch;
-  font: 400 var(--text-body) / 1.55 var(--font-ui);
+  font: 400 var(--text-small) / 1.5 var(--font-ui);
   color: var(--ink-mid);
 }
 
@@ -25,35 +23,13 @@
 }
 
 /*
- * Starlight takes --route, the one meaning colour no rarity claims, so the
- * wallet never reads as a tier.
+ * The two draw buttons, side by side wherever they both fit and stacked when
+ * they do not. auto-fit rather than a track count, so a third option later
+ * wraps instead of orphaning.
  */
-.wallet {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  background: var(--veil-2);
-}
-
-.walletLabel {
-  font: 600 var(--text-label) / 1 var(--font-ui);
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--ink-low);
-}
-
-.walletValue {
-  color: var(--route);
-  font-size: var(--text-lead);
-}
-
 .draws {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
   gap: var(--space-3);
 }
 
@@ -76,6 +52,10 @@
   border-color: var(--route);
 }
 
+.drawTen {
+  border-color: var(--route);
+}
+
 .draw:disabled {
   color: var(--ink-dim);
   /* Outranks .drawTen: a lit border read as affordable when it was not. */
@@ -83,13 +63,10 @@
   cursor: default;
 }
 
-.drawTen {
-  border-color: var(--route);
-}
-
 .drawLabel {
   display: grid;
   gap: 2px;
+  min-width: 0;
   font: 500 var(--text-body) / 1.2 var(--font-ui);
 }
 
@@ -100,6 +77,8 @@
 
 .drawPrice {
   color: var(--route);
+  flex: none;
+  font-variant-numeric: tabular-nums;
 }
 
 .draw:disabled .drawPrice {
@@ -130,4 +109,42 @@
   color: var(--ink-mid);
   font: 400 var(--text-small) / 1 var(--font-ui);
   font-variant-numeric: tabular-nums;
+}
+
+/* Only drawn once a second banner exists; kept so that stays a data change. */
+.banners {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.banner {
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  color: var(--ink-low);
+  font: 500 var(--text-small) / 1 var(--font-ui);
+}
+
+.bannerOn {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/*
+ * On a phone the buttons are the surface. Tightening the label lets the price
+ * and the wording stay on one line at 320px rather than wrapping into three.
+ */
+@media (max-width: 560px) {
+  .draw {
+    padding: var(--space-3);
+  }
+
+  .drawLabel {
+    font-size: var(--text-small);
+  }
+
+  .drawSub {
+    font-size: var(--text-label);
+  }
 }

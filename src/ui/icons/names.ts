@@ -27,6 +27,7 @@ export const ICON_NAMES = [
   'slotNecklace',
   'slotRing',
   'companions',
+  'party',
   'summon',
   'classVanguard',
   'classBruiser',

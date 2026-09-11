@@ -192,6 +192,54 @@ describe('mobile layout', () => {
     }
   });
 
+  it('hides the wallet labels while there are still three wallets to fit', () => {
+    /*
+     * The threshold was 360px when the header carried two wallets. Starlight
+     * made it three, and between 361 and 420 the third was pushed clean off
+     * the right edge - label, value and all - because `.wallets` is `flex:
+     * none` and widens the header rather than shrinking. Every phone in
+     * portrait is inside that band.
+     */
+    const host = sheet('shell/SurfaceHost.module.css');
+    const query = /@media \(max-width: (\d+)px\)\s*\{[^}]*\.walletLabel\s*\{[^}]*display:\s*none/.exec(
+      declarations(host),
+    );
+    expect(query, 'no rule hides .walletLabel at a narrow width').not.toBeNull();
+    expect(Number(query?.[1])).toBeGreaterThanOrEqual(430);
+
+    // And if a fourth ever arrives it clips rather than dragging the host wide.
+    const hostRule = /\.header\s*\{[^}]*\}/.exec(host)?.[0] ?? '';
+    expect(hostRule).toMatch(/overflow:\s*hidden/);
+  });
+
+  it('gives the summon overlay a definite column to measure against', () => {
+    /*
+     * Left implicit, the scrim's grid column sized to max-content - the width
+     * all ten cards would like, measured at 855px inside a 375px phone - and
+     * every child asking for 100% inherited that instead of the screen. The
+     * card grid laid out nine columns, clipped six of them, and took the
+     * Continue button off the right edge with them.
+     */
+    const reveal = sheet('summon/SummonReveal.module.css');
+    const scrim = /\.scrim\s*\{[^}]*\}/.exec(declarations(reveal))?.[0] ?? '';
+    expect(scrim).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)/);
+    // Centring a batch taller than the screen must not strand its first row
+    // above the top of the scroll container.
+    expect(scrim).toMatch(/align-content:\s*safe center/);
+  });
+
+  it('never sets a grid track minimum wider than the narrowest phone', () => {
+    /*
+     * `minmax(9rem, 1fr)` is 144px that cannot shrink, so a row of them
+     * overflows a 320px screen instead of wrapping. `min(100%, 9rem)` says
+     * "9rem, or the whole width if that is less", which is what makes
+     * auto-fit behave on a phone.
+     */
+    const candidates = STYLESHEETS.filter((file) => file.relativePath !== 'theme/tokens.css');
+    const bare = offences(candidates, /minmax\(\s*\d+(\.\d+)?rem/);
+    expect(bare).toEqual([]);
+  });
+
   it('treats a tap as a tap', () => {
     // No 300ms double-tap wait, no grey flash, and a drag across the shelf or
     // the spell tree is a gesture rather than a text selection.

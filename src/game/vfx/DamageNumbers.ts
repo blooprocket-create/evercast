@@ -14,6 +14,46 @@ export class DamageNumbers {
     this.root.style.cssText = 'position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:2;';
     document.body.append(this.root);
   }
+  /**
+   * A short piece of text over a world position: an ability name, a heal, a
+   * knockout. Same pool and same projection as the damage numbers, because a
+   * companion casting Mend has to read the same way a hit does or the player
+   * has no idea anything happened.
+   */
+  callout(id: number, text: string, position: Vector3, color: string, size = 11): void {
+    const label = this.claim(id, false);
+    if (!label) return;
+    label.position.copyFrom(position);
+    label.element.textContent = text;
+    label.element.style.color = color;
+    label.element.style.fontSize = `${size}px`;
+    label.element.style.letterSpacing = '0.08em';
+    label.element.style.opacity = '0';
+  }
+
+  /** A free label, reused or newly pooled. Null when the pool is exhausted. */
+  private claim(id: number, coalesce = true): Label | undefined {
+    if (!this.root) return undefined;
+    let label =
+      (coalesce ? this.labels.find((l) => l.id === id && l.age < 0.1) : undefined) ??
+      this.labels.find((l) => l.age >= 0.65);
+    if (!label && this.labels.length < 24) {
+      const element = document.createElement('span');
+      element.style.cssText =
+        'position:absolute;left:0;top:0;font:600 12px Georgia,serif;text-shadow:0 1px 3px #18201a;will-change:transform,opacity;white-space:nowrap;';
+      this.root.append(element);
+      label = { element, age: 1, position: Vector3.Zero(), id: 0, critical: false };
+      this.labels.push(label);
+    }
+    if (label) {
+      label.id = id;
+      label.age = 0;
+      label.critical = false;
+      label.element.style.letterSpacing = 'normal';
+    }
+    return label;
+  }
+
   show(hit: Pick<Hit, 'instanceId' | 'critical' | 'damage'>, position: Vector3): void {
     if (!this.root) return;
     let label =

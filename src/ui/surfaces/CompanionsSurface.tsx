@@ -1,21 +1,16 @@
 import { useState } from 'react';
-import { MAX_COMPANION_STARS, PARTY_SIZE } from '../../engine/companions/types';
-import type { FormationRow } from '../../engine/companions/types';
-import type { CompanionSnapshot } from '../../engine/types';
+import { MAX_COMPANION_STARS } from '../../engine/companions/types';
 import { Detail } from '../archetypes/Detail';
 import { Ledger } from '../archetypes/Ledger';
 // prettier-ignore
 import { ABILITY_LABEL, ABILITY_NOTE, CLASS_ICON, CLASS_LABEL, RARITY_LABEL, ROW_LABEL, ROW_NOTE, rarityStyle, starText } from '../companions/rarity';
 import { NumberCell } from '../format/NumberCell';
-import { Icon } from '../icons/Icon';
 import { Meter } from '../primitives/Meter';
 import { Panel } from '../primitives/Panel';
 import { Row } from '../primitives/Row';
 import { useCommand } from '../state/CommandContext';
 import { useSnapshot } from '../state/snapshot';
 import styles from './CompanionsSurface.module.css';
-
-const ROWS: readonly FormationRow[] = ['front', 'flank', 'back'];
 
 export function CompanionsSurface() {
   const snapshot = useSnapshot();
@@ -39,8 +34,6 @@ export function CompanionsSurface() {
   }
   if (!selected) return null;
 
-  const equippedCount = snapshot.party.filter(Boolean).length;
-
   return (
     <Detail
       list={
@@ -50,9 +43,7 @@ export function CompanionsSurface() {
           header={
             <>
               <span className={styles.eyebrow}>Roster</span>
-              <span className={styles.count}>
-                {equippedCount}/{PARTY_SIZE} fighting
-              </span>
+              <span className={styles.count}>{roster.length} collected</span>
             </>
           }
           renderRow={(companion) => (
@@ -62,7 +53,7 @@ export function CompanionsSurface() {
                 iconLive={companion.canAscend}
                 label={companion.name}
                 sub={`${RARITY_LABEL[companion.rarity]} · ${CLASS_LABEL[companion.companionClass]}${
-                  companion.slot === null ? '' : ` · Slot ${companion.slot + 1}`
+                  companion.slot === null ? '' : ` · ${companion.slot + 1}`
                 }`}
                 value={<span className={styles.stars}>{starText(companion.stars)}</span>}
                 selected={companion.definitionId === selected.definitionId}
@@ -155,59 +146,14 @@ export function CompanionsSurface() {
           </p>
         </Panel>
 
-        <Panel title="Party" note={`${equippedCount} of ${PARTY_SIZE}`}>
+        <Panel title="Deployment" note={selected.slot === null ? 'On the bench' : `Slot ${selected.slot + 1}`}>
           <p className={styles.hint}>
-            Any companion fits any slot. Where it stands is decided by what it is.
+            {selected.slot === null
+              ? `${selected.name} is not deployed. The Party screen decides who stands where.`
+              : `${selected.name} is holding slot ${selected.slot + 1}, ${ROW_LABEL[selected.row].toLowerCase()} rank.`}
           </p>
-          <div className={styles.formation}>
-            {ROWS.map((row) => (
-              <div className={styles.formationRow} key={row}>
-                <span className={styles.rowLabel} title={ROW_NOTE[row]}>
-                  {ROW_LABEL[row]}
-                </span>
-                <span className={styles.rowMembers}>
-                  {snapshot.party.filter((entry) => entry?.row === row).length === 0 ? (
-                    <span className={styles.rowEmpty}>—</span>
-                  ) : (
-                    snapshot.party
-                      .filter((entry): entry is CompanionSnapshot => entry?.row === row)
-                      .map((entry) => (
-                        <span
-                          key={entry.definitionId}
-                          style={rarityStyle(entry.rarity)}
-                          className={entry.downed ? `${styles.chip} ${styles.chipDown}` : styles.chip}
-                          title={entry.downed ? `${entry.name} — down` : entry.name}
-                        >
-                          <Icon name={CLASS_ICON[entry.companionClass]} size={13} />
-                          {entry.name}
-                        </span>
-                      ))
-                  )}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          <div className={styles.slots}>
-            {snapshot.party.map((entry, slot) => (
-              <button
-                key={slot}
-                type="button"
-                style={entry ? rarityStyle(entry.rarity) : undefined}
-                className={entry ? `${styles.slot} ${styles.slotFilled}` : styles.slot}
-                onClick={() =>
-                  entry
-                    ? run({ type: 'unequip_companion', slot })
-                    : run({ type: 'equip_companion', definitionId: selected.definitionId, slot })
-                }
-                title={entry ? `Remove ${entry.name}` : `Put ${selected.name} here`}
-              >
-                <span className={styles.slotIndex}>{slot + 1}</span>
-                <span className={styles.slotName}>{entry ? entry.name : 'Empty'}</span>
-              </button>
-            ))}
-          </div>
         </Panel>
+
       </div>
     </Detail>
   );

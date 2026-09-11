@@ -61,8 +61,10 @@ across five rarities and six classes. They are real combatants: they swing on
 their own timers, soak the blows aimed at the mage, and can be knocked out for
 the rest of an encounter. Duplicates bank shards, and shards buy star levels.
 
-Summons cost Starlight, a third wallet earned from kills so the collection loop
-feeds off the combat loop without competing with gear or Arcane Essence. The
+Companions get their own section of the rail: a roster screen, a Party screen for
+deploying them, and the Summon banner. Summons cost Starlight, a third wallet
+earned from kills so the collection loop feeds off the combat loop without
+competing with gear or Arcane Essence. The
 reveal is animated, with a skip toggle in Settings and a Skip button on the
 overlay itself.
 

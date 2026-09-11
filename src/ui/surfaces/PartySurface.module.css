@@ -1,0 +1,211 @@
+/* Rarity arrives as `--rarity` from `companions/rarity.ts`. No colour here. */
+
+.eyebrow {
+  font: 600 var(--text-label) / 1 var(--font-ui);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.count {
+  font: 400 var(--text-small) / 1 var(--font-ui);
+  color: var(--ink-low);
+  font-variant-numeric: tabular-nums;
+}
+
+.rowWrap {
+  display: block;
+}
+
+.stars {
+  color: var(--rarity, var(--ink-low));
+  letter-spacing: 0.06em;
+  font-size: var(--text-small);
+}
+
+.empty {
+  color: var(--ink-dim);
+}
+
+.name {
+  margin: 0;
+  font: 500 var(--text-value) / 1.15 var(--font-display);
+  color: var(--ink);
+}
+
+.description {
+  margin: 0;
+  max-width: 52ch;
+  font: 400 var(--text-body) / 1.55 var(--font-ui);
+  color: var(--ink-mid);
+}
+
+.hint {
+  margin: 0;
+  font: 400 var(--text-small) / 1.5 var(--font-ui);
+  color: var(--ink-dim);
+}
+
+/* The field: front rank at the top, nearest the wave. */
+.formation {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.formationRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--veil-1);
+}
+
+.rowLabel {
+  flex: 0 0 4.5rem;
+  font: 600 var(--text-label) / 1 var(--font-ui);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.rowMembers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.rowEmpty {
+  color: var(--ink-dim);
+  font-size: var(--text-small);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--rarity);
+  border-radius: var(--radius-pill);
+  color: var(--rarity);
+  font: 500 var(--text-small) / 1 var(--font-ui);
+}
+
+.chipDown {
+  border-color: var(--line);
+  color: var(--ink-dim);
+  text-decoration: line-through;
+}
+
+.occupant {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--rarity);
+}
+
+.occupantName {
+  flex: 1;
+  min-width: 0;
+  font: 500 var(--text-lead) / 1.2 var(--font-display);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.recall {
+  min-height: var(--control-height);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-card);
+  background: var(--veil-3);
+  color: var(--ink-mid);
+  font: 500 var(--text-small) / 1 var(--font-ui);
+  cursor: pointer;
+}
+
+.recall:hover {
+  border-color: var(--hp-foe);
+  color: var(--hp-foe);
+}
+
+/*
+ * The bench. auto-fit with a `min(100%, …)` floor so a 320px screen gets one
+ * per row instead of overflowing, and a desktop gets as many as fit.
+ */
+.bench {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr));
+  gap: var(--space-2);
+}
+
+.pick {
+  display: grid;
+  gap: var(--space-1);
+  min-height: var(--touch-target);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--slot);
+  text-align: left;
+  cursor: pointer;
+}
+
+.pick:hover {
+  border-color: var(--rarity);
+}
+
+.pickHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--rarity);
+  min-width: 0;
+}
+
+.pickName {
+  min-width: 0;
+  color: var(--ink);
+  font: 500 var(--text-small) / 1.2 var(--font-ui);
+  overflow-wrap: anywhere;
+}
+
+.pickMeta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.pickRow {
+  font: 400 var(--text-label) / 1 var(--font-ui);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+/* The pane is the bottom half of a phone; everything comes down a step. */
+@media (max-width: 560px) {
+  .name {
+    font-size: var(--text-lead);
+  }
+
+  .description {
+    font-size: var(--text-small);
+    line-height: 1.45;
+  }
+
+  .formationRow {
+    padding: var(--space-2);
+    gap: var(--space-2);
+  }
+
+  .rowLabel {
+    flex-basis: 3.25rem;
+  }
+
+  .bench {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr));
+  }
+}

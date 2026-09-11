@@ -1,6 +1,6 @@
 import type Decimal from 'break_eternity.js';
 // prettier-ignore
-import { STARLIGHT_BOSS_MULTIPLIER, STARLIGHT_FIRST_CLEAR, STARLIGHT_PER_KILL } from '../../content/companionTuning';
+import { STARLIGHT_PER_BOSS_KILL, STARLIGHT_PER_KILL } from '../../content/companionTuning';
 import { big } from '../numbers';
 
 /**
@@ -12,23 +12,12 @@ import { big } from '../numbers';
  * no Essence. So summons get a third wallet, earned the way Gold is - from
  * kills - which keeps the collection loop feeding off the combat loop.
  *
- * It grows far more slowly than Gold per kill: a draw should be an occasion.
+ * Unlike Gold it does not scale. It used to grow with the square root of the
+ * stage, which meant a draw cost less the further you pushed and the price
+ * stopped meaning anything; a kill is now worth a kill wherever it happens,
+ * and only a boss is worth more. There is no first-clear bonus for the same
+ * reason - it was the largest scaling source of all.
  */
-export function starlightRewardForKill(stage: number, boss: boolean): Decimal {
-  const safeStage = Math.max(1, Math.floor(stage));
-  const multiplier = boss ? STARLIGHT_BOSS_MULTIPLIER : 1;
-  const reward = big(STARLIGHT_PER_KILL)
-    .mul(Math.sqrt(safeStage))
-    .mul(multiplier)
-    .floor();
-  return reward.cmp(1) < 0 ? big(1) : reward;
-}
-
-/** A one-off bonus the first time a frontier stage falls. */
-export function firstClearStarlightReward(stage: number, boss: boolean): Decimal {
-  const safeStage = Math.max(1, Math.floor(stage));
-  return big(STARLIGHT_FIRST_CLEAR)
-    .mul(Math.sqrt(safeStage))
-    .mul(boss ? 3 : 1)
-    .floor();
+export function starlightRewardForKill(_stage: number, boss: boolean): Decimal {
+  return big(boss ? STARLIGHT_PER_BOSS_KILL : STARLIGHT_PER_KILL);
 }

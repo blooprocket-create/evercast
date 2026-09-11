@@ -219,7 +219,7 @@ describe('companion system', () => {
     expect(system.ascend(state, 'hedge_warden')).toBe(false); // no shards yet
 
     for (let star = 1; star < MAX_COMPANION_STARS; star += 1) {
-      const cost = starUpCost(owned.stars);
+      const cost = starUpCost('hedge_warden', owned.stars);
       if (cost === null) throw new Error('expected a cost');
       owned.shards = cost;
       expect(system.ascend(state, 'hedge_warden')).toBe(true);
@@ -227,7 +227,7 @@ describe('companion system', () => {
     }
 
     expect(owned.stars).toBe(MAX_COMPANION_STARS);
-    expect(starUpCost(owned.stars)).toBeNull();
+    expect(starUpCost('hedge_warden', owned.stars)).toBeNull();
     owned.shards = 10_000;
     expect(system.ascend(state, 'hedge_warden')).toBe(false);
   });
@@ -238,7 +238,7 @@ describe('companion system', () => {
     const before = state.run.companions[0]?.maxHp;
     const owned = state.companions.owned.hedge_warden;
     if (!owned || !before) throw new Error('expected ownership');
-    owned.shards = starUpCost(1) ?? 0;
+    owned.shards = starUpCost('hedge_warden', 1) ?? 0;
     system.ascend(state, 'hedge_warden');
     expect(state.run.companions[0]?.maxHp.cmp(before)).toBe(1);
   });

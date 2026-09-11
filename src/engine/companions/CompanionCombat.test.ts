@@ -11,7 +11,7 @@ import type { EnemyState, GameState } from '../model';
 import { big } from '../numbers';
 import { SaveCodec } from '../save/SaveCodec';
 // prettier-ignore
-import { guardReduction, isPassive, nextCompanionBeat, wizardPerHit } from './CompanionCombat';
+import { damageCompanion, guardReduction, isPassive, nextCompanionBeat, wizardPerHit } from './CompanionCombat';
 import { companionDamage, requireCompanion } from './CompanionCatalog';
 import { compileSpell } from '../spell/SpellCompiler';
 import { MAX_COMPANION_STARS } from './types';
@@ -185,6 +185,81 @@ describe('companions in a fight', () => {
     const events = simulation.drainPresentationEvents();
     expect(events.some((event) => event.type === 'companion_attack')).toBe(true);
     expect(events.some((event) => event.type === 'companion_ability')).toBe(true);
+  });
+
+  it('reports what each target of an ability actually took', () => {
+    /*
+     * `amount` is a total. A volley hitting three enemies for 6, 6 and 6 sends
+     * 18, and anything painting that on each of them tells the player every
+     * enemy took the whole salvo. `hits` carries the per-enemy figure.
+     */
+    const simulation = fresh(4242);
+    simulation.advance(240);
+    let sawMultiTarget = false;
+    for (const event of simulation.drainPresentationEvents()) {
+      if (event.type !== 'companion_ability') continue;
+      // Every hit names a target the ability landed on, and no target twice.
+      const hitIds = event.hits.map((hit) => hit.instanceId);
+      expect(new Set(hitIds).size).toBe(hitIds.length);
+      for (const id of hitIds) expect(event.targets).toContain(id);
+      if (event.hits.length === 0) continue;
+      if (event.hits.length > 1) sawMultiTarget = true;
+      const summed = event.hits.reduce((total, hit) => total.add(big(hit.damage)), big(0));
+      expect(summed.sub(big(event.amount)).abs().cmp(1e-9)).toBeLessThanOrEqual(0);
+    }
+    expect(sawMultiTarget).toBe(true);
+  });
+
+  it('gives a debuff no damage to report', () => {
+    // Hex and wither weaken a target without hurting it. Treating an empty
+    // `amount` as damage stamped a 0 over whatever they touched.
+    const simulation = fresh(97, ['gravebell_acolyte', 'hedge_warden']);
+    simulation.advance(300);
+    let sawDebuff = false;
+    for (const event of simulation.drainPresentationEvents()) {
+      if (event.type !== 'companion_ability') continue;
+      if (event.ability !== 'hex' && event.ability !== 'wither') continue;
+      sawDebuff = true;
+      expect(event.hits).toEqual([]);
+      expect(event.targets.length).toBeGreaterThan(0);
+    }
+    expect(sawDebuff).toBe(true);
+  });
+
+  it('reports the health a blow actually cost, not the swing', () => {
+    /*
+     * A bulwark that eats a hit whole leaves the bar where it was. Reporting
+     * the incoming figure put a large number over a bar that never moved.
+     */
+    const simulation = fresh(5);
+    simulation.advance(30, { presentationEvents: false });
+    const run = simulation.getState().run;
+    const companion = run.companions[0];
+    companion.hp = big(100);
+    companion.maxHp = big(100);
+    companion.shield = big(40);
+
+    const events: GameEvent[] = [];
+    const emit = (event: GameEvent) => void events.push(event);
+
+    damageCompanion(run, companion, big(25), emit, 1);
+    const soaked = events.find((event) => event.type === 'companion_damaged');
+    expect(soaked).toMatchObject({ damage: '0', absorbed: '25' });
+    expect(companion.hp.toString()).toBe('100');
+
+    events.length = 0;
+    damageCompanion(run, companion, big(25), emit, 1);
+    const split = events.find((event) => event.type === 'companion_damaged');
+    // 15 of shield left, so 15 absorbed and 10 off the bar.
+    expect(split).toMatchObject({ damage: '10', absorbed: '15' });
+    expect(companion.hp.toString()).toBe('90');
+
+    // Overkill reports the health there was to take, not the blow.
+    events.length = 0;
+    damageCompanion(run, companion, big(1000), emit, 1);
+    const lethal = events.find((event) => event.type === 'companion_damaged');
+    expect(lethal).toMatchObject({ damage: '90', absorbed: '0' });
+    expect(companion.downed).toBe(true);
   });
 
   it('spends a companion attack on something actually in reach', () => {

@@ -58,7 +58,7 @@ export function buildCompanionSnapshots(
         modelKey: definition.modelKey,
         stars: owned.stars,
         shards: owned.shards,
-        shardsForNextStar: starUpCost(owned.stars),
+        shardsForNextStar: starUpCost(owned.definitionId, owned.stars),
         canAscend: canAscend(owned),
         ability: { ...definition.ability },
         abilityMagnitude: abilityMagnitude(definition, owned.stars),

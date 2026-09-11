@@ -207,6 +207,7 @@ function useAbility(
   const ability = definition.ability;
   const magnitude = abilityMagnitude(definition, companion.stars);
   const targets: number[] = [];
+  const hits: { instanceId: number; damage: string }[] = [];
   let amount = big(0);
 
   switch (ability.id) {
@@ -215,6 +216,7 @@ function useAbility(
       if (!target) return;
       amount = hurt(run, target, perHit.mul(magnitude).mul(rallyMultiplier(run)), killed);
       targets.push(target.instanceId);
+      hits.push({ instanceId: target.instanceId, damage: amount.toString() });
       break;
     }
     case 'volley': {
@@ -223,8 +225,10 @@ function useAbility(
         .slice(0, VOLLEY_TARGETS);
       if (reachable.length === 0) return;
       for (const enemy of reachable) {
-        amount = amount.add(hurt(run, enemy, perHit.mul(magnitude).mul(rallyMultiplier(run)), killed));
+        const dealt = hurt(run, enemy, perHit.mul(magnitude).mul(rallyMultiplier(run)), killed);
+        amount = amount.add(dealt);
         targets.push(enemy.instanceId);
+        hits.push({ instanceId: enemy.instanceId, damage: dealt.toString() });
       }
       break;
     }
@@ -236,6 +240,7 @@ function useAbility(
       if (!target) return;
       amount = hurt(run, target, perHit.mul(magnitude).mul(rallyMultiplier(run)), killed);
       targets.push(target.instanceId);
+      hits.push({ instanceId: target.instanceId, damage: amount.toString() });
       break;
     }
     case 'hex': {
@@ -322,6 +327,7 @@ function useAbility(
     ability: ability.id,
     amount: amount.toString(),
     targets,
+    hits,
   });
 }
 
@@ -394,9 +400,10 @@ export function damageCompanion(
   instanceId: number,
 ): boolean {
   let remaining = damage;
+  let absorbed = big(0);
   const shield = companion.shield;
   if (shield && shield.cmp(0) > 0) {
-    const absorbed = shield.cmp(remaining) > 0 ? remaining : shield;
+    absorbed = shield.cmp(remaining) > 0 ? remaining : shield;
     companion.shield = shield.sub(absorbed);
     remaining = remaining.sub(absorbed);
   }
@@ -408,7 +415,11 @@ export function damageCompanion(
     time: run.elapsedSeconds,
     slot: companion.slot,
     instanceId,
-    damage: damage.toString(),
+    // What the health bar will actually move by, not what was swung. A blow a
+    // bulwark ate whole moved nothing, and a number saying otherwise over a
+    // bar that does not budge reads as a bug in the fight.
+    damage: actual.toString(),
+    absorbed: absorbed.toString(),
   });
 
   if (companion.hp.cmp(0) > 0) return false;

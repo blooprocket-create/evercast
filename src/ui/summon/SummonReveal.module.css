@@ -11,8 +11,21 @@
   inset: 0;
   z-index: 6;
   display: grid;
+  /*
+   * The column has to be definite. Left implicit it sized to max-content - the
+   * width all ten cards would like, 855px inside a 375px phone - and every
+   * child that asked for 100% inherited that instead of the screen, so the card
+   * grid laid out nine columns and clipped six of them along with the Continue
+   * button. minmax(0, 1fr) is what makes `100%` mean the viewport here.
+   */
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: 1fr auto auto;
-  align-content: center;
+  /*
+   * `safe` matters: a ten-pull on a short screen is taller than the overlay,
+   * and plain centring pushes the first row out of the top of a scroll
+   * container where no gesture reaches it.
+   */
+  align-content: safe center;
   justify-items: center;
   gap: var(--space-4);
   padding: max(var(--space-5), var(--safe-top)) max(var(--space-4), var(--safe-right))
@@ -42,9 +55,17 @@
   pointer-events: none;
 }
 
+/*
+ * `width: 100%` is load-bearing. The scrim centres its items, so without it
+ * this grid was sized to its own max-content - the width all ten cards would
+ * like - and `auto-fit` resolved against that rather than against the screen.
+ * On a 375px phone it laid out three columns in a 343px box and the third was
+ * clipped, taking the Continue button off the right edge with it.
+ */
 .cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 9.5rem));
+  width: 100%;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr));
   gap: var(--space-3);
   justify-content: center;
   align-self: center;
@@ -53,12 +74,17 @@
 
 /* A whole batch at once is a summary, so the cards can afford to be smaller. */
 .summary {
-  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 8.5rem));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 7.5rem), 1fr));
 }
 
 .card {
   display: grid;
-  align-content: center;
+  /*
+   * `safe` matters: a ten-pull on a short screen is taller than the overlay,
+   * and plain centring pushes the first row out of the top of a scroll
+   * container where no gesture reaches it.
+   */
+  align-content: safe center;
   justify-items: center;
   gap: var(--space-1);
   aspect-ratio: 3 / 4;
@@ -120,6 +146,62 @@
   font: 400 var(--text-small) / 1.4 var(--font-ui);
   color: var(--ink-low);
   text-align: center;
+}
+
+/*
+ * Ten cards at a 3:4 aspect is over 900px of column on a phone. Below this the
+ * card is sized by its own content instead, which fits the batch on one screen
+ * and keeps Continue reachable without scrolling.
+ */
+@media (max-width: 560px) {
+  .scrim {
+    gap: var(--space-3);
+    padding: max(var(--space-4), var(--safe-top)) max(var(--space-3), var(--safe-right))
+      max(var(--space-4), var(--safe-bottom)) max(var(--space-3), var(--safe-left));
+  }
+
+  .cards {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 6.25rem), 1fr));
+    gap: var(--space-2);
+  }
+
+  .summary {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 5.25rem), 1fr));
+  }
+
+  .card {
+    aspect-ratio: auto;
+    min-height: 5.5rem;
+    padding: var(--space-2);
+    gap: 1px;
+  }
+
+  .back {
+    height: 2.25rem;
+  }
+
+  .cardName {
+    font-size: var(--text-label);
+    line-height: 1.2;
+  }
+}
+
+/* A phone held sideways has even less height; the batch has to stay one view. */
+@media (max-height: 520px) and (orientation: landscape) {
+  .cards,
+  .summary {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 5.5rem), 1fr));
+  }
+
+  .card {
+    aspect-ratio: auto;
+    min-height: 4.75rem;
+    padding: var(--space-2);
+  }
+
+  .scrim {
+    gap: var(--space-2);
+  }
 }
 
 @keyframes fade {
