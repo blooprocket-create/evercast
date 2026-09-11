@@ -4,6 +4,7 @@ import { goldRewardForKill } from '../gear/GearSystem';
 import type { EnemyState, GameState } from '../model';
 import { big } from '../numbers';
 import { firstClearEssenceReward } from './EssenceEconomy';
+import { firstClearStarlightReward, starlightRewardForKill } from './StarlightEconomy';
 import { clearSpellCombat } from '../combat/SpellCombatState';
 import { restoreCompanions } from '../companions/CompanionSystem';
 
@@ -14,9 +15,11 @@ export class ProgressionSystem {
   ) {}
 
   handleEnemyKilled(state: GameState, enemy: EnemyState): void {
-    const { run, meta, equipment } = state;
+    const { run, meta, equipment, companions } = state;
     const gold = goldRewardForKill(enemy.stage, enemy.boss);
     equipment.gold = equipment.gold.add(gold);
+    const starlight = starlightRewardForKill(enemy.stage, enemy.boss);
+    companions.starlight = companions.starlight.add(starlight);
     run.stats.kills += 1;
     if (enemy.boss) run.stats.bossKills += 1;
     meta.lifetimeKills += 1;
@@ -36,6 +39,12 @@ export class ProgressionSystem {
       resource: 'gold',
       amount: gold.toString(),
     });
+    this.emit({
+      type: 'resource_gained',
+      time: run.elapsedSeconds,
+      resource: 'starlight',
+      amount: starlight.toString(),
+    });
   }
 
   handleEncounterCleared(state: GameState): void {
@@ -45,13 +54,22 @@ export class ProgressionSystem {
       const firstEverClear = clearedStage >= meta.highestStageEver;
 
       if (firstEverClear) {
-        const essence = firstClearEssenceReward(clearedStage, clearedStage % this.config.bossCadence === 0);
+        const boss = clearedStage % this.config.bossCadence === 0;
+        const essence = firstClearEssenceReward(clearedStage, boss);
         run.essence = run.essence.add(essence);
         this.emit({
           type: 'resource_gained',
           time: run.elapsedSeconds,
           resource: 'essence',
           amount: essence.toString(),
+        });
+        const starlight = firstClearStarlightReward(clearedStage, boss);
+        state.companions.starlight = state.companions.starlight.add(starlight);
+        this.emit({
+          type: 'resource_gained',
+          time: run.elapsedSeconds,
+          resource: 'starlight',
+          amount: starlight.toString(),
         });
       }
 

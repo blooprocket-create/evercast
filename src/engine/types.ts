@@ -1,3 +1,6 @@
+import type { CombatPosition } from './combat/SpellCombatState';
+// prettier-ignore
+import type { CompanionAbility, CompanionClass, CompanionModelKey, CompanionRarity, FormationRow } from './companions/types';
 import type { GearSlot } from './gear/types';
 import type { QuantitySnapshot } from './numbers';
 import type { RunMode } from './model';
@@ -29,6 +32,63 @@ export interface EnemySnapshot {
   hpPercent: number;
   /** Still closing the distance, so the renderer can walk it in. */
   approaching: boolean;
+}
+
+/**
+ * One companion, whether or not it is equipped. Identity and derived power for
+ * the interface; position, health and knockout for the renderer - the same
+ * shape `EnemySnapshot` uses, so the scene reads both the same way.
+ */
+export interface CompanionSnapshot {
+  definitionId: string;
+  name: string;
+  description: string;
+  rarity: CompanionRarity;
+  companionClass: CompanionClass;
+  row: FormationRow;
+  kind: 'humanoid' | 'creature';
+  modelKey: CompanionModelKey;
+  stars: number;
+  shards: number;
+  /** Null once a companion is at five stars and has nothing left to buy. */
+  shardsForNextStar: number | null;
+  canAscend: boolean;
+  ability: CompanionAbility;
+  abilityMagnitude: number;
+  attackInterval: number;
+  threat: number;
+  maxHp: QuantitySnapshot;
+  damage: QuantitySnapshot;
+  /** The party slot it holds, or null when it is only in the roster. */
+  slot: number | null;
+  /** Live combat state; present only while equipped. */
+  hp?: QuantitySnapshot;
+  hpPercent?: number;
+  downed?: boolean;
+  position?: CombatPosition;
+}
+
+export interface SummonResultSnapshot {
+  definitionId: string;
+  name: string;
+  rarity: CompanionRarity;
+  duplicate: boolean;
+  shards: number;
+  refund: number;
+  stars: number;
+}
+
+/**
+ * The results of the most recent draw, with the serial that produced them.
+ *
+ * `runCommand` republishes immediately after every command, so the interface
+ * learns what it pulled by seeing a serial it has not animated yet. That keeps
+ * the reveal reading authoritative results rather than needing a second
+ * channel out of the engine.
+ */
+export interface LastSummonSnapshot {
+  serial: number;
+  results: SummonResultSnapshot[];
 }
 
 export interface SimulationSnapshot {
@@ -88,6 +148,20 @@ export interface SimulationSnapshot {
   rebirthKnowledgeGain: QuantitySnapshot;
   canRebirth: boolean;
   gear: GearSnapshot[];
+  starlight: QuantitySnapshot;
+  summonCost: QuantitySnapshot;
+  summonCostTen: QuantitySnapshot;
+  canSummon: boolean;
+  canSummonTen: boolean;
+  /** Draws into the current drought, and the draw that guarantees a Legendary. */
+  pityCounter: number;
+  pityHard: number;
+  /** The whole owned roster, richest first for the ledger. */
+  companions: CompanionSnapshot[];
+  /** Exactly PARTY_SIZE entries; null is an empty slot. */
+  party: (CompanionSnapshot | null)[];
+  ascendableCompanions: number;
+  lastSummon: LastSummonSnapshot | null;
   lastEvent: string;
 }
 
@@ -98,4 +172,8 @@ export type EngineCommand =
   | { type: 'buy_spell_point' }
   | { type: 'activate_spell_node'; nodeId: string }
   | { type: 'respec_spell_tree' }
-  | { type: 'rebirth' };
+  | { type: 'rebirth' }
+  | { type: 'summon_draw'; count: number }
+  | { type: 'ascend_companion'; definitionId: string }
+  | { type: 'equip_companion'; definitionId: string; slot: number }
+  | { type: 'unequip_companion'; slot: number };

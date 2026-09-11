@@ -35,6 +35,7 @@ const snapshot = () =>
     config: DEFAULT_ENGINE_CONFIG,
     catalog,
     canRebirth: false,
+    lastSummon: null,
     rebirthKnowledgeGain: big(0),
     lastEvent: 'Authored spell review',
   });

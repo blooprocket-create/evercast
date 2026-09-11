@@ -9,7 +9,8 @@ import { big, quantity } from '../numbers';
 import { compileSpell } from '../spell/SpellCompiler';
 import { spellPointCost } from '../spellTree/SpellTreeCatalog';
 import { totalSpellPoints, unspentSpellPoints } from '../spellTree/SpellTreeSystem';
-import type { SimulationSnapshot } from '../types';
+import type { LastSummonSnapshot, SimulationSnapshot } from '../types';
+import { buildCompanionSnapshots } from './CompanionSnapshotBuilder';
 // prettier-ignore
 import { effectiveCastInterval, hasArrived, livingByDistance } from '../combat/SpellCombatState';
 
@@ -19,6 +20,7 @@ export interface SimulationSnapshotBuildContext {
   catalog: ContentCatalog;
   canRebirth: boolean;
   rebirthKnowledgeGain: Decimal;
+  lastSummon: LastSummonSnapshot | null;
   lastEvent: string;
 }
 
@@ -28,6 +30,7 @@ export function buildSimulationSnapshot({
   catalog,
   canRebirth,
   rebirthKnowledgeGain,
+  lastSummon,
   lastEvent,
 }: SimulationSnapshotBuildContext): SimulationSnapshot {
   const run = state.run;
@@ -42,8 +45,13 @@ export function buildSimulationSnapshot({
   const enemyHpPercent =
     target && target.maxHp.cmp(0) > 0 ? percent(target.hp.div(target.maxHp).toNumber()) : 0;
   const mageHpPercent = run.mage.maxHp.cmp(0) > 0 ? percent(run.mage.hp.div(run.mage.maxHp).toNumber()) : 0;
+  // Companion power is a share of what the mage actually hits for, so the
+  // read model is derived from the same figure the HUD shows.
+  const companionSnapshots = buildCompanionSnapshots(state, finalDamage);
 
   return {
+    ...companionSnapshots,
+    lastSummon,
     spellMechanics: compiledSpell.mechanics ? { ...compiledSpell.mechanics } : undefined,
     combatState: run.combatState ? structuredClone(run.combatState) : undefined,
     elapsedSeconds: run.elapsedSeconds,

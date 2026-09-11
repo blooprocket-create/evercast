@@ -3,6 +3,9 @@ import type { ContentCatalog } from '../content/types';
 import { CombatSystem } from './combat/CombatSystem';
 import { clearSpellCombat, ensurePositions } from './combat/SpellCombatState';
 import { clearTelegraphs } from './combat/EnemyTurns';
+import { CompanionSystem } from './companions/CompanionSystem';
+import { GachaSystem } from './companions/GachaSystem';
+import { requireCompanion } from './companions/CompanionCatalog';
 import type { EngineConfig } from './config';
 import { DEFAULT_ENGINE_CONFIG } from './config';
 import { EncounterSystem } from './encounters/EncounterSystem';
@@ -18,7 +21,7 @@ import { compileSpell } from './spell/SpellCompiler';
 import { SpellTreeSystem } from './spellTree/SpellTreeSystem';
 import { buildSimulationSnapshot } from './snapshot/SimulationSnapshotBuilder';
 import { createInitialGameState } from './state';
-import type { EngineCommand, SimulationSnapshot } from './types';
+import type { EngineCommand, LastSummonSnapshot, SimulationSnapshot } from './types';
 
 export interface SimulationOptions {
   config?: Partial<EngineConfig>;
@@ -37,8 +40,11 @@ export class EvercastSimulation {
   private readonly rebirthSystem: RebirthSystem;
   private readonly gearSystem: GearSystem;
   private readonly spellTreeSystem: SpellTreeSystem;
+  private readonly companionSystem: CompanionSystem;
+  private readonly gachaSystem: GachaSystem;
   private recordPresentationEvents = true;
   private lastEvent: GameEvent | null = null;
+  private lastSummon: LastSummonSnapshot | null = null;
 
   constructor(options: SimulationOptions = {}) {
     this.config = { ...DEFAULT_ENGINE_CONFIG, ...options.config };
@@ -53,6 +59,8 @@ export class EvercastSimulation {
     this.rebirthSystem = new RebirthSystem(this.config, emit);
     this.gearSystem = new GearSystem(this.config, emit);
     this.spellTreeSystem = new SpellTreeSystem(emit);
+    this.companionSystem = new CompanionSystem(emit);
+    this.gachaSystem = new GachaSystem(this.config, emit);
     this.loop = new EncounterLoop(
       this.config,
       {
@@ -64,6 +72,7 @@ export class EvercastSimulation {
     );
     this.gearSystem.syncMageStats(this.state);
     this.spellTreeSystem.syncSpell(this.state);
+    this.companionSystem.sync(this.state);
     ensurePositions(this.state.run, this.config.enemyAttackRange);
   }
 
@@ -105,8 +114,13 @@ export class EvercastSimulation {
           compileSpell(this.state.run.spell).castInterval,
         );
         return true;
-      case 'level_gear':
-        return this.gearSystem.levelUp(this.state, command.slot);
+      case 'level_gear': {
+        const levelled = this.gearSystem.levelUp(this.state, command.slot);
+        // Companion health is a share of the mage's, so a gear level that
+        // raises her maximum raises theirs in the same breath.
+        if (levelled) this.companionSystem.sync(this.state);
+        return levelled;
+      }
       case 'buy_spell_point':
         return this.spellTreeSystem.buyPoint(this.state);
       case 'activate_spell_node': {
@@ -123,9 +137,33 @@ export class EvercastSimulation {
         return this.spellTreeSystem.respec(this.state);
       case 'rebirth': {
         const performed = this.rebirthSystem.perform(this.state);
-        if (performed) this.spellTreeSystem.syncSpell(this.state);
+        if (performed) {
+          this.spellTreeSystem.syncSpell(this.state);
+          // The roster survives a rebirth alongside gear and the spell tree; a
+          // prestige that wiped a collection would make the gacha worthless.
+          this.companionSystem.sync(this.state);
+        }
         return performed;
       }
+      case 'summon_draw': {
+        const results = this.gachaSystem.draw(this.state, command.count);
+        if (!results) return false;
+        this.companionSystem.sync(this.state);
+        this.lastSummon = {
+          serial: this.state.companions.drawSerial,
+          results: results.map((result) => ({
+            ...result,
+            name: requireCompanion(result.definitionId).name,
+          })),
+        };
+        return true;
+      }
+      case 'ascend_companion':
+        return this.companionSystem.ascend(this.state, command.definitionId);
+      case 'equip_companion':
+        return this.companionSystem.equip(this.state, command.definitionId, command.slot);
+      case 'unequip_companion':
+        return this.companionSystem.unequip(this.state, command.slot);
     }
   }
 
@@ -136,6 +174,7 @@ export class EvercastSimulation {
       catalog: this.catalog,
       canRebirth: this.rebirthSystem.canRebirth(this.state),
       rebirthKnowledgeGain: this.rebirthSystem.previewKnowledgeGain(this.state),
+      lastSummon: this.lastSummon,
       lastEvent: this.lastEvent ? describeGameEvent(this.lastEvent) : 'The Evercast stirs.',
     });
   }
