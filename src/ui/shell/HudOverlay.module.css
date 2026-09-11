@@ -1,6 +1,7 @@
 .chrome {
   position: absolute;
-  inset: 0 0 var(--shelf-height) 0;
+  /* --shelf-inset, not --shelf-height: the shelf clears the home indicator. */
+  inset: 0 0 var(--shelf-inset) 0;
   pointer-events: none;
 }
 
@@ -14,18 +15,25 @@
 
 .place {
   position: absolute;
-  left: var(--space-5);
-  top: var(--space-5);
+  left: max(var(--space-5), var(--safe-left));
+  top: max(var(--space-5), var(--safe-top));
   display: grid;
   gap: var(--space-2);
   width: 296px;
+  /*
+   * The whole block sits on the sky, and a Greenfields sky is close enough in
+   * value to --ink-low that Frontier and Best all but vanished on a phone,
+   * where the scrim is shallower and the type smaller. The wordmark already
+   * carried a shadow; everything under it needs one just as much. Two stops:
+   * the tight one buys contrast at 10px, the wide one seats the block.
+   */
+  text-shadow: 0 1px 2px var(--wordmark-shadow), 0 2px 14px var(--wordmark-shadow);
 }
 
 .wordmark {
   font: 400 23px / 1 var(--font-display);
   letter-spacing: 0.26em;
   color: var(--ink);
-  text-shadow: 0 2px 18px var(--wordmark-shadow);
 }
 
 .zone {
@@ -85,8 +93,8 @@
 
 .wallets {
   position: absolute;
-  right: var(--space-5);
-  top: var(--space-5);
+  right: max(var(--space-5), var(--safe-right));
+  top: max(var(--space-5), var(--safe-top));
   display: flex;
   align-items: stretch;
   gap: var(--space-3);
@@ -183,17 +191,34 @@
   /* The wallet strip takes the top row on a phone; the place block sits under it. */
   .place {
     width: auto;
-    left: var(--space-3);
-    top: calc(var(--space-3) + 62px);
+    left: max(var(--space-3), var(--safe-left));
+    top: calc(max(var(--space-3), var(--safe-top)) + 62px);
+  }
+
+  .chrome::before {
+    height: 240px;
   }
 
   .wordmark {
     font-size: var(--text-lead);
   }
 
+  /*
+   * Without .place's fixed width, `margin-left: auto` puts Best hard against
+   * the frontier numeral and the three run together into one unreadable line.
+   * A real gap, and the value keeps its own space.
+   */
+  .frontier {
+    gap: var(--space-3);
+  }
+
+  .best {
+    margin-left: 0;
+  }
+
   .wallets {
-    right: var(--space-3);
-    top: var(--space-3);
+    right: max(var(--space-3), var(--safe-right));
+    top: max(var(--space-3), var(--safe-top));
   }
 
   .wallet {
@@ -204,9 +229,52 @@
   .enemy {
     top: auto;
     bottom: var(--space-3);
-    left: var(--space-3);
-    right: var(--space-3);
+    left: max(var(--space-3), var(--safe-left));
+    right: max(var(--space-3), var(--safe-right));
     width: auto;
     transform: none;
+  }
+}
+
+/*
+ * Sideways on a phone there are ~300px of diorama above the shelf, and the
+ * wordmark, the zone, the frontier block and the mode pill were claiming most
+ * of them. The place block keeps what identifies where you are and what you
+ * are doing, at the size the wide layout uses for a label.
+ */
+@media (max-height: 520px) and (orientation: landscape) {
+  .chrome::before {
+    height: 110px;
+  }
+
+  .place {
+    top: max(var(--space-2), var(--safe-top));
+    gap: var(--space-1);
+  }
+
+  .wallets {
+    top: max(var(--space-2), var(--safe-top));
+  }
+
+  .wordmark {
+    display: none;
+  }
+
+  .frontierValue {
+    font-size: var(--text-value);
+  }
+
+  .enemy {
+    top: auto;
+    bottom: var(--space-2);
+    /*
+     * Centred and capped again: full-width over a 844px landscape screen made
+     * a boss bar that ran the length of the diorama.
+     */
+    left: 50%;
+    right: auto;
+    width: min(420px, calc(100% - var(--space-6)));
+    transform: translateX(-50%);
+    padding: var(--space-2) var(--space-3);
   }
 }

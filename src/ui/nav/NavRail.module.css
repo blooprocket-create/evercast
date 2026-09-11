@@ -61,6 +61,7 @@
 @media (max-width: 860px) {
   .rail {
     width: 100%;
+    flex: none;
     flex-direction: row;
     align-items: center;
     gap: var(--space-2);
@@ -68,6 +69,18 @@
     border-bottom: 1px solid var(--line);
     overflow-x: auto;
     overflow-y: hidden;
+    padding: var(--space-2) max(var(--space-2), var(--safe-right)) var(--space-2)
+      max(var(--space-2), var(--safe-left));
+    /*
+     * A horizontal bar of destinations does not need a scrollbar drawn through
+     * it; the entries running off the edge are the affordance, and on a phone
+     * the bar is swiped rather than dragged.
+     */
+    scrollbar-width: none;
+  }
+
+  .rail::-webkit-scrollbar {
+    display: none;
   }
 
   .rail > div {
@@ -79,8 +92,66 @@
     display: none;
   }
 
+  /*
+   * flex: none, or eleven destinations each give up a few pixels until every
+   * label is an ellipsis and the strip has nothing left to scroll.
+   */
   .entry {
     width: auto;
+    flex: none;
     white-space: nowrap;
+  }
+
+  .label {
+    overflow: visible;
+    text-overflow: clip;
+  }
+}
+
+/*
+ * Back to a column. The strip above is the right trade on a portrait phone,
+ * where width is scarce; sideways it is the wrong one, because 61px of strip
+ * is a fifth of the height and the 176px this costs is a quarter of a width
+ * the min-width gate has already established there is enough of.
+ */
+@media (max-height: 520px) and (min-width: 640px) and (orientation: landscape) {
+  .rail {
+    /*
+     * The inset is added to the column, not taken out of it. Absorbed, a 59px
+     * side notch left the rail 93px of content box and 9px for the words
+     * "Spell Tree" - the label ellipsed away to nothing. 176px is what the
+     * longest label plus its badge needs without ellipsing at all.
+     */
+    width: calc(176px + var(--safe-left));
+    flex-direction: column;
+    align-items: stretch;
+    border-right: 1px solid var(--line);
+    border-bottom: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: var(--space-2) var(--space-2) var(--space-2) max(var(--space-2), var(--safe-left));
+  }
+
+  .rail > div {
+    display: block;
+  }
+
+  .group {
+    display: block;
+    margin: var(--space-3) 0 var(--space-1);
+  }
+
+  .group:first-child {
+    margin-top: 0;
+  }
+
+  .entry {
+    width: 100%;
+    white-space: nowrap;
+  }
+
+  .label {
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }

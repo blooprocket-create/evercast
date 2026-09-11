@@ -31,10 +31,41 @@
     flex-direction: column;
   }
 
+  /*
+   * flex: none pins the list to its 45%; without it the pane below, sized to
+   * its content, pushed the split until the list was a single row.
+   */
   .list {
     width: 100%;
+    flex: none;
     max-height: 45%;
     border-right: 0;
     border-bottom: 1px solid var(--line);
+  }
+
+  .pane {
+    padding: var(--space-4) max(var(--space-3), var(--safe-right)) var(--space-4)
+      max(var(--space-3), var(--safe-left));
+  }
+}
+
+/*
+ * Sideways there is width to spare - the min-width gate says so - and no
+ * height to give the list a band of.
+ */
+@media (max-height: 520px) and (min-width: 640px) and (orientation: landscape) {
+  .detail {
+    flex-direction: row;
+  }
+
+  .list {
+    width: 240px;
+    max-height: none;
+    border-right: 1px solid var(--line);
+    border-bottom: 0;
+  }
+
+  .pane {
+    padding: var(--space-3) max(var(--space-3), var(--safe-right)) var(--space-3) var(--space-3);
   }
 }

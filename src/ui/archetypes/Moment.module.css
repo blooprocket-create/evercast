@@ -1,9 +1,14 @@
+/*
+ * The one thing that covers the shelf, so it is also the one thing that can
+ * land under a notch or a home indicator on its own account.
+ */
 .scrim {
   position: absolute;
   inset: 0;
   display: grid;
   place-items: center;
-  padding: var(--space-5);
+  padding: max(var(--space-5), var(--safe-top)) max(var(--space-5), var(--safe-right))
+    max(var(--space-5), var(--safe-bottom)) max(var(--space-5), var(--safe-left));
   background: var(--scrim);
   pointer-events: auto;
 }
@@ -107,4 +112,39 @@
   margin: 0;
   font: 400 var(--text-small) / 1.5 var(--font-ui);
   color: var(--ink-low);
+}
+
+/* A 32px inset on a 320px screen leaves 208px of card to say it in. */
+@media (max-width: 620px) {
+  .card {
+    padding: var(--space-4);
+    gap: var(--space-3);
+  }
+
+  .headline {
+    font-size: var(--text-value);
+  }
+}
+
+/* Sideways there is no room for a scrim, a card and its own padding. */
+@media (max-height: 520px) and (orientation: landscape) {
+  .scrim {
+    padding: var(--space-3) max(var(--space-3), var(--safe-right)) var(--space-3)
+      max(var(--space-3), var(--safe-left));
+    align-items: start;
+    overflow-y: auto;
+  }
+
+  .card {
+    padding: var(--space-4);
+    gap: var(--space-3);
+  }
+
+  .headline {
+    font-size: var(--text-value);
+  }
+
+  .badge {
+    display: none;
+  }
 }

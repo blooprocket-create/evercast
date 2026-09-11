@@ -76,3 +76,11 @@
 .action {
   flex: none;
 }
+
+@media (pointer: coarse) {
+  .row {
+    height: auto;
+    min-height: 56px;
+    padding: var(--space-2) var(--space-3);
+  }
+}

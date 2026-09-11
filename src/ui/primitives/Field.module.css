@@ -109,3 +109,58 @@
   background: color-mix(in srgb, var(--accent) 18%, var(--panel));
   color: var(--ink);
 }
+
+/*
+ * A 160px control column beside a label and a hint leaves neither readable on
+ * a 375px screen, so the pair stacks and the control takes the full width.
+ */
+@media (max-width: 620px) {
+  .field {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2);
+    padding: var(--space-4) 0;
+  }
+
+  .control {
+    justify-content: flex-start;
+    min-height: var(--touch-target);
+  }
+
+  .slider {
+    flex: 1;
+  }
+
+  .choice {
+    flex: 1;
+  }
+
+  .option {
+    flex: 1;
+  }
+}
+
+@media (pointer: coarse) {
+  .toggle {
+    width: 52px;
+    height: 30px;
+  }
+
+  .knob {
+    width: 24px;
+    height: 24px;
+  }
+
+  .toggleOn .knob {
+    transform: translateX(22px);
+  }
+
+  .option {
+    min-height: var(--touch-target);
+    padding: 0 var(--space-4);
+  }
+
+  /* The thumb of a range input is a 16px dot by default. */
+  .slider {
+    height: var(--touch-target);
+  }
+}
