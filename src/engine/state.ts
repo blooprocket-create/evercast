@@ -1,4 +1,5 @@
 import type { EngineConfig } from './config';
+import { createInitialCompanionsState } from './companions/CompanionSystem';
 import { createInitialEquipmentState } from './gear/GearSystem';
 import type { GameState, MetaState, RunState } from './model';
 import { big } from './numbers';
@@ -7,6 +8,7 @@ import { createInitialSpellTreeState } from './spellTree/SpellTreeSystem';
 
 export function createInitialRunState(config: EngineConfig): RunState {
   return {
+    companions: [],
     elapsedSeconds: 0,
     frontierStage: 1,
     highestStageThisRun: 1,
@@ -56,5 +58,6 @@ export function createInitialGameState(config: EngineConfig): GameState {
     meta: createInitialMetaState(),
     equipment: createInitialEquipmentState(),
     spellTree: createInitialSpellTreeState(),
+    companions: createInitialCompanionsState(),
   };
 }

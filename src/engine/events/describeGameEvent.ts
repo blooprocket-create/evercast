@@ -1,3 +1,4 @@
+import { COMPANION_BY_ID } from '../companions/CompanionCatalog';
 import type { GameEvent } from './GameEvent';
 import { big, formatBig } from '../numbers';
 
@@ -48,6 +49,58 @@ export function describeGameEvent(event: GameEvent): string {
       return `Evercast reshaped. ${event.refundedPoints} point${event.refundedPoints === 1 ? '' : 's'} returned.`;
     case 'rebirth_performed':
       return `Rebirth ${event.rebirths}: +${n(event.knowledgeGained)} Knowledge.`;
+    case 'companion_attack':
+      return `${companionName(event.definitionId)} strikes for ${n(event.damage)}.`;
+    case 'companion_windup':
+      return 'A companion sets itself.';
+    case 'companion_ability':
+      return `${companionName(event.definitionId)} uses ${abilityLabel(event.ability)}.`;
+    case 'companion_damaged':
+      return `A companion takes ${n(event.damage)}.`;
+    case 'companion_downed':
+      return `${companionName(event.definitionId)} goes down.`;
+    case 'companion_revived':
+      return `${companionName(event.definitionId)} is back on its feet.`;
+    case 'companion_summoned':
+      return event.duplicate
+        ? `${companionName(event.definitionId)} answers again. +${event.shards} shards.`
+        : `${companionName(event.definitionId)} answers the call.`;
+    case 'companion_ascended':
+      return `${companionName(event.definitionId)} ascends to ${event.stars} stars.`;
+    case 'companion_equipped':
+      return event.definitionId
+        ? `${companionName(event.definitionId)} joins the party.`
+        : 'A party slot is emptied.';
+  }
+}
+
+/** Authored names live in content; an unknown id must not crash the log. */
+function companionName(definitionId: string): string {
+  return COMPANION_BY_ID.get(definitionId)?.name ?? 'A companion';
+}
+
+function abilityLabel(ability: Extract<GameEvent, { type: 'companion_ability' }>['ability']): string {
+  switch (ability) {
+    case 'strike':
+      return 'a heavy blow';
+    case 'volley':
+      return 'a volley';
+    case 'guard':
+      return 'its guard';
+    case 'bulwark':
+      return 'a bulwark';
+    case 'mend':
+      return 'a mending';
+    case 'rally':
+      return 'a rallying cry';
+    case 'hex':
+      return 'a hex';
+    case 'wither':
+      return 'a withering';
+    case 'echo':
+      return 'an echo';
+    case 'revive':
+      return 'a last rite';
   }
 }
 
@@ -74,5 +127,7 @@ function resourceLabel(resource: Extract<GameEvent, { type: 'resource_gained' }>
       return 'Knowledge';
     case 'gold':
       return 'Gold';
+    case 'starlight':
+      return 'Starlight';
   }
 }

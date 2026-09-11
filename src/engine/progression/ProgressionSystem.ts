@@ -5,6 +5,7 @@ import type { EnemyState, GameState } from '../model';
 import { big } from '../numbers';
 import { firstClearEssenceReward } from './EssenceEconomy';
 import { clearSpellCombat } from '../combat/SpellCombatState';
+import { restoreCompanions } from '../companions/CompanionSystem';
 
 export class ProgressionSystem {
   constructor(
@@ -112,6 +113,7 @@ export class ProgressionSystem {
     run.phase = 'travel';
     run.travelElapsed = 0;
     run.mage.hp = big(run.mage.maxHp);
+    restoreCompanions(run);
     this.emit({
       type: 'mode_changed',
       time: run.elapsedSeconds,
@@ -134,5 +136,6 @@ export class ProgressionSystem {
     run.travelElapsed = 0;
     run.castCooldown = 0;
     run.mage.hp = big(run.mage.maxHp);
+    restoreCompanions(run);
   }
 }

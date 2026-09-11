@@ -3,6 +3,7 @@ import type { EquipmentState } from './gear/types';
 import type { SpellBuild } from './spell/types';
 import type { SpellTreeState } from './spellTree/types';
 import type { CombatPosition, EnemyStatuses, SpellCombatState } from './combat/SpellCombatState';
+import type { CompanionCombatant, CompanionsState } from './companions/types';
 
 export type RunMode = 'push' | 'farm';
 export type CombatPhase = 'travel' | 'combat';
@@ -37,6 +38,14 @@ export interface EnemyState {
   /** Whether its next swing has already been telegraphed to the renderer. */
   telegraphed?: boolean;
   /**
+   * Extra distance this enemy keeps because a frontline was standing when it
+   * spawned. Captured once, at spawn, and never recomputed: `contactPoint` has
+   * to stay a pure function of stored fields or a chunked run and a single pass
+   * would derive different stopping places. A wave that spawns after the tank
+   * falls carries no offset, so it presses in toward the mage.
+   */
+  frontlineOffset?: number;
+  /**
    * Where the enemy entered from, and the clock reading when it did. Position
    * is derived from these rather than accumulated, so a run simulated in one
    * pass, in chunks, or resumed from a save lands on identical coordinates.
@@ -69,6 +78,12 @@ export interface RunStatistics {
 
 export interface RunState {
   combatState?: SpellCombatState;
+  /**
+   * The party as it stands in this encounter. Rebuilt from `CompanionsState`
+   * whenever the roster changes, so ownership is persistent and hit points are
+   * not - exactly the split enemies already use.
+   */
+  companions: CompanionCombatant[];
   elapsedSeconds: number;
   frontierStage: number;
   highestStageThisRun: number;
@@ -104,4 +119,5 @@ export interface GameState {
   meta: MetaState;
   equipment: EquipmentState;
   spellTree: SpellTreeState;
+  companions: CompanionsState;
 }
