@@ -4,7 +4,7 @@ import { goldRewardForKill } from '../gear/GearSystem';
 import type { EnemyState, GameState } from '../model';
 import { big } from '../numbers';
 import { firstClearEssenceReward } from './EssenceEconomy';
-import { firstClearStarlightReward, starlightRewardForKill } from './StarlightEconomy';
+import { starlightRewardForKill } from './StarlightEconomy';
 import { clearSpellCombat } from '../combat/SpellCombatState';
 import { restoreCompanions } from '../companions/CompanionSystem';
 
@@ -54,22 +54,16 @@ export class ProgressionSystem {
       const firstEverClear = clearedStage >= meta.highestStageEver;
 
       if (firstEverClear) {
-        const boss = clearedStage % this.config.bossCadence === 0;
-        const essence = firstClearEssenceReward(clearedStage, boss);
+        const essence = firstClearEssenceReward(
+          clearedStage,
+          clearedStage % this.config.bossCadence === 0,
+        );
         run.essence = run.essence.add(essence);
         this.emit({
           type: 'resource_gained',
           time: run.elapsedSeconds,
           resource: 'essence',
           amount: essence.toString(),
-        });
-        const starlight = firstClearStarlightReward(clearedStage, boss);
-        state.companions.starlight = state.companions.starlight.add(starlight);
-        this.emit({
-          type: 'resource_gained',
-          time: run.elapsedSeconds,
-          resource: 'starlight',
-          amount: starlight.toString(),
         });
       }
 

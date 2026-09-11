@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 // prettier-ignore
-import { BASE_RATES, DUPLICATE_SHARDS, MAXED_DUPLICATE_REFUND, PITY_HARD, PITY_SOFT_START, SUMMON_COST, SUMMON_COST_TEN } from '../../content/companionTuning';
+import { BASE_RATES, MAXED_DUPLICATE_REFUND, SHARDS_PER_DUPLICATE, STAR_UP_SHARDS, PITY_HARD, PITY_SOFT_START, SUMMON_COST, SUMMON_COST_TEN } from '../../content/companionTuning';
 import { DEFAULT_ENGINE_CONFIG } from '../config';
 import { EvercastSimulation } from '../EvercastSimulation';
 import type { GameState } from '../model';
@@ -8,6 +8,8 @@ import { big } from '../numbers';
 import { SaveCodec } from '../save/SaveCodec';
 import { createInitialGameState } from '../state';
 import { requireCompanion } from './CompanionCatalog';
+import { starUpCost } from './CompanionSystem';
+import { starlightRewardForKill } from '../progression/StarlightEconomy';
 // prettier-ignore
 import { GachaSystem, highRarityChance, isHighRarity, rollRarity, summonCost } from './GachaSystem';
 import { COMPANION_RARITIES, MAX_COMPANION_STARS } from './types';
@@ -137,7 +139,7 @@ describe('drawing', () => {
         expect(state.companions.owned[result.definitionId]?.stars).toBe(1);
       } else {
         expect(result.duplicate).toBe(true);
-        expect(result.shards).toBe(DUPLICATE_SHARDS[result.rarity]);
+        expect(result.shards).toBe(SHARDS_PER_DUPLICATE);
       }
     }
   });
@@ -173,6 +175,71 @@ describe('drawing', () => {
     for (const result of results) {
       expect(requireCompanion(result.definitionId).rarity).toBe(result.rarity);
     }
+  });
+});
+
+describe('shard balance', () => {
+  it('pays one shard for a duplicate, whatever it was', () => {
+    const gacha = new GachaSystem(DEFAULT_ENGINE_CONFIG, () => {});
+    const state = richState();
+    const seen = new Set<string>();
+    const rarities = new Set<CompanionRarity>();
+
+    for (let draw = 0; draw < 400; draw += 1) {
+      const result = gacha.draw(state, 1)?.[0];
+      if (!result) throw new Error('expected a result');
+      if (seen.has(result.definitionId)) {
+        expect(result.shards, result.rarity).toBe(1);
+        rarities.add(result.rarity);
+      }
+      seen.add(result.definitionId);
+    }
+    // Meaningless unless several rarities actually repeated.
+    expect(rarities.size).toBeGreaterThan(1);
+  });
+
+  it('charges less per star the rarer a companion is', () => {
+    /*
+     * A mythical duplicate arrives at 0.5%. Paying it fifty shards and then
+     * charging it the same price as a common made the rare thing the easy one;
+     * the difficulty belongs in the price, and it runs downward.
+     */
+    const order: CompanionRarity[] = ['common', 'rare', 'epic', 'legendary', 'mythical'];
+    const costs = order.map((rarity) => STAR_UP_SHARDS[rarity]);
+    for (let index = 1; index < costs.length; index += 1) {
+      expect(costs[index], order[index]).toBeLessThan(costs[index - 1] ?? 0);
+    }
+    expect(STAR_UP_SHARDS.common).toBe(20);
+    expect(STAR_UP_SHARDS.mythical).toBe(10);
+  });
+
+  it('charges the same for every star, not more for the later ones', () => {
+    const owned = { definitionId: 'hedge_warden', stars: 1, shards: 0 };
+    const costs = [1, 2, 3, 4].map((stars) => starUpCost(owned.definitionId, stars));
+    expect(new Set(costs).size).toBe(1);
+    expect(starUpCost(owned.definitionId, 5)).toBeNull();
+  });
+});
+
+describe('starlight balance', () => {
+  it('pays the same for a kill wherever it happens', () => {
+    // It used to grow with the square root of the stage, which meant a draw
+    // cost less the further you pushed.
+    for (const stage of [1, 10, 100, 10_000]) {
+      expect(starlightRewardForKill(stage, false).toString(), `stage ${stage}`).toBe('1');
+      expect(starlightRewardForKill(stage, true).toString(), `stage ${stage}`).toBe('5');
+    }
+  });
+
+  it('pays nothing extra for a first clear', () => {
+    const simulation = new EvercastSimulation({ config: { seed: 4 } });
+    simulation.advance(400, { presentationEvents: false });
+    const snapshot = simulation.getSnapshot();
+    const kills = snapshot.kills;
+    const starlight = Number(simulation.getState().companions.starlight.toString());
+    // Every point of Starlight is a kill, and bosses are worth five.
+    expect(starlight).toBeGreaterThanOrEqual(kills);
+    expect(starlight).toBeLessThanOrEqual(kills * 5);
   });
 });
 

@@ -1,6 +1,6 @@
 import type { EngineConfig } from '../config';
 // prettier-ignore
-import { BASE_RATES, DUPLICATE_SHARDS, MAXED_DUPLICATE_REFUND, MYTHICAL_SHARE, PITY_HARD, PITY_RAMP_PER_DRAW, PITY_SOFT_START, SUMMON_COST, SUMMON_COST_TEN, TEN_PULL_FLOOR } from '../../content/companionTuning';
+import { BASE_RATES, MAXED_DUPLICATE_REFUND, MYTHICAL_SHARE, PITY_HARD, PITY_RAMP_PER_DRAW, PITY_SOFT_START, SHARDS_PER_DUPLICATE, SUMMON_COST, SUMMON_COST_TEN, TEN_PULL_FLOOR } from '../../content/companionTuning';
 import type { GameEvent } from '../events/GameEvent';
 import type { GameState } from '../model';
 import { big } from '../numbers';
@@ -153,7 +153,7 @@ export class GachaSystem {
         refund = MAXED_DUPLICATE_REFUND[rarity];
         companions.starlight = companions.starlight.add(big(refund));
       } else {
-        shards = DUPLICATE_SHARDS[rarity];
+        shards = SHARDS_PER_DUPLICATE;
         existing.shards += shards;
       }
     }

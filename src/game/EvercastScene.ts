@@ -29,7 +29,7 @@ import { ActorAssets, ActorVisual } from './actors/ActorAssets';
 import { CompanionPresenter } from './CompanionPresenter';
 import { VfxPool, type VfxQuality } from './vfx/VfxPool';
 import { CombatFxPresenter } from './vfx/CombatFxPresenter';
-import { EnemyHealthBars } from './vfx/EnemyHealthBars';
+import { WorldHealthBars } from './vfx/WorldHealthBars';
 import { SpellVfxPresenter } from './vfx/SpellVfxPresenter';
 import { castDuration } from './vfx/CombatVfxPlan';
 import { BossTracker } from './BossTracker';
@@ -40,6 +40,12 @@ const HEALTH_BAR_OFFSET = new Vector3(0, 1.55, 0);
 
 /** Matches DEFAULT_UI_SETTINGS.display.depthOfField; the store is the authority. */
 const DEFAULT_DEPTH_OF_FIELD = 0.75;
+
+/**
+ * The framing everything else is calibrated against: the camera radius, the
+ * depth-of-field aperture and CombatFeel's shake were all measured here.
+ */
+const BASE_FOV = 0.68;
 
 /**
  * Sky, sun, rim, and up to two landmark lanterns already exceed Babylon's
@@ -70,7 +76,8 @@ export class EvercastScene {
   private readonly enemyMeshes = new Map<number, ActorVisual>();
   private readonly retiring: { id: number; actor: ActorVisual; remaining: number }[] = [];
   private readonly presentation: DefaultRenderingPipeline;
-  private readonly healthBars: EnemyHealthBars;
+  private readonly healthBars: WorldHealthBars;
+  private readonly partyBars: WorldHealthBars;
   private readonly companions: CompanionPresenter;
   private readonly feel: CombatFeel;
   private readonly bosses = new BossTracker();
@@ -81,6 +88,9 @@ export class EvercastScene {
   private journeyInitialized = false;
   private visualFrontierStage = 1;
   private pendingWorldTravelSeconds = 0;
+  private pendingResize: number | null = null;
+  private depthOfFieldStrength = DEFAULT_DEPTH_OF_FIELD;
+  private readonly canvasObserver?: ResizeObserver;
 
   constructor(canvas: HTMLCanvasElement, quality: VfxQuality = 'medium') {
     this.engine = new Engine(canvas, true, { preserveDrawingBuffer: false, stencil: true });
@@ -100,7 +110,7 @@ export class EvercastScene {
     // 12.4 units of visible height this radius and fov produce.
     camera.lowerRadiusLimit = 17.5;
     camera.upperRadiusLimit = 17.5;
-    camera.fov = 0.68;
+    camera.fov = BASE_FOV;
     camera.minZ = 0.2;
     camera.maxZ = 180;
     camera.inputs.clear();
@@ -222,14 +232,25 @@ export class EvercastScene {
     this.mage.root.position.set(0, 0.025, 0);
     this.mage.root.rotation.y = Math.PI * 0.68;
     const pool = new VfxPool(this.scene, quality);
-    this.healthBars = new EnemyHealthBars(this.scene);
-    this.companions = new CompanionPresenter(this.scene, this.shadows);
+    this.healthBars = new WorldHealthBars(this.scene, 'foe');
+    this.partyBars = new WorldHealthBars(this.scene, 'ally');
     this.feel = new CombatFeel({
       camera,
       pipeline: presentation,
       imageProcessing: this.scene.imageProcessingConfiguration,
     });
-    this.vfx = new SpellVfxPresenter(pool, new CombatFxPresenter(pool, this.scene), {
+    const combatFx = new CombatFxPresenter(pool, this.scene);
+    this.companions = new CompanionPresenter(
+      this.scene,
+      {
+        enemyAnchor: (id) =>
+          this.enemyActor(id)?.root.position.add(new Vector3(0, 0.85, 0)) ??
+          this.transientAnchors.get(id)?.position,
+        numbers: combatFx.numbers,
+      },
+      this.shadows,
+    );
+    this.vfx = new SpellVfxPresenter(pool, combatFx, {
       staff: () => this.mage.socketPosition('socket_spell', new Vector3(0.55, 1.65, 0)),
       mage: () => this.mage.root.position.add(new Vector3(0, 1, 0)),
       target: (id) =>
@@ -245,7 +266,12 @@ export class EvercastScene {
     if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).evercastScene = this;
     this.resize();
     this.engine.runRenderLoop(() => this.scene.render());
-    window.addEventListener('resize', this.resize);
+    window.addEventListener('resize', this.scheduleResize);
+    window.addEventListener('orientationchange', this.scheduleResize);
+    if (typeof ResizeObserver !== 'undefined') {
+      this.canvasObserver = new ResizeObserver(this.scheduleResize);
+      this.canvasObserver.observe(canvas);
+    }
     window.addEventListener('keydown', this.keydown);
   }
 
@@ -310,11 +336,28 @@ export class EvercastScene {
     this.syncEnemyVisuals(snapshot, deltaSeconds);
     // Bars follow the meshes, not the snapshot: enemies are walking in, and the
     // interface only hears about them ten times a second.
-    this.healthBars.sync(snapshot.enemies, (instanceId: number) => {
-      const actor = this.enemyMeshes.get(instanceId);
-      return actor ? actor.root.position.add(HEALTH_BAR_OFFSET) : null;
-    });
+    this.healthBars.sync(
+      // The boss owns the banner at the top of the screen, not a floating bar.
+      snapshot.enemies
+        .filter((enemy) => !enemy.boss)
+        .map((enemy) => ({
+          id: enemy.instanceId,
+          hpPercent: enemy.hpPercent,
+          hp: enemy.hp.display,
+          maxHp: enemy.maxHp.display,
+        })),
+      (instanceId: number) => {
+        const actor = this.enemyMeshes.get(instanceId);
+        return actor ? actor.root.position.add(HEALTH_BAR_OFFSET) : null;
+      },
+    );
     this.healthBars.update();
+    // The party wears the same bars in ally colours: a companion draining is
+    // the thing that tells you the front line is about to break.
+    this.partyBars.sync(this.companions.healthBarTargets(snapshot), (slot) =>
+      this.companions.headOf(slot),
+    );
+    this.partyBars.update();
     for (const event of events) {
       if (event.type === 'spell_cast') this.mage.play('attack', castDuration(snapshot.castInterval));
       // The swing is played from the windup so it leads the blow, rather than
@@ -348,10 +391,27 @@ export class EvercastScene {
    * player decides how much of the world falls away from it.
    */
   setDepthOfField(strength: number): void {
-    const clamped = Math.min(1, Math.max(0, strength));
-    this.presentation.depthOfFieldEnabled = clamped > 0.02;
-    if (clamped <= 0.02) return;
-    this.presentation.depthOfField.lensSize = clamped * 560;
+    this.depthOfFieldStrength = Math.min(1, Math.max(0, strength));
+    this.applyDepthOfField();
+  }
+
+  /**
+   * Aperture scaled against the framing.
+   *
+   * `focusDistance` is measured to the combat lane and the aperture was
+   * calibrated at the desktop fov of 0.68. A phone in portrait widens the fov
+   * to about 1.03 to keep both formations in frame, which puts far more depth
+   * inside the picture - and at a fixed aperture that arrives as the whole
+   * diorama going soft. Opening the lens less as the view widens keeps the band
+   * that is actually sharp roughly the same fraction of the shot, so portrait
+   * and landscape read alike.
+   */
+  private applyDepthOfField(): void {
+    const strength = this.depthOfFieldStrength;
+    this.presentation.depthOfFieldEnabled = strength > 0.02;
+    if (strength <= 0.02) return;
+    const fov = this.scene.activeCamera?.fov ?? BASE_FOV;
+    this.presentation.depthOfField.lensSize = strength * 560 * (BASE_FOV / Math.max(BASE_FOV, fov));
   }
 
   setDamageNumbersVisible(visible: boolean): void {
@@ -361,10 +421,14 @@ export class EvercastScene {
   dispose(): void {
     this.feel.dispose();
     this.bosses.clear();
-    window.removeEventListener('resize', this.resize);
+    window.removeEventListener('resize', this.scheduleResize);
+    window.removeEventListener('orientationchange', this.scheduleResize);
+    this.canvasObserver?.disconnect();
+    if (this.pendingResize !== null) cancelAnimationFrame(this.pendingResize);
     window.removeEventListener('keydown', this.keydown);
     this.vfx.dispose();
     this.healthBars.dispose();
+    this.partyBars.dispose();
     this.transientAnchors.clear();
     for (const mesh of this.enemyMeshes.values()) mesh.dispose();
     this.enemyMeshes.clear();
@@ -381,9 +445,31 @@ export class EvercastScene {
   private readonly resize = (): void => {
     this.engine.resize();
     const aspect = this.engine.getRenderWidth() / Math.max(1, this.engine.getRenderHeight());
-    // Keep both combat formations in frame on portrait screens.
-    if (this.scene.activeCamera)
-      this.scene.activeCamera.fov = Math.max(0.68, 2 * Math.atan(11 / (35 * aspect)));
+    // Keep both combat formations in frame on portrait screens. Through
+    // CombatFeel rather than straight onto the camera: it is shaking the fov
+    // around this value, and writing underneath it corrupts the base.
+    this.feel.setBaseFov(Math.max(BASE_FOV, 2 * Math.atan(11 / (35 * aspect))));
+    // The aperture is calibrated against the base framing, so it moves with it.
+    this.applyDepthOfField();
+  };
+
+  /**
+   * Rotating a phone is not one clean resize event.
+   *
+   * `orientationchange` arrives before the viewport has settled, `resize` can
+   * fire several times with transitional dimensions, and some mobile browsers
+   * report stale `innerWidth`/`innerHeight` throughout. So every signal is
+   * taken, and the actual work is coalesced onto the next frame - by which
+   * point the canvas box is real. A ResizeObserver on the canvas is the
+   * authority, because it fires on what actually changed rather than on what
+   * the window thinks happened.
+   */
+  private readonly scheduleResize = (): void => {
+    if (this.pendingResize !== null) return;
+    this.pendingResize = requestAnimationFrame(() => {
+      this.pendingResize = null;
+      this.resize();
+    });
   };
 
   private readonly keydown = (event: KeyboardEvent): void => {

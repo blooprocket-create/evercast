@@ -70,17 +70,44 @@ export class CombatFeel {
   private refractory = 0;
   private slowMotion = 0;
   private clock = 0;
-  /** This frame's contribution, so it can be undone before the next one. */
-  private fovOffset = 0;
+  /**
+   * The fov to shake around, owned here rather than read back off the camera.
+   *
+   * This used to be a relative accumulator - add last frame's offset back,
+   * subtract this frame's - which silently assumed nothing else ever wrote to
+   * `camera.fov`. Resize does: rotating a phone mid-fight set a new fov while
+   * an offset was still in flight, so the next frame added that offset to a
+   * base it had never been taken from. The base drifted by the size of the
+   * shake, every resize, and stayed drifted - which is why rotating to
+   * landscape and back left portrait wrong too.
+   */
+  private baseFov: number;
+  private shakeFov = 0;
 
   private readonly baseExposure: number;
   private readonly baseBloom: number;
   private readonly baseAberration: number;
 
   constructor(private readonly targets: CombatFeelTargets) {
+    this.baseFov = targets.camera.fov;
     this.baseExposure = targets.imageProcessing.exposure;
     this.baseBloom = targets.pipeline.bloomWeight;
     this.baseAberration = targets.pipeline.chromaticAberration.aberrationAmount;
+  }
+
+  /**
+   * The fov the camera should rest at. Anything that wants to change the
+   * framing goes through here rather than writing `camera.fov`, so a shake in
+   * flight is accounted for instead of being baked in.
+   */
+  setBaseFov(fov: number): void {
+    this.baseFov = fov;
+    this.targets.camera.fov = fov - this.shakeFov;
+  }
+
+  /** What the camera would rest at with no shake, for anyone recomputing it. */
+  getBaseFov(): number {
+    return this.baseFov;
   }
 
   ingest(events: readonly GameEvent[], isBoss: (instanceId: number) => boolean): void {
@@ -131,9 +158,9 @@ export class CombatFeel {
       noise(t, 31) * shake * SHAKE_SCREEN * 0.7,
     );
 
-    camera.fov += this.fovOffset;
-    this.fovOffset = shake * SHAKE_FOV;
-    camera.fov -= this.fovOffset;
+    // Absolute, not accumulated: whatever the base is now, this is the fov.
+    this.shakeFov = shake * SHAKE_FOV;
+    camera.fov = this.baseFov - this.shakeFov;
 
     imageProcessing.exposure = this.baseExposure * (1 + this.flash * 0.5);
     pipeline.bloomWeight = this.baseBloom + this.flash * 0.75;
@@ -145,8 +172,8 @@ export class CombatFeel {
   dispose(): void {
     const { camera, pipeline, imageProcessing } = this.targets;
     camera.targetScreenOffset.set(0, 0);
-    camera.fov += this.fovOffset;
-    this.fovOffset = 0;
+    this.shakeFov = 0;
+    camera.fov = this.baseFov;
     imageProcessing.exposure = this.baseExposure;
     pipeline.bloomWeight = this.baseBloom;
     pipeline.chromaticAberration.aberrationAmount = this.baseAberration;

@@ -17,13 +17,20 @@ export function createInitialCompanionsState(): CompanionsState {
   };
 }
 
-/** Shards for the next star, or null when a companion is already at five. */
-export function starUpCost(stars: number): number | null {
-  return stars >= MAX_COMPANION_STARS ? null : (STAR_UP_SHARDS[stars - 1] ?? null);
+/**
+ * Shards for the next star, or null when a companion is already at five.
+ *
+ * Priced by rarity rather than by how many stars are already on it: a
+ * duplicate is worth one shard whatever it was, so the rarer a companion is to
+ * see again, the fewer sightings it asks for.
+ */
+export function starUpCost(definitionId: string, stars: number): number | null {
+  if (stars >= MAX_COMPANION_STARS) return null;
+  return STAR_UP_SHARDS[requireCompanion(definitionId).rarity];
 }
 
 export function canAscend(owned: OwnedCompanion): boolean {
-  const cost = starUpCost(owned.stars);
+  const cost = starUpCost(owned.definitionId, owned.stars);
   return cost !== null && owned.shards >= cost;
 }
 
@@ -150,7 +157,7 @@ export class CompanionSystem {
   ascend(state: GameState, definitionId: string): boolean {
     const owned = state.companions.owned[definitionId];
     if (!owned) return false;
-    const cost = starUpCost(owned.stars);
+    const cost = starUpCost(definitionId, owned.stars);
     if (cost === null || owned.shards < cost) return false;
 
     owned.shards -= cost;

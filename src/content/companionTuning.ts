@@ -75,17 +75,25 @@ export const MYTHICAL_SHARE = BASE_RATES.mythical / (BASE_RATES.legendary + BASE
 /** A ten-pull never comes back with nothing: the last roll floors here. */
 export const TEN_PULL_FLOOR: CompanionRarity = 'epic';
 
-/** Shards a duplicate of each rarity is worth. */
-export const DUPLICATE_SHARDS: Readonly<Record<CompanionRarity, number>> = {
-  common: 1,
-  rare: 3,
-  epic: 8,
-  legendary: 20,
-  mythical: 50,
-};
+/**
+ * A duplicate is worth one shard, whatever it was.
+ *
+ * The difficulty of ascending a rarity belongs in what it costs, not in what
+ * it pays: a mythical duplicate arriving at 0.5% was worth fifty shards AND
+ * needed the same 20 to spend them on, which made the rare thing the easy one.
+ * Rarity now moves the price instead, downward, so the companions that are
+ * hardest to see again need the fewest sightings.
+ */
+export const SHARDS_PER_DUPLICATE = 1;
 
-/** Shards to go from star N to star N+1. Index 0 is 1 star -> 2 stars. */
-export const STAR_UP_SHARDS: readonly number[] = [20, 45, 100, 220];
+/** Shards for one star, by rarity. Flat across all four ascensions. */
+export const STAR_UP_SHARDS: Readonly<Record<CompanionRarity, number>> = {
+  common: 20,
+  rare: 18,
+  epic: 15,
+  legendary: 13,
+  mythical: 10,
+};
 
 /** Starlight refunded for a duplicate of an already-maxed companion. */
 export const MAXED_DUPLICATE_REFUND: Readonly<Record<CompanionRarity, number>> = {
@@ -98,8 +106,12 @@ export const MAXED_DUPLICATE_REFUND: Readonly<Record<CompanionRarity, number>> =
 
 /* ------------------------------------------------------------- currency --- */
 
-/** Starlight per kill, before the boss multiplier. */
-export const STARLIGHT_PER_KILL = 0.6;
-export const STARLIGHT_BOSS_MULTIPLIER = 12;
-/** A one-off bonus the first time a frontier stage is cleared. */
-export const STARLIGHT_FIRST_CLEAR = 25;
+/**
+ * Starlight per kill. Flat, and deliberately so.
+ *
+ * It used to scale with the square root of the stage, which meant the price of
+ * a draw fell the further you pushed and the cost of a summon quietly stopped
+ * meaning anything. A kill is a kill; only a boss is worth more.
+ */
+export const STARLIGHT_PER_KILL = 1;
+export const STARLIGHT_PER_BOSS_KILL = 5;
