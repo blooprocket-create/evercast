@@ -10,7 +10,10 @@ import type { GameEvent } from '../events/GameEvent';
 import type { EnemyState, GameState } from '../model';
 import { big } from '../numbers';
 import { SaveCodec } from '../save/SaveCodec';
-import { guardReduction, isPassive, nextCompanionBeat } from './CompanionCombat';
+// prettier-ignore
+import { guardReduction, isPassive, nextCompanionBeat, wizardPerHit } from './CompanionCombat';
+import { companionDamage, requireCompanion } from './CompanionCatalog';
+import { compileSpell } from '../spell/SpellCompiler';
 import { MAX_COMPANION_STARS } from './types';
 
 /** A vanguard, a bruiser, a ranger, an arcanist and a healer. */
@@ -311,6 +314,48 @@ describe('knockouts', () => {
       if (collected.some((event) => event.type === 'companion_downed')) break;
     }
     expect(collected.some((event) => event.type === 'companion_downed')).toBe(true);
+  });
+});
+
+describe('companion damage', () => {
+  it('hits for exactly what the Companions surface says it does', () => {
+    // Combat and the snapshot each derived the mage's per-hit damage on their
+    // own, and the charged route was in one of them and not the other.
+    const simulation = fresh(1234);
+    const state = simulation.getState();
+    const snapshot = simulation.getSnapshot();
+    const shown = snapshot.party.find((member) => member?.definitionId === FULL_PARTY[0]);
+    if (!shown) throw new Error('expected a fielded companion');
+
+    const definition = requireCompanion(shown.definitionId);
+    const actual = companionDamage(
+      definition,
+      shown.stars,
+      wizardPerHit(state.run, state.equipment),
+    );
+    expect(actual.toString()).toBe(shown.damage.raw);
+  });
+
+  it('keeps the two in step on the charged route', () => {
+    const simulation = fresh(1234);
+    const state = simulation.getState();
+    const spell = compileSpell(state.run.spell);
+    if (!spell.mechanics) return; // The default build has no mechanics to charge.
+
+    state.run.spell = {
+      ...state.run.spell,
+      mechanics: { ...spell.mechanics, route: 'charged', chargedDamage: 3 },
+    };
+    const snapshot = simulation.getSnapshot();
+    const shown = snapshot.party.find((member) => member?.definitionId === FULL_PARTY[0]);
+    if (!shown) throw new Error('expected a fielded companion');
+
+    const actual = companionDamage(
+      requireCompanion(shown.definitionId),
+      shown.stars,
+      wizardPerHit(state.run, state.equipment),
+    );
+    expect(actual.toString()).toBe(shown.damage.raw);
   });
 });
 

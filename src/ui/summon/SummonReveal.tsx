@@ -15,6 +15,8 @@ const BEAM_MS = 850;
 
 interface SummonRevealProps {
   results: readonly SummonResultSnapshot[];
+  /** Open straight on the summary, for players who skip the animation. */
+  immediate?: boolean;
   onDone: () => void;
 }
 
@@ -34,9 +36,9 @@ function rank(rarity: CompanionRarity): number {
  * first frame; this only replays what it was told, which is why skipping is
  * free and why closing early cannot cost a pull.
  */
-export function SummonReveal({ results, onDone }: SummonRevealProps) {
+export function SummonReveal({ results, immediate = false, onDone }: SummonRevealProps) {
   const [turned, setTurned] = useState(0);
-  const [skipped, setSkipped] = useState(false);
+  const [skipped, setSkipped] = useState(immediate);
   const timer = useRef<number | undefined>(undefined);
 
   const best = useMemo(

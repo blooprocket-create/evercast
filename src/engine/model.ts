@@ -90,6 +90,15 @@ export interface RunState {
    * not - exactly the split enemies already use.
    */
   companions: CompanionCombatant[];
+  /**
+   * Companions that fought this encounter and are no longer fielded.
+   *
+   * They keep their wounds here rather than being discarded, so taking a
+   * downed companion out of the party and putting it back cannot undo a
+   * knockout. A separate list rather than a flag on the combatant: every
+   * combat path iterates `companions` and none of them has to learn about it.
+   */
+  benchedCompanions: CompanionCombatant[];
   /** Timed party buffs the companions have raised. */
   companionAura?: CompanionAura;
   elapsedSeconds: number;

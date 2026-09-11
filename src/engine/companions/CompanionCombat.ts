@@ -41,12 +41,19 @@ export interface CompanionBeatContext {
 }
 
 /**
- * What the mage hits for per projectile, before her own crit and route
- * multipliers. Companion power is a share of this, which is what keeps a
- * five-star mythical worth the same at stage 10 and stage 10,000.
+ * What the mage hits for per projectile. Companion power is a share of this,
+ * which is what keeps a five-star mythical worth the same at stage 10 and at
+ * stage 10,000.
+ *
+ * The single definition, used by combat and by the snapshot the Companions
+ * surface reads. They were computed separately and the charged route was in one
+ * and not the other, so companions quietly hit for less than the interface
+ * said. Anything that scales off the mage's damage belongs here.
  */
 export function wizardPerHit(run: RunState, equipment: EquipmentState): Decimal {
-  return big(compileSpell(run.spell).damage).add(compileGearStats(equipment).baseDamageBonus);
+  const spell = compileSpell(run.spell);
+  const base = big(spell.damage).add(compileGearStats(equipment).baseDamageBonus);
+  return spell.mechanics?.route === 'charged' ? base.mul(spell.mechanics.chargedDamage) : base;
 }
 
 /** Whether this companion has anything it could act on from where it stands. */

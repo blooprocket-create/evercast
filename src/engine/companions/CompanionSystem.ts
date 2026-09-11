@@ -40,9 +40,13 @@ export function restoreCompanions(run: RunState): void {
     companion.hp = big(companion.maxHp);
     companion.downed = false;
     companion.revivedThisEncounter = false;
+    // A bulwark is a combat effect, and combat state is encounter-scoped.
+    companion.shield = undefined;
     companion.attackCooldown = definition.attackInterval;
     companion.abilityCooldown = definition.ability.cooldown;
   }
+  // The bench only exists to remember wounds within an encounter.
+  run.benchedCompanions = [];
 }
 
 export class CompanionSystem {
@@ -58,8 +62,16 @@ export class CompanionSystem {
    */
   sync(state: GameState): void {
     const { run, companions } = state;
-    const previous = new Map(run.companions.map((companion) => [companion.slot, companion]));
+    // Keyed by identity, never by slot. Keyed by slot, any party edit that
+    // moved a companion built it again from scratch at full health - which
+    // made a knockout, meant to cost the rest of the encounter, cost nothing.
+    const known = new Map<string, CompanionCombatant>();
+    for (const companion of [...run.companions, ...run.benchedCompanions]) {
+      known.set(companion.definitionId, companion);
+    }
+
     const next: CompanionCombatant[] = [];
+    const fielded = new Set<string>();
 
     companions.party.slice(0, PARTY_SIZE).forEach((definitionId, slot) => {
       if (!definitionId) return;
@@ -67,11 +79,13 @@ export class CompanionSystem {
       if (!owned) return; // A party entry for something no longer owned is simply empty.
       const definition = requireCompanion(definitionId);
       const maxHp = companionMaxHp(definition, owned.stars, run.mage.maxHp);
-      const existing = previous.get(slot);
+      const existing = known.get(definitionId);
+      fielded.add(definitionId);
 
-      if (existing && existing.definitionId === definitionId) {
+      if (existing) {
         next.push({
           ...existing,
+          slot,
           stars: owned.stars,
           maxHp,
           hp: scaleHealth(existing.hp, existing.maxHp, maxHp),
@@ -92,6 +106,10 @@ export class CompanionSystem {
     });
 
     run.companions = next;
+    // Whoever fought and is no longer fielded waits here with their wounds.
+    run.benchedCompanions = [...known.values()].filter(
+      (companion) => !fielded.has(companion.definitionId),
+    );
   }
 
   equip(state: GameState, definitionId: string, slot: number): boolean {

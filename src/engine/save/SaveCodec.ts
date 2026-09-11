@@ -2,6 +2,7 @@ import type { EngineConfig } from '../config';
 import { GEAR_SLOT_ORDER } from '../gear/GearCatalog';
 import { createInitialEquipmentState } from '../gear/GearSystem';
 import type { EquipmentState, GearPieceState, GearSlot } from '../gear/types';
+import { COMPANION_BY_ID } from '../companions/CompanionCatalog';
 import { createInitialCompanionsState } from '../companions/CompanionSystem';
 import type { CompanionCombatant, CompanionsState, OwnedCompanion } from '../companions/types';
 import { PARTY_SIZE } from '../companions/types';
@@ -32,17 +33,28 @@ type SerializedEnemy = Omit<EnemyState, 'hp' | 'maxHp' | 'attackDamage'> & {
   reward?: string;
 };
 
-type SerializedCompanion = Omit<CompanionCombatant, 'hp' | 'maxHp'> & {
+/**
+ * Every Decimal is named explicitly. Omitting one leaves it typed as a Decimal
+ * while JSON flattens it to a plain value, and nothing on the type side catches
+ * it - the blob is read back through an `as` cast. The next `.cmp()` then
+ * throws in the middle of combat.
+ */
+type SerializedCompanion = Omit<CompanionCombatant, 'hp' | 'maxHp' | 'shield'> & {
   hp: string;
   maxHp: string;
+  shield?: string;
 };
 
-type SerializedRunV3 = Omit<GameState['run'], 'essence' | 'mage' | 'enemies' | 'companions'> & {
+type SerializedRunV3 = Omit<
+  GameState['run'],
+  'essence' | 'mage' | 'enemies' | 'companions' | 'benchedCompanions'
+> & {
   essence: string;
   mage: { hp: string; maxHp: string };
   enemies: SerializedEnemy[];
   /** Absent in v6 and earlier, which predate companions entirely. */
   companions?: SerializedCompanion[];
+  benchedCompanions?: SerializedCompanion[];
 };
 
 interface SerializedCompanions {
@@ -158,6 +170,7 @@ export class SaveCodec {
           },
           enemies: state.run.enemies.map(serializeEnemy),
           companions: state.run.companions.map(serializeCompanion),
+          benchedCompanions: state.run.benchedCompanions.map(serializeCompanion),
         },
         meta: {
           ...state.meta,
@@ -278,11 +291,31 @@ function serializeEnemy(enemy: EnemyState): SerializedEnemy {
 }
 
 function serializeCompanion(companion: CompanionCombatant): SerializedCompanion {
-  return { ...companion, hp: companion.hp.toString(), maxHp: companion.maxHp.toString() };
+  const { hp, maxHp, shield, ...rest } = companion;
+  return {
+    ...rest,
+    hp: hp.toString(),
+    maxHp: maxHp.toString(),
+    shield: shield ? shield.toString() : undefined,
+  };
 }
 
 function deserializeCompanion(companion: SerializedCompanion): CompanionCombatant {
-  return { ...companion, hp: big(companion.hp), maxHp: big(companion.maxHp) };
+  const { hp, maxHp, shield, ...rest } = companion;
+  return {
+    ...rest,
+    hp: big(hp),
+    maxHp: big(maxHp),
+    shield: shield === undefined || shield === null ? undefined : big(shield),
+  };
+}
+
+/** Drops anything the catalog no longer knows, rather than trusting the blob. */
+function deserializeCompanionList(raw: SerializedCompanion[] | undefined): CompanionCombatant[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((companion) => companion && COMPANION_BY_ID.has(companion.definitionId))
+    .map(deserializeCompanion);
 }
 
 /**
@@ -296,6 +329,10 @@ function deserializeCompanions(companions: SerializedCompanions | undefined): Co
   const owned: Record<string, OwnedCompanion> = {};
   for (const [id, entry] of Object.entries(companions.owned ?? {})) {
     if (!entry || typeof entry !== 'object') continue;
+    // An id the catalog does not know reaches `requireCompanion` later and
+    // throws. `importSaveFile` writes the blob and then reloads, so trusting it
+    // here leaves the game unable to boot until storage is cleared by hand.
+    if (!COMPANION_BY_ID.has(id)) continue;
     owned[id] = {
       definitionId: id,
       stars: Math.max(1, Math.floor(entry.stars ?? 1)),
@@ -333,7 +370,8 @@ function deserializeRunV3(run: SerializedRunV3): GameState['run'] {
     essence: big(run.essence),
     mage: { hp: big(run.mage.hp), maxHp: big(run.mage.maxHp) },
     enemies: Array.isArray(run.enemies) ? run.enemies.map(deserializeEnemy) : [],
-    companions: Array.isArray(run.companions) ? run.companions.map(deserializeCompanion) : [],
+    companions: deserializeCompanionList(run.companions),
+    benchedCompanions: deserializeCompanionList(run.benchedCompanions),
     encounter: run.encounter ?? null,
     nextEnemyInstanceId: Math.max(1, run.nextEnemyInstanceId ?? 1),
   };
@@ -352,6 +390,7 @@ function migrateLegacyRun(run: LegacySerializedRun): GameState['run'] {
     // Saves this old predate companions; the party starts empty rather than
     // arriving undefined and failing the first time combat iterates it.
     companions: [],
+    benchedCompanions: [],
     encounter: null,
     nextEnemyInstanceId: 1,
   };

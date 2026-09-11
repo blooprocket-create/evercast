@@ -39,8 +39,9 @@ export function SummonSurface() {
 
   const summon = (count: number) => {
     if (!run({ type: 'summon_draw', count })) return;
-    if (settings.display.skipSummonAnimation) return;
     // The engine has already granted everything; the reveal only replays it.
+    // Skipping the animation still has to say what was drawn - returning here
+    // left the player with no account of it at all.
     setRevealing((serial) => (serial === null ? 0 : serial + 1));
   };
 
@@ -140,6 +141,7 @@ export function SummonSurface() {
         <SummonReveal
           key={snapshot.lastSummon.serial}
           results={snapshot.lastSummon.results}
+          immediate={settings.display.skipSummonAnimation}
           onDone={() => setRevealing(null)}
         />
       )}

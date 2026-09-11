@@ -78,6 +78,8 @@
 
 .draw:disabled {
   color: var(--ink-dim);
+  /* Outranks .drawTen: a lit border read as affordable when it was not. */
+  border-color: var(--line);
   cursor: default;
 }
 

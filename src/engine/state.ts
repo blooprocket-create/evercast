@@ -9,6 +9,7 @@ import { createInitialSpellTreeState } from './spellTree/SpellTreeSystem';
 export function createInitialRunState(config: EngineConfig): RunState {
   return {
     companions: [],
+    benchedCompanions: [],
     elapsedSeconds: 0,
     frontierStage: 1,
     highestStageThisRun: 1,

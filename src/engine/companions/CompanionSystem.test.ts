@@ -244,6 +244,121 @@ describe('companion system', () => {
   });
 });
 
+describe('party edits during a fight', () => {
+  /*
+   * A knockout costs the rest of the encounter. Every one of these was a way
+   * to buy it back for free, because combat state was keyed by the slot a
+   * companion happened to be holding rather than by the companion.
+   */
+  function downed(state: GameState, definitionId: string) {
+    const companion =
+      state.run.companions.find((entry) => entry.definitionId === definitionId) ??
+      state.run.benchedCompanions.find((entry) => entry.definitionId === definitionId);
+    if (!companion) throw new Error(`${definitionId} is neither fielded nor benched`);
+    return companion;
+  }
+
+  it('does not revive a downed companion by moving it to another slot', () => {
+    const state = stateWith('hedge_warden');
+    const system = new CompanionSystem(() => {});
+    const before = downed(state, 'hedge_warden');
+    before.downed = true;
+    before.hp = big(0);
+
+    expect(system.equip(state, 'hedge_warden', 3)).toBe(true);
+    const after = downed(state, 'hedge_warden');
+    expect(after.slot).toBe(3);
+    expect(after.downed).toBe(true);
+    expect(after.hp.cmp(0)).toBe(0);
+  });
+
+  it('does not revive one by benching it and bringing it back', () => {
+    const state = stateWith('hedge_warden');
+    const system = new CompanionSystem(() => {});
+    downed(state, 'hedge_warden').downed = true;
+    downed(state, 'hedge_warden').hp = big(0);
+
+    expect(system.unequip(state, 0)).toBe(true);
+    expect(state.run.companions).toHaveLength(0);
+    // Benched rather than discarded, which is the whole point.
+    expect(state.run.benchedCompanions.map((c) => c.definitionId)).toEqual(['hedge_warden']);
+
+    expect(system.equip(state, 'hedge_warden', 1)).toBe(true);
+    const back = downed(state, 'hedge_warden');
+    expect(back.downed).toBe(true);
+    expect(back.hp.cmp(0)).toBe(0);
+    expect(state.run.benchedCompanions).toHaveLength(0);
+  });
+
+  it('keeps a half-health companion half-healthy across a move', () => {
+    const state = stateWith('hedge_warden');
+    const system = new CompanionSystem(() => {});
+    const wounded = downed(state, 'hedge_warden');
+    wounded.hp = wounded.maxHp.div(4);
+
+    system.equip(state, 'hedge_warden', 2);
+    const after = downed(state, 'hedge_warden');
+    expect(after.hp.div(after.maxHp).toNumber()).toBeCloseTo(0.25, 6);
+  });
+
+  it('empties the bench when the encounter ends', () => {
+    const state = stateWith('hedge_warden');
+    new CompanionSystem(() => {}).unequip(state, 0);
+    expect(state.run.benchedCompanions).toHaveLength(1);
+    restoreCompanions(state.run);
+    expect(state.run.benchedCompanions).toEqual([]);
+  });
+
+  it('still starts a companion fresh if it never fought this encounter', () => {
+    const state = stateWith('hedge_warden');
+    state.companions.owned.sunless_knight = {
+      definitionId: 'sunless_knight',
+      stars: 1,
+      shards: 0,
+    };
+    new CompanionSystem(() => {}).equip(state, 'sunless_knight', 1);
+    const fresh = downed(state, 'sunless_knight');
+    expect(fresh.downed).toBe(false);
+    expect(fresh.hp.cmp(fresh.maxHp)).toBe(0);
+  });
+});
+
+describe('shields', () => {
+  it('does not carry an unspent bulwark into the next encounter', () => {
+    const state = stateWith('hedge_warden');
+    const companion = state.run.companions[0];
+    if (!companion) throw new Error('expected a companion');
+    companion.shield = big(500);
+    restoreCompanions(state.run);
+    expect(companion.shield).toBeUndefined();
+  });
+
+  it('survives a save as something combat can still subtract from', () => {
+    // It reached JSON as a raw Decimal and came back a plain value, so the
+    // next blow called .cmp on it and took the run down with it.
+    const codec = new SaveCodec(DEFAULT_ENGINE_CONFIG);
+    const state = stateWith('hedge_warden');
+    const companion = state.run.companions[0];
+    if (!companion) throw new Error('expected a companion');
+    companion.shield = big('1234.5');
+
+    const decoded = codec.decode(JSON.parse(JSON.stringify(codec.encode(state)))).state;
+    const restored = decoded.run.companions[0];
+    expect(restored?.shield?.toString()).toBe('1234.5');
+    expect(() => restored?.shield?.cmp(1)).not.toThrow();
+  });
+
+  it('round-trips the bench, which also holds Decimals', () => {
+    const codec = new SaveCodec(DEFAULT_ENGINE_CONFIG);
+    const state = stateWith('hedge_warden');
+    new CompanionSystem(() => {}).unequip(state, 0);
+    const decoded = codec.decode(JSON.parse(JSON.stringify(codec.encode(state)))).state;
+    const benched = decoded.run.benchedCompanions[0];
+    expect(benched?.definitionId).toBe('hedge_warden');
+    expect(() => benched?.hp.cmp(0)).not.toThrow();
+  });
+});
+
 describe('companion persistence', () => {
   it('round-trips the roster, the party and the pity count', () => {
     const codec = new SaveCodec(DEFAULT_ENGINE_CONFIG);
@@ -296,6 +411,29 @@ describe('companion persistence', () => {
 
     const decoded = codec.decode(envelope).state;
     expect(decoded.companions.party.every((entry) => entry === null)).toBe(true);
+  });
+
+  it('refuses an id the catalog does not know rather than failing to boot', () => {
+    /*
+     * importSaveFile persists the blob and then reloads, so an id accepted
+     * here reaches requireCompanion on the next boot and throws - leaving the
+     * game unstartable until storage is cleared by hand.
+     */
+    const codec = new SaveCodec(DEFAULT_ENGINE_CONFIG);
+    const envelope = JSON.parse(JSON.stringify(codec.encode(stateWith('hedge_warden')))) as {
+      state: { companions: { owned: Record<string, unknown>; party: (string | null)[] } };
+    };
+    envelope.state.companions.owned.not_a_real_companion = {
+      definitionId: 'not_a_real_companion',
+      stars: 4,
+      shards: 9,
+    };
+    envelope.state.companions.party[1] = 'not_a_real_companion';
+
+    const decoded = codec.decode(envelope).state;
+    expect(decoded.companions.owned.not_a_real_companion).toBeUndefined();
+    expect(decoded.companions.party).not.toContain('not_a_real_companion');
+    expect(() => new EvercastSimulation({ initialState: decoded }).getSnapshot()).not.toThrow();
   });
 
   it('survives a rebirth, which is what makes collecting worth anything', () => {
