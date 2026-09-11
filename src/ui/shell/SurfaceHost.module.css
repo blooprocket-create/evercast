@@ -10,6 +10,14 @@
    * loses its own overflow rather than the player's way out.
    */
   overflow: hidden;
+  /*
+   * viewport-fit=cover means this box starts at the physical top of the
+   * display, so on a notched phone the status bar sits over the header - and
+   * the header holds Back, which is the only way out of a surface. Padding
+   * rather than an inset, so the veil still paints under the notch instead of
+   * leaving a bare strip above it. Zero wherever the browser reports nothing.
+   */
+  padding-top: var(--safe-top);
   background: var(--surface-veil);
   backdrop-filter: blur(18px);
   pointer-events: auto;
@@ -146,10 +154,19 @@
  * host owns 306. The max-width rules above stack the nav rail, the toolbar and
  * the inspector into horizontal bands, and four of those spent that height
  * before the surface itself got any: the spell tree came out 50px tall. So the
- * wide layout comes back here, at landscape sizes. Width is the dimension
- * there is plenty of.
+ * wide layout comes back here, at landscape sizes.
+ *
+ * min-width is what makes "wide" true rather than assumed. Keyed on height
+ * alone, this rule also caught a 320x568 phone turned sideways, where the
+ * three columns are 176px of rail, 240px of list and whatever is left: at
+ * 568px that is a 152px pane, and at the 184/280 this rule first used it was
+ * 104px, with 130px of settings controls clipped by the pane's
+ * overflow-x: hidden and no way to scroll to them. 640px is the width at
+ * which the pane still gets 224px - itself a column - and it takes in every
+ * phone from a 667px landscape upward. Below it the stacked layout is the
+ * better trade: cramped, but everything scrolls and nothing is cut off.
  */
-@media (max-height: 520px) and (orientation: landscape) {
+@media (max-height: 520px) and (min-width: 640px) and (orientation: landscape) {
   .body {
     flex-direction: row;
   }

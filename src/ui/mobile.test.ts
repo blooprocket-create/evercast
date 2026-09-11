@@ -132,6 +132,43 @@ describe('mobile layout', () => {
     expect(hostRule).toMatch(/overflow:\s*hidden/);
   });
 
+  it('clears the notch above the only way out of a surface', () => {
+    /*
+     * viewport-fit=cover puts the top of the host at the physical top of the
+     * display. The header holds Back, and on a 393x852 iPhone with a 59px
+     * Dynamic Island the button measured y=8..52 - covered end to end by the
+     * system area, with no other way to close a surface.
+     */
+    const host = /\.host\s*\{[^}]*\}/.exec(sheet('shell/SurfaceHost.module.css'))?.[0] ?? '';
+    expect(host).toMatch(/padding-top:\s*var\(--safe-top\)/);
+  });
+
+  it('claims the wide landscape layout only where it is actually wide', () => {
+    /*
+     * Keyed on height alone, the landscape rule turned the host into three
+     * columns on a 320x568 phone held sideways too: 568px across a rail, a
+     * list and a pane left the pane 104px with 130px of its content clipped
+     * by overflow-x: hidden and unreachable - the same defect this whole
+     * change set out to remove. Any rule that builds those columns has to
+     * say how much width it needs.
+     *
+     * tokens.css and HudOverlay are exempt on purpose: the shelf and the HUD
+     * only ever need one row, so they hold at any width.
+     */
+    const columnBuilders = [
+      'shell/SurfaceHost.module.css',
+      'nav/NavRail.module.css',
+      'archetypes/Detail.module.css',
+      'archetypes/Graph.module.css',
+      'archetypes/Dashboard.module.css',
+    ];
+    for (const path of columnBuilders) {
+      const queries = sheet(path).match(/@media[^{]*orientation:\s*landscape[^{]*\{/g) ?? [];
+      expect(queries.length).toBeGreaterThan(0);
+      for (const query of queries) expect(`${path} ${query}`).toMatch(/min-width:/);
+    }
+  });
+
   it('gives a landscape phone a shelf that fits it', () => {
     // 132px of stacked shelf is a third of a 390px-tall screen.
     expect(sheet('theme/tokens.css')).toMatch(

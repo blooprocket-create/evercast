@@ -49,14 +49,17 @@
   }
 }
 
-/* Sideways there is width to spare and no height to give the list a band of. */
-@media (max-height: 520px) and (orientation: landscape) {
+/*
+ * Sideways there is width to spare - the min-width gate says so - and no
+ * height to give the list a band of.
+ */
+@media (max-height: 520px) and (min-width: 640px) and (orientation: landscape) {
   .detail {
     flex-direction: row;
   }
 
   .list {
-    width: 280px;
+    width: 240px;
     max-height: none;
     border-right: 1px solid var(--line);
     border-bottom: 0;

@@ -62,7 +62,7 @@
   }
 }
 
-@media (max-height: 520px) and (orientation: landscape) {
+@media (max-height: 520px) and (min-width: 640px) and (orientation: landscape) {
   .withAside {
     grid-template-columns: minmax(0, 1fr) minmax(240px, 20rem);
   }

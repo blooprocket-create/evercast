@@ -274,7 +274,7 @@
  * layout puts them: the inspector beside the graph, the toolbar floating over
  * the top of it.
  */
-@media (max-height: 520px) and (orientation: landscape) {
+@media (max-height: 520px) and (min-width: 640px) and (orientation: landscape) {
   .graph {
     flex-direction: row;
   }
@@ -300,7 +300,8 @@
   }
 
   .inspector {
-    width: 260px;
+    /* As with the rail: the notch is added to the column, not taken from it. */
+    width: calc(240px + var(--safe-right));
     max-height: none;
     border-top: 0;
     border-left: 1px solid var(--line);
