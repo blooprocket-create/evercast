@@ -278,3 +278,71 @@
     padding: var(--space-2) var(--space-3);
   }
 }
+
+/* --route is the one meaning colour no companion rarity claims. */
+.starlight {
+  color: var(--route);
+}
+
+/*
+ * The party, as five health pips beside the mage's own bar. A companion going
+ * down has to be visible without opening a surface - it changes who is taking
+ * the next blow.
+ */
+.party {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.partyLabel {
+  font: 600 var(--text-label) / 1 var(--font-ui);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-low);
+}
+
+.partyPips {
+  display: flex;
+  flex: 1;
+  gap: 3px;
+  min-width: 0;
+}
+
+.pip {
+  position: relative;
+  flex: 1;
+  height: 4px;
+  min-width: 0;
+  border-radius: var(--radius-pill);
+  background: var(--track);
+  overflow: hidden;
+}
+
+.pip::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--fill, 100%);
+  background: linear-gradient(90deg, var(--hp-you-deep), var(--hp-you));
+}
+
+.pipDown::after {
+  width: 100%;
+  background: var(--hp-foe-deep);
+  opacity: 0.55;
+}
+
+.pipEmpty {
+  opacity: 0.35;
+}
+
+.pipEmpty::after {
+  width: 0;
+}
+
+.partyCount {
+  font: 400 var(--text-label) / 1 var(--font-ui);
+  color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
+}

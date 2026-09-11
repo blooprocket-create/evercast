@@ -3,6 +3,7 @@ import type { EquipmentState } from './gear/types';
 import type { SpellBuild } from './spell/types';
 import type { SpellTreeState } from './spellTree/types';
 import type { CombatPosition, EnemyStatuses, SpellCombatState } from './combat/SpellCombatState';
+import type { CompanionAura, CompanionCombatant, CompanionsState } from './companions/types';
 
 export type RunMode = 'push' | 'farm';
 export type CombatPhase = 'travel' | 'combat';
@@ -31,11 +32,25 @@ export interface EnemyState {
    * which falls back to the engine default.
    */
   attackRange?: number;
+  /**
+   * Authored tags, copied at spawn for the same reason. Targeting reads them to
+   * decide whether this enemy goes through the front line or around it, and
+   * combat must not need the content catalog to answer that.
+   */
+  tags?: string[];
   /** Which spot around the mage it walked to, so a wave presses in rather than
    * stacking six bodies on one coordinate. */
   contactSlot?: number;
   /** Whether its next swing has already been telegraphed to the renderer. */
   telegraphed?: boolean;
+  /**
+   * Extra distance this enemy keeps because a frontline was standing when it
+   * spawned. Captured once, at spawn, and never recomputed: `contactPoint` has
+   * to stay a pure function of stored fields or a chunked run and a single pass
+   * would derive different stopping places. A wave that spawns after the tank
+   * falls carries no offset, so it presses in toward the mage.
+   */
+  frontlineOffset?: number;
   /**
    * Where the enemy entered from, and the clock reading when it did. Position
    * is derived from these rather than accumulated, so a run simulated in one
@@ -69,6 +84,23 @@ export interface RunStatistics {
 
 export interface RunState {
   combatState?: SpellCombatState;
+  /**
+   * The party as it stands in this encounter. Rebuilt from `CompanionsState`
+   * whenever the roster changes, so ownership is persistent and hit points are
+   * not - exactly the split enemies already use.
+   */
+  companions: CompanionCombatant[];
+  /**
+   * Companions that fought this encounter and are no longer fielded.
+   *
+   * They keep their wounds here rather than being discarded, so taking a
+   * downed companion out of the party and putting it back cannot undo a
+   * knockout. A separate list rather than a flag on the combatant: every
+   * combat path iterates `companions` and none of them has to learn about it.
+   */
+  benchedCompanions: CompanionCombatant[];
+  /** Timed party buffs the companions have raised. */
+  companionAura?: CompanionAura;
   elapsedSeconds: number;
   frontierStage: number;
   highestStageThisRun: number;
@@ -104,4 +136,5 @@ export interface GameState {
   meta: MetaState;
   equipment: EquipmentState;
   spellTree: SpellTreeState;
+  companions: CompanionsState;
 }

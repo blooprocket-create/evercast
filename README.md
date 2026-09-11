@@ -54,6 +54,22 @@ soft shadows, layered distant hills, wind, and lit biome landmarks. In developme
 **N** previews the next biome and **Shift N** its transition; these shortcuts do not
 change simulation progress or appear in production.
 
+## Companions
+
+Up to five companions fight alongside the mage, drawn from a 30-strong roster
+across five rarities and six classes. They are real combatants: they swing on
+their own timers, soak the blows aimed at the mage, and can be knocked out for
+the rest of an encounter. Duplicates bank shards, and shards buy star levels.
+
+Summons cost Starlight, a third wallet earned from kills so the collection loop
+feeds off the combat loop without competing with gear or Arcane Essence. The
+reveal is animated, with a skip toggle in Settings and a Skip button on the
+overlay itself.
+
+Companion models are procedural placeholder art built from primitives at
+runtime, not authored GLBs — `modelKey` is the seam a Blender pack would drop
+into later. See the Companions section of [the architecture guide](docs/ARCHITECTURE.md).
+
 ## Spell tree
 
 Evercast v1 has three exclusive routes, choose-two identities, nine mutations and nine fusions. See [the spell-tree guide](docs/SPELL_TREE_V1.md) for mechanics, playtest tuning, save migration and the development VFX review.

@@ -146,6 +146,14 @@ function DisplaySection({ settings }: { settings: ReturnType<typeof useUiSetting
             onChange={(damageNumbers) => uiSettings.setDisplay({ damageNumbers })}
           />
         </Field>
+
+        <Field label="Skip summon animation" hint="Go straight to what a draw pulled.">
+          <Toggle
+            label="Skip summon animation"
+            checked={settings.skipSummonAnimation}
+            onChange={(skipSummonAnimation) => uiSettings.setDisplay({ skipSummonAnimation })}
+          />
+        </Field>
       </div>
     </div>
   );

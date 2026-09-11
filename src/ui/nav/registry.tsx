@@ -2,6 +2,8 @@ import type { Destination } from './destinations';
 import { OverviewSurface } from '../surfaces/OverviewSurface';
 import { SpellTreeSurface } from '../surfaces/SpellTreeSurface';
 import { GearSurface } from '../surfaces/GearSurface';
+import { CompanionsSurface } from '../surfaces/CompanionsSurface';
+import { SummonSurface } from '../surfaces/SummonSurface';
 import { RebirthSurface } from '../surfaces/RebirthSurface';
 import { SettingsSurface } from '../surfaces/SettingsSurface';
 
@@ -39,6 +41,25 @@ export const DESTINATIONS: RegisteredDestination[] = [
     icon: 'gear',
     archetype: 'detail',
     Component: GearSurface,
+  },
+  {
+    id: 'companions',
+    group: 'power',
+    label: 'Companions',
+    icon: 'companions',
+    archetype: 'detail',
+    // Shards nobody has spent are the one thing worth interrupting for.
+    badge: (snapshot) => snapshot.ascendableCompanions || null,
+    Component: CompanionsSurface,
+  },
+  {
+    id: 'summon',
+    group: 'power',
+    label: 'Summon',
+    icon: 'summon',
+    archetype: 'detail',
+    badge: (snapshot) => (snapshot.canSummon ? 'dot' : null),
+    Component: SummonSurface,
   },
   {
     id: 'rebirth',

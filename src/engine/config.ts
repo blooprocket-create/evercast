@@ -27,6 +27,13 @@ export interface EngineConfig {
   enemyWindupSeconds: number;
   /** How far the Evercast reaches. Longer than melee, which is the point. */
   spellRange: number;
+  /**
+   * Extra distance a wave keeps when a front-row companion is standing as it
+   * spawns. Without it there is no room in front of the mage for anyone, and
+   * it has to clear the whole front rank: the furthest-forward slot sits at
+   * x = 2.72, so a melee enemy resting at 1.1 + this stops well clear of it.
+   */
+  frontlineStandoff: number;
 }
 
 export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
@@ -51,4 +58,5 @@ export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
   enemyAttackRange: 1.1,
   enemyWindupSeconds: 0.3,
   spellRange: 9,
+  frontlineStandoff: 2.3,
 };

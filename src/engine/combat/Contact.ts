@@ -38,9 +38,18 @@ const SLOT_SEARCH_LIMIT = CONTACT_SLOTS.length * 4;
  */
 const CONTACT_CONVERGE = 3.4;
 
-/** This enemy's own reach, or the engine default for a save written before them. */
+/**
+ * This enemy's own reach, or the engine default for a save written before them,
+ * plus whatever standoff it committed to at spawn.
+ *
+ * The standoff is what makes room for a front rank of companions: without it a
+ * wave walks to ~1.1 from the mage and stands inside them. It is read from a
+ * stored field rather than from the live party on purpose - `contactPoint` is
+ * derived twice per step, and a stop that moved when a tank fell would put a
+ * chunked run and a single pass on different coordinates.
+ */
 export function reachOf(enemy: EnemyState, defaultReach: number): number {
-  return enemy.attackRange ?? defaultReach;
+  return (enemy.attackRange ?? defaultReach) + (enemy.frontlineOffset ?? 0);
 }
 
 /**

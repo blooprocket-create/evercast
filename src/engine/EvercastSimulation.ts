@@ -1,10 +1,11 @@
 import { createDefaultCatalog, validateCatalog } from '../content/catalog';
 import type { ContentCatalog } from '../content/types';
 import { CombatSystem } from './combat/CombatSystem';
-// prettier-ignore
-import { advanceApproach, anyInRange, clearSpellCombat, effectiveCastInterval, ensurePositions, soonestRangeChange } from './combat/SpellCombatState';
-// prettier-ignore
-import { clearTelegraphs, nextEnemyBeat, resolveEnemyBeats, tickEnemyCooldowns } from './combat/EnemyTurns';
+import { clearSpellCombat, ensurePositions } from './combat/SpellCombatState';
+import { clearTelegraphs } from './combat/EnemyTurns';
+import { CompanionSystem } from './companions/CompanionSystem';
+import { GachaSystem } from './companions/GachaSystem';
+import { requireCompanion } from './companions/CompanionCatalog';
 import type { EngineConfig } from './config';
 import { DEFAULT_ENGINE_CONFIG } from './config';
 import { EncounterSystem } from './encounters/EncounterSystem';
@@ -12,6 +13,7 @@ import { EventBus } from './events/EventBus';
 import type { GameEvent } from './events/GameEvent';
 import { describeGameEvent } from './events/describeGameEvent';
 import { GearSystem } from './gear/GearSystem';
+import { EPSILON, EncounterLoop } from './loop/EncounterLoop';
 import type { GameState } from './model';
 import { ProgressionSystem } from './progression/ProgressionSystem';
 import { RebirthSystem } from './prestige/RebirthSystem';
@@ -19,9 +21,7 @@ import { compileSpell } from './spell/SpellCompiler';
 import { SpellTreeSystem } from './spellTree/SpellTreeSystem';
 import { buildSimulationSnapshot } from './snapshot/SimulationSnapshotBuilder';
 import { createInitialGameState } from './state';
-import type { EngineCommand, SimulationSnapshot } from './types';
-
-const EPSILON = 1e-9;
+import type { EngineCommand, LastSummonSnapshot, SimulationSnapshot } from './types';
 
 export interface SimulationOptions {
   config?: Partial<EngineConfig>;
@@ -35,14 +35,16 @@ export class EvercastSimulation {
   private readonly catalog: ContentCatalog;
   private readonly eventBus: EventBus<GameEvent>;
   private readonly presentationEvents: GameEvent[] = [];
-  private readonly encounterSystem: EncounterSystem;
-  private readonly combatSystem: CombatSystem;
+  private readonly loop: EncounterLoop;
   private readonly progressionSystem: ProgressionSystem;
   private readonly rebirthSystem: RebirthSystem;
   private readonly gearSystem: GearSystem;
   private readonly spellTreeSystem: SpellTreeSystem;
+  private readonly companionSystem: CompanionSystem;
+  private readonly gachaSystem: GachaSystem;
   private recordPresentationEvents = true;
   private lastEvent: GameEvent | null = null;
+  private lastSummon: LastSummonSnapshot | null = null;
 
   constructor(options: SimulationOptions = {}) {
     this.config = { ...DEFAULT_ENGINE_CONFIG, ...options.config };
@@ -53,14 +55,24 @@ export class EvercastSimulation {
     this.eventBus = new EventBus<GameEvent>(this.config.maxEventsPerAdvance);
     this.eventBus.subscribe((event) => this.captureEvent(event));
     const emit = (event: GameEvent) => this.eventBus.emit(event);
-    this.encounterSystem = new EncounterSystem(this.catalog, this.config);
-    this.combatSystem = new CombatSystem(this.config, emit);
     this.progressionSystem = new ProgressionSystem(this.config, emit);
     this.rebirthSystem = new RebirthSystem(this.config, emit);
     this.gearSystem = new GearSystem(this.config, emit);
     this.spellTreeSystem = new SpellTreeSystem(emit);
+    this.companionSystem = new CompanionSystem(emit);
+    this.gachaSystem = new GachaSystem(this.config, emit);
+    this.loop = new EncounterLoop(
+      this.config,
+      {
+        encounters: new EncounterSystem(this.catalog, this.config),
+        combat: new CombatSystem(this.config, emit),
+        progression: this.progressionSystem,
+      },
+      emit,
+    );
     this.gearSystem.syncMageStats(this.state);
     this.spellTreeSystem.syncSpell(this.state);
+    this.companionSystem.sync(this.state);
     ensurePositions(this.state.run, this.config.enemyAttackRange);
   }
 
@@ -81,10 +93,7 @@ export class EvercastSimulation {
         if (eventCount > this.config.maxEventsPerAdvance) {
           throw new Error(`Simulation safety limit exceeded while advancing ${seconds}s.`);
         }
-
-        const consumed =
-          this.state.run.phase === 'travel' ? this.advanceTravel(remaining) : this.advanceCombat(remaining);
-        remaining -= consumed;
+        remaining -= this.loop.step(this.state, remaining);
       }
     } finally {
       if (!this.recordPresentationEvents) clearTelegraphs(this.state.run);
@@ -105,8 +114,13 @@ export class EvercastSimulation {
           compileSpell(this.state.run.spell).castInterval,
         );
         return true;
-      case 'level_gear':
-        return this.gearSystem.levelUp(this.state, command.slot);
+      case 'level_gear': {
+        const levelled = this.gearSystem.levelUp(this.state, command.slot);
+        // Companion health is a share of the mage's, so a gear level that
+        // raises her maximum raises theirs in the same breath.
+        if (levelled) this.companionSystem.sync(this.state);
+        return levelled;
+      }
       case 'buy_spell_point':
         return this.spellTreeSystem.buyPoint(this.state);
       case 'activate_spell_node': {
@@ -123,9 +137,33 @@ export class EvercastSimulation {
         return this.spellTreeSystem.respec(this.state);
       case 'rebirth': {
         const performed = this.rebirthSystem.perform(this.state);
-        if (performed) this.spellTreeSystem.syncSpell(this.state);
+        if (performed) {
+          this.spellTreeSystem.syncSpell(this.state);
+          // The roster survives a rebirth alongside gear and the spell tree; a
+          // prestige that wiped a collection would make the gacha worthless.
+          this.companionSystem.sync(this.state);
+        }
         return performed;
       }
+      case 'summon_draw': {
+        const results = this.gachaSystem.draw(this.state, command.count);
+        if (!results) return false;
+        this.companionSystem.sync(this.state);
+        this.lastSummon = {
+          serial: this.state.companions.drawSerial,
+          results: results.map((result) => ({
+            ...result,
+            name: requireCompanion(result.definitionId).name,
+          })),
+        };
+        return true;
+      }
+      case 'ascend_companion':
+        return this.companionSystem.ascend(this.state, command.definitionId);
+      case 'equip_companion':
+        return this.companionSystem.equip(this.state, command.definitionId, command.slot);
+      case 'unequip_companion':
+        return this.companionSystem.unequip(this.state, command.slot);
     }
   }
 
@@ -136,6 +174,7 @@ export class EvercastSimulation {
       catalog: this.catalog,
       canRebirth: this.rebirthSystem.canRebirth(this.state),
       rebirthKnowledgeGain: this.rebirthSystem.previewKnowledgeGain(this.state),
+      lastSummon: this.lastSummon,
       lastEvent: this.lastEvent ? describeGameEvent(this.lastEvent) : 'The Evercast stirs.',
     });
   }
@@ -146,142 +185,6 @@ export class EvercastSimulation {
 
   drainPresentationEvents(): GameEvent[] {
     return this.presentationEvents.splice(0, this.presentationEvents.length);
-  }
-
-  private advanceTravel(available: number): number {
-    const run = this.state.run;
-    const timeToEncounter = Math.max(0, this.config.travelSeconds - run.travelElapsed);
-    const consumed = Math.min(available, timeToEncounter);
-    run.travelElapsed += consumed;
-    run.elapsedSeconds += consumed;
-
-    if (run.travelElapsed + EPSILON >= this.config.travelSeconds) {
-      const descriptor = this.encounterSystem.createForRun(run);
-      run.encounter = descriptor.encounter;
-      run.enemies = [];
-      run.encounterStage = descriptor.encounter.stage;
-      run.zoneNumber = descriptor.zoneNumber;
-      run.zoneName = descriptor.zoneName;
-      run.phase = 'combat';
-      run.travelElapsed = 0;
-      run.castCooldown = Math.min(0.15, compileSpell(run.spell).castInterval);
-      this.eventBus.emit({
-        type: 'encounter_started',
-        time: run.elapsedSeconds,
-        stage: descriptor.encounter.stage,
-        totalEnemies: descriptor.encounter.totalEnemies,
-        boss: descriptor.encounter.bossStage,
-      });
-      this.spawnNextEnemy();
-    }
-
-    return consumed || Math.min(available, EPSILON);
-  }
-
-  private advanceCombat(available: number): number {
-    const run = this.state.run;
-    const encounter = run.encounter;
-    if (!encounter) {
-      run.phase = 'travel';
-      return Math.min(available, EPSILON);
-    }
-
-    if (encounter.spawnedEnemies >= encounter.totalEnemies && run.enemies.length === 0) {
-      this.progressionSystem.handleEncounterCleared(this.state);
-      return Math.min(available, EPSILON);
-    }
-
-    const canSpawn =
-      encounter.spawnedEnemies < encounter.totalEnemies && run.enemies.length < encounter.maxAlive;
-    const nextSpawn = canSpawn ? Math.max(0, encounter.spawnCooldown) : Number.POSITIVE_INFINITY;
-    const reach = this.config.enemyAttackRange;
-    const nextCast = anyInRange(run, this.config.spellRange)
-      ? Math.max(0, run.castCooldown)
-      : Number.POSITIVE_INFINITY;
-    const nextAction = Math.min(
-      nextSpawn,
-      nextCast,
-      nextEnemyBeat(run, this.config),
-      soonestRangeChange(run, this.config.spellRange, reach, this.config.enemyApproachSpeed),
-      this.combatSystem.evolving.effects.nextDelay(run),
-    );
-
-    if (!Number.isFinite(nextAction)) {
-      throw new Error('Combat has no reachable next event.');
-    }
-
-    const consumed = Math.min(available, nextAction);
-    run.elapsedSeconds += consumed;
-    // Gates read positions as they were at the START of this step. Arrival is
-    // itself an event, so an enemy is either out of range for the whole step or
-    // in range for the whole step - which is what keeps a chunked run, a single
-    // pass and a save-and-resume in agreement.
-    if (anyInRange(run, this.config.spellRange)) run.castCooldown -= consumed;
-    // An enemy still closing is not winding up a swing.
-    tickEnemyCooldowns(run, this.config, consumed);
-    if (canSpawn) encounter.spawnCooldown -= consumed;
-    advanceApproach(run, reach, this.config.enemyApproachSpeed);
-
-    if (consumed + EPSILON < nextAction) return consumed;
-
-    if (canSpawn && encounter.spawnCooldown <= EPSILON) this.spawnNextEnemy();
-    this.collectDeadEnemies(this.combatSystem.evolving.effects.advance(run));
-
-    // Player wins ties. A cast can kill the first target and subsequent projectiles retarget.
-    if (anyInRange(run, this.config.spellRange) && run.castCooldown <= EPSILON) {
-      const result = this.combatSystem.cast(run, this.state.equipment);
-      run.castCooldown += effectiveCastInterval(run);
-      this.collectDeadEnemies(result.killedEnemyIds);
-    }
-
-    if (
-      run.encounter &&
-      run.encounter.spawnedEnemies >= run.encounter.totalEnemies &&
-      run.enemies.length === 0
-    ) {
-      this.progressionSystem.handleEncounterCleared(this.state);
-      return consumed || Math.min(available, EPSILON);
-    }
-
-    for (const enemy of resolveEnemyBeats(run, this.config, (event) => this.eventBus.emit(event))) {
-      const result = this.combatSystem.enemyAttack(run, enemy);
-      enemy.attackCooldown += enemy.attackInterval;
-      enemy.telegraphed = false;
-      if (result.mageDefeated) {
-        this.progressionSystem.handleDefeat(this.state);
-        break;
-      }
-    }
-
-    return consumed || Math.min(available, EPSILON);
-  }
-
-  private spawnNextEnemy(): void {
-    const run = this.state.run;
-    const enemy = this.encounterSystem.spawnEnemy(run);
-    if (!enemy || !run.encounter) return;
-    this.eventBus.emit({
-      type: 'enemy_spawned',
-      position: enemy.position ? { ...enemy.position } : undefined,
-      time: run.elapsedSeconds,
-      stage: enemy.stage,
-      instanceId: enemy.instanceId,
-      enemyId: enemy.definitionId,
-      enemyName: enemy.name,
-      boss: enemy.boss,
-      spawned: run.encounter.spawnedEnemies,
-      total: run.encounter.totalEnemies,
-    });
-  }
-
-  private collectDeadEnemies(candidateIds: readonly number[]): void {
-    const run = this.state.run;
-    const candidates = new Set(candidateIds);
-    for (const enemy of [...run.enemies]) {
-      if (enemy.hp.cmp(0) > 0 || (!candidates.has(enemy.instanceId) && candidateIds.length > 0)) continue;
-      this.progressionSystem.handleEnemyKilled(this.state, enemy);
-      run.enemies = run.enemies.filter((entry) => entry.instanceId !== enemy.instanceId);
-    }
   }
 
   private captureEvent(event: GameEvent): void {

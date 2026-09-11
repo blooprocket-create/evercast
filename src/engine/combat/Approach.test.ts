@@ -117,7 +117,7 @@ describe('range', () => {
     const melee = config.enemyAttackRange;
     const spell = config.spellRange;
     // The spell threshold is crossed first, so it is the next event.
-    expect(soonestRangeChange(run, spell, melee, config.enemyApproachSpeed)).toBeCloseTo(
+    expect(soonestRangeChange(run, [spell], melee, config.enemyApproachSpeed)).toBeCloseTo(
       (13 - spell) / config.enemyApproachSpeed,
       9,
     );

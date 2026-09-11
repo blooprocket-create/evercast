@@ -54,12 +54,13 @@ Owns browser lifecycle, save loading, autosave, visibility/background handling, 
 
 ## State boundaries
 
-`GameState` currently has four domains:
+`GameState` currently has five domains:
 
-- `RunState`: frontier, current encounter, push/farm mode, Arcane Essence, spell build, combat timers and run stats.
+- `RunState`: frontier, current encounter, push/farm mode, Arcane Essence, spell build, combat timers, the live party and run stats.
 - `MetaState`: Rebirth count, Knowledge, lifetime/highest-stage records, permanent unlock/story flags.
 - `EquipmentState`: Gold and the eight persistent gear pieces.
 - `SpellTreeState`: purchased Spell Points and activated spell-tree nodes.
+- `CompanionsState`: Starlight, the owned roster, the party, and the draw/pity counters.
 
 The current placeholder Rebirth replaces `RunState` while equipment and spell-tree state survive. That is intentionally provisional until prestige is designed; it must not become canon by accident.
 
@@ -99,6 +100,7 @@ Gold and Arcane Essence intentionally serve different loops:
 
 - **Gold** is repeatable. Every kill grants Gold and farming/AFK time can accumulate it. Gold levels gear.
 - **Arcane Essence** is finite frontier progression. It is granted only on a stage's first-ever frontier clear and purchases Spell Points. Farming/replaying already-cleared stages grants no Essence.
+- **Starlight** is repeatable and buys summons. It is deliberately a third wallet rather than a second use for one of the others: draws out of Gold would cannibalise gear, and draws out of Essence would break the rule above. It grows far more slowly than Gold per kill, with a boss multiplier and a first-clear bonus.
 
 Boss first-clears currently award more Essence. Exact curves remain prototype tuning.
 
@@ -107,6 +109,52 @@ Boss first-clears currently award more Essence. Exact curves remain prototype tu
 The authored v1 tree has three exclusive routes, choose-two identity groups, optional side upgrades, mutations and pairwise fusions requiring both parents. Allocations compile into SpellBuild.mechanics. EvolvingCombat and TimedSpellEffects own cast/timed behavior; stable enemy positions and temporary spell resources remain authoritative engine state. UI geometry stays separate.
 
 See [Real Spell Tree v1](SPELL_TREE_V1.md) for the graph rules, provisional tuning, event timing and version 6 migration. Future fusion identity splits are supported through the same exclusive-group schema, without invented nodes.
+
+## Companions
+
+Up to five companions fight alongside the mage as real combatants with their own
+health. They swing on their own cooldowns, take the blow that would have hit the
+mage, and can be knocked out; a knockout costs the rest of the encounter, never
+the run. `ProgressionSystem.resetAfterEncounter` restores the party where it
+already restores the mage.
+
+Ownership is persistent and stored **once per companion**, never once per copy:
+a duplicate draw banks shards, and shards buy star levels. Companion power is a
+*share* of the mage's own numbers — health off her maximum, damage off her
+per-hit — so a companion is worth what it says at every magnitude and needs no
+second scaling economy.
+
+Four rules carry the weight:
+
+- **Beats are events.** `nextCompanionBeat` joins the same `min(...)` the spawn,
+  cast and enemy beats already feed, and companion cooldowns tick only while
+  something is in reach — the mirror of `tickEnemyCooldowns`. Passive abilities
+  are never scheduled: a cooldown of zero would put a due action at t=0 on every
+  pass and `advance` would spin until the safety limit.
+- **Reaches are gates.** `soonestRangeChange` takes a list of thresholds so each
+  companion's reach is a moment the loop can stop on, not a condition that can
+  flip mid-step.
+- **Targeting is pure.** `combat/Threat.ts` sorts by threat with no randomness,
+  so a chunked run, a single pass and a resumed save agree on who took the hit.
+  Enemies tagged `flying` or `ambush` invert the sort and dive the softest
+  target, which is what keeps a wall of vanguards from making the back row free.
+- **The standoff is stored.** A wave that spawns against a standing frontline
+  keeps its distance for life, captured once at spawn. `contactPoint` is derived
+  twice per step, so a stop that moved when a tank fell would put a chunked run
+  and a single pass on different coordinates. It also reads correctly: the wave
+  that arrives after the line breaks presses in.
+
+Draws are a pure hash of a stored serial, so a reload continues on the roll the
+session would have made next. Pity follows the Genshin/HSR shape — the published
+rate is not the experienced one, and almost every high-rarity pull comes out of
+the ramp.
+
+Formation slots are gameplay geometry and live in the engine: they decide reach
+and who is reached first. They separate mostly along x for the reason
+`Contact.ts` gives about the enemy slots — z is nearly the depth axis at this
+camera angle. Companion art is procedural placeholder built from primitives in
+`src/game/actors/CompanionModels.ts`; `modelKey` is the seam an authored Blender
+pack would replace without touching combat.
 
 ## Gear
 
@@ -132,7 +180,7 @@ As new systems arrive, prefer extracting cohesive builders/services rather than 
 
 ## Save / migration
 
-`SaveCodec` owns versioned schema conversion. Browser `localStorage` remains in `src/app`. Existing saves migrate forward rather than silently resetting progression.
+`SaveCodec` owns versioned schema conversion. Version 7 adds the companions domain; every earlier save loads with the feature simply not started rather than losing anything it had. Browser `localStorage` remains in `src/app`. Existing saves migrate forward rather than silently resetting progression.
 
 The current solver is exact event-driven catch-up. If endgame event frequency eventually makes long catch-up too expensive, `OfflineProgressor` is the seam for an analytical/bulk strategy without changing combat or save formats.
 

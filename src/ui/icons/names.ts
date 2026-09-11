@@ -26,6 +26,14 @@ export const ICON_NAMES = [
   'slotBoots',
   'slotNecklace',
   'slotRing',
+  'companions',
+  'summon',
+  'classVanguard',
+  'classBruiser',
+  'classTrickster',
+  'classRanger',
+  'classArcanist',
+  'classSupport',
 ] as const;
 
 export type IconName = (typeof ICON_NAMES)[number];

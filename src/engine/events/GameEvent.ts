@@ -1,3 +1,4 @@
+import type { CompanionAbilityId, CompanionRarity } from '../companions/types';
 import type { GearSlot } from '../gear/types';
 import type { CombatPosition } from '../combat/SpellCombatState';
 
@@ -91,10 +92,22 @@ export type GameEvent =
       /** Seconds until the blow lands, so the clip can be fitted to it. */
       durationSeconds: number;
     }
-  | { type: 'enemy_attack'; time: number; instanceId: number; damage: string }
+  | {
+      type: 'enemy_attack';
+      time: number;
+      instanceId: number;
+      damage: string;
+      /** The party slot that took it; absent when the mage did. */
+      targetSlot?: number;
+    }
   | { type: 'enemy_killed'; time: number; stage: number; instanceId: number; enemyId: string; gold: string }
   | { type: 'mage_defeated'; time: number; stage: number }
-  | { type: 'resource_gained'; time: number; resource: 'essence' | 'knowledge' | 'gold'; amount: string }
+  | {
+      type: 'resource_gained';
+      time: number;
+      resource: 'essence' | 'knowledge' | 'gold' | 'starlight';
+      amount: string;
+    }
   | { type: 'stage_advanced'; time: number; stage: number }
   | { type: 'mode_changed'; time: number; mode: 'push' | 'farm'; reason: string }
   | { type: 'gear_leveled'; time: number; slot: GearSlot; level: number; cost: string }
@@ -102,4 +115,49 @@ export type GameEvent =
   | { type: 'spell_point_purchased'; time: number; purchasedPoints: number; cost: string }
   | { type: 'spell_node_activated'; time: number; nodeId: string; nodeName: string }
   | { type: 'spell_tree_respecced'; time: number; refundedPoints: number }
-  | { type: 'rebirth_performed'; time: number; knowledgeGained: string; rebirths: number };
+  | { type: 'rebirth_performed'; time: number; knowledgeGained: string; rebirths: number }
+  /**
+   * Companion events. Like `projectile_hit`, these carry what actually
+   * happened rather than what the build implies, so Babylon animates facts
+   * instead of re-deriving combat from stats.
+   */
+  | {
+      type: 'companion_attack';
+      time: number;
+      slot: number;
+      definitionId: string;
+      instanceId: number;
+      damage: string;
+      critical: boolean;
+    }
+  | {
+      type: 'companion_ability';
+      time: number;
+      slot: number;
+      definitionId: string;
+      ability: CompanionAbilityId;
+      /** Healing restored, damage dealt or shield granted, by ability. */
+      amount: string;
+      /** Enemy instance ids or party slots the ability landed on. */
+      targets: number[];
+    }
+  | { type: 'companion_damaged'; time: number; slot: number; instanceId: number; damage: string }
+  | { type: 'companion_downed'; time: number; slot: number; definitionId: string }
+  | { type: 'companion_revived'; time: number; slot: number; definitionId: string }
+  | {
+      type: 'companion_summoned';
+      time: number;
+      definitionId: string;
+      rarity: CompanionRarity;
+      duplicate: boolean;
+      shards: number;
+      stars: number;
+    }
+  | { type: 'companion_ascended'; time: number; definitionId: string; stars: number }
+  | {
+      type: 'companion_equipped';
+      time: number;
+      /** Null when a slot is cleared. */
+      definitionId: string | null;
+      slot: number;
+    };

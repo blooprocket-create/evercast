@@ -1,0 +1,205 @@
+/*
+ * Rarity arrives as `--rarity`, set on a wrapper by `companions/rarity.ts`.
+ * No colour is named here: the five tiers map onto tokens the game already
+ * owns, because the meaning set in tokens.css is closed.
+ */
+
+.eyebrow {
+  font: 600 var(--text-label) / 1 var(--font-ui);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--rarity, var(--accent));
+}
+
+.count {
+  font: 400 var(--text-small) / 1 var(--font-ui);
+  color: var(--ink-low);
+  font-variant-numeric: tabular-nums;
+}
+
+.rowWrap {
+  display: block;
+}
+
+/* The one place rarity does real work: a legendary reads down a long list. */
+.rowWrap .stars {
+  color: var(--rarity);
+  letter-spacing: 0.06em;
+  font-size: var(--text-small);
+}
+
+.pane {
+  display: contents;
+}
+
+.name {
+  margin: 0;
+  font: 500 var(--text-value) / 1.15 var(--font-display);
+  color: var(--ink);
+}
+
+.description {
+  margin: 0;
+  max-width: 52ch;
+  font: 400 var(--text-body) / 1.55 var(--font-ui);
+  color: var(--ink-mid);
+}
+
+.hint {
+  margin: 0;
+  font: 400 var(--text-small) / 1.5 var(--font-ui);
+  color: var(--ink-dim);
+}
+
+.facts {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.fact {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-chip);
+  background: var(--veil-2);
+  font: 400 var(--text-small) / 1 var(--font-ui);
+  color: var(--ink-low);
+}
+
+/* Star track, built on the gear evolution track so the two read as siblings. */
+.track {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.pip {
+  width: 100%;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--track);
+}
+
+.pipOn {
+  background: var(--rarity);
+}
+
+.ascend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--control-height);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-card);
+  background: var(--veil-3);
+  color: var(--ink);
+  font: 500 var(--text-body) / 1 var(--font-ui);
+  cursor: pointer;
+}
+
+.ascend:enabled {
+  border-color: var(--rarity);
+  color: var(--rarity);
+}
+
+.ascend:disabled {
+  color: var(--ink-dim);
+  cursor: default;
+}
+
+/* The formation, as a diagram: front rank at the top, nearest the enemy. */
+.formation {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.formationRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-chip);
+  background: var(--veil-1);
+}
+
+.rowLabel {
+  flex: 0 0 4.5rem;
+  font: 600 var(--text-label) / 1 var(--font-ui);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.rowMembers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.rowEmpty {
+  color: var(--ink-dim);
+  font-size: var(--text-small);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--rarity);
+  border-radius: var(--radius-pill);
+  color: var(--rarity);
+  font: 500 var(--text-small) / 1 var(--font-ui);
+}
+
+.chipDown {
+  border-color: var(--line);
+  color: var(--ink-dim);
+  text-decoration: line-through;
+}
+
+/*
+ * auto-fit rather than a track count: PARTY_SIZE is an engine constant, and a
+ * sixth slot must not need a stylesheet edit.
+ */
+.slots {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr));
+  gap: var(--space-2);
+}
+
+.slot {
+  display: grid;
+  gap: var(--space-1);
+  min-height: var(--touch-target);
+  padding: var(--space-2);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-card);
+  background: var(--slot);
+  color: var(--ink-dim);
+  text-align: left;
+  cursor: pointer;
+}
+
+.slotFilled {
+  border-style: solid;
+  border-color: var(--rarity);
+  color: var(--ink);
+}
+
+.slotIndex {
+  font: 600 var(--text-label) / 1 var(--font-ui);
+  letter-spacing: 0.16em;
+  color: var(--ink-dim);
+}
+
+.slotName {
+  font: 500 var(--text-small) / 1.2 var(--font-ui);
+  overflow-wrap: anywhere;
+}
+
+.slotFilled .slotName {
+  color: var(--rarity);
+}

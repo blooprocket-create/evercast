@@ -8,6 +8,8 @@ import { random01 } from '../random/DeterministicRandom';
 import { resolveEffects } from '../spell/EffectResolver';
 import { compileSpell } from '../spell/SpellCompiler';
 import type { CompiledSpell } from '../spell/types';
+import { damageCompanion, guardReduction } from '../companions/CompanionCombat';
+import { chooseTarget } from './Threat';
 import { EvolvingCombat } from './EvolvingCombat';
 import { livingByDistance } from './SpellCombatState';
 
@@ -131,18 +133,33 @@ export class CombatSystem {
 
   enemyAttack(run: RunState, enemy: EnemyState): CombatResult {
     const weakness = enemy.statuses?.weakness;
-    const damage = enemy.attackDamage.mul(
-      weakness && weakness.expiresAt > run.elapsedSeconds
-        ? Math.max(0, 1 - weakness.stacks * weakness.strength)
-        : 1,
-    );
-    run.mage.hp = run.mage.hp.sub(damage);
+    const damage = enemy.attackDamage
+      .mul(
+        weakness && weakness.expiresAt > run.elapsedSeconds
+          ? Math.max(0, 1 - weakness.stacks * weakness.strength)
+          : 1,
+      )
+      // A guard shelters the whole party, the mage included.
+      .mul(1 - guardReduction(run));
+
+    // Who takes it is a pure function of the field, so a chunked run, a single
+    // pass and a resumed save never disagree about where the blow landed.
+    const target = chooseTarget(run, enemy);
     this.emit({
       type: 'enemy_attack',
       time: run.elapsedSeconds,
       instanceId: enemy.instanceId,
       damage: damage.toString(),
+      targetSlot: target.kind === 'companion' ? target.companion.slot : undefined,
     });
+
+    if (target.kind === 'companion') {
+      damageCompanion(run, target.companion, damage, this.emit, enemy.instanceId);
+      // A companion going down costs the rest of the fight, never the run.
+      return { killedEnemyIds: [], mageDefeated: false };
+    }
+
+    run.mage.hp = run.mage.hp.sub(damage);
     return {
       killedEnemyIds: [],
       mageDefeated: run.mage.hp.cmp(0) <= 0,

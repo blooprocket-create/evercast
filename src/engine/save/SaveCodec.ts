@@ -2,6 +2,10 @@ import type { EngineConfig } from '../config';
 import { GEAR_SLOT_ORDER } from '../gear/GearCatalog';
 import { createInitialEquipmentState } from '../gear/GearSystem';
 import type { EquipmentState, GearPieceState, GearSlot } from '../gear/types';
+import { COMPANION_BY_ID } from '../companions/CompanionCatalog';
+import { createInitialCompanionsState } from '../companions/CompanionSystem';
+import type { CompanionCombatant, CompanionsState, OwnedCompanion } from '../companions/types';
+import { PARTY_SIZE } from '../companions/types';
 import type { EnemyState, GameState } from '../model';
 import { big } from '../numbers';
 import { totalFirstClearEssenceEarned } from '../progression/EssenceEconomy';
@@ -19,7 +23,7 @@ import { clearSpellCombat, ensurePositions } from '../combat/SpellCombatState';
 import type { SpellTreeState } from '../spellTree/types';
 import { createInitialGameState } from '../state';
 
-export const CURRENT_SAVE_VERSION = 6;
+export const CURRENT_SAVE_VERSION = 7;
 
 type SerializedEnemy = Omit<EnemyState, 'hp' | 'maxHp' | 'attackDamage'> & {
   hp: string;
@@ -29,11 +33,37 @@ type SerializedEnemy = Omit<EnemyState, 'hp' | 'maxHp' | 'attackDamage'> & {
   reward?: string;
 };
 
-type SerializedRunV3 = Omit<GameState['run'], 'essence' | 'mage' | 'enemies'> & {
+/**
+ * Every Decimal is named explicitly. Omitting one leaves it typed as a Decimal
+ * while JSON flattens it to a plain value, and nothing on the type side catches
+ * it - the blob is read back through an `as` cast. The next `.cmp()` then
+ * throws in the middle of combat.
+ */
+type SerializedCompanion = Omit<CompanionCombatant, 'hp' | 'maxHp' | 'shield'> & {
+  hp: string;
+  maxHp: string;
+  shield?: string;
+};
+
+type SerializedRunV3 = Omit<
+  GameState['run'],
+  'essence' | 'mage' | 'enemies' | 'companions' | 'benchedCompanions'
+> & {
   essence: string;
   mage: { hp: string; maxHp: string };
   enemies: SerializedEnemy[];
+  /** Absent in v6 and earlier, which predate companions entirely. */
+  companions?: SerializedCompanion[];
+  benchedCompanions?: SerializedCompanion[];
 };
+
+interface SerializedCompanions {
+  starlight: string;
+  owned: Record<string, OwnedCompanion>;
+  party: (string | null)[];
+  drawSerial: number;
+  pityCounter: number;
+}
 
 type LegacyEnemy = Omit<EnemyState, 'instanceId' | 'hp' | 'maxHp' | 'attackDamage'> & {
   hp: string;
@@ -44,7 +74,7 @@ type LegacyEnemy = Omit<EnemyState, 'instanceId' | 'hp' | 'maxHp' | 'attackDamag
 
 type LegacySerializedRun = Omit<
   GameState['run'],
-  'essence' | 'mage' | 'enemies' | 'encounter' | 'nextEnemyInstanceId'
+  'essence' | 'mage' | 'enemies' | 'encounter' | 'nextEnemyInstanceId' | 'companions'
 > & {
   essence: string;
   mage: { hp: string; maxHp: string };
@@ -84,14 +114,26 @@ interface LegacySaveEnvelopeV4 {
   };
 }
 
-export interface SaveEnvelopeV6 {
+interface LegacySaveEnvelopeV6 {
   version: 6;
+  savedAt?: string;
+  state: {
+    run: SerializedRunV3;
+    meta: SerializedMeta;
+    equipment: SerializedEquipment;
+    spellTree: SerializedSpellTree;
+  };
+}
+
+export interface SaveEnvelopeV7 {
+  version: 7;
   savedAt: string;
   state: {
     run: SerializedRunV3;
     meta: SerializedMeta;
     equipment: SerializedEquipment;
     spellTree: SerializedSpellTree;
+    companions: SerializedCompanions;
   };
 }
 
@@ -110,7 +152,7 @@ interface LegacySaveEnvelopeV2 {
 export class SaveCodec {
   constructor(private readonly config: EngineConfig) {}
 
-  encode(state: GameState, savedAt = new Date()): SaveEnvelopeV6 {
+  encode(state: GameState, savedAt = new Date()): SaveEnvelopeV7 {
     return {
       version: CURRENT_SAVE_VERSION,
       savedAt: savedAt.toISOString(),
@@ -127,6 +169,8 @@ export class SaveCodec {
             maxHp: state.run.mage.maxHp.toString(),
           },
           enemies: state.run.enemies.map(serializeEnemy),
+          companions: state.run.companions.map(serializeCompanion),
+          benchedCompanions: state.run.benchedCompanions.map(serializeCompanion),
         },
         meta: {
           ...state.meta,
@@ -142,6 +186,13 @@ export class SaveCodec {
           purchasedPoints: state.spellTree.purchasedPoints,
           activatedNodeIds: [...state.spellTree.activatedNodeIds],
         },
+        companions: {
+          starlight: state.companions.starlight.toString(),
+          owned: structuredClone(state.companions.owned),
+          party: [...state.companions.party],
+          drawSerial: state.companions.drawSerial,
+          pityCounter: state.companions.pityCounter,
+        },
       },
     };
   }
@@ -152,7 +203,7 @@ export class SaveCodec {
     }
 
     const version = (raw as { version?: unknown }).version;
-    if (version !== 1 && version !== 2 && version !== 3 && version !== 4 && version !== 5 && version !== 6) {
+    if (typeof version !== 'number' || !Number.isInteger(version) || version < 1 || version > CURRENT_SAVE_VERSION) {
       throw new Error(`Unsupported Evercast save version: ${String(version)}`);
     }
 
@@ -167,6 +218,7 @@ export class SaveCodec {
         meta: deserializeMeta(envelope.state.meta),
         equipment,
         spellTree: createInitialSpellTreeState(),
+        companions: createInitialCompanionsState(),
       };
       return {
         savedAt: new Date(envelope.savedAt ?? Date.now()),
@@ -181,6 +233,7 @@ export class SaveCodec {
         meta: deserializeMeta(envelope.state.meta),
         equipment: deserializeEquipment(envelope.state.equipment),
         spellTree: createInitialSpellTreeState(),
+        companions: createInitialCompanionsState(),
       };
       return {
         savedAt: new Date(envelope.savedAt ?? Date.now()),
@@ -195,6 +248,7 @@ export class SaveCodec {
         meta: deserializeMeta(envelope.state.meta),
         equipment: deserializeEquipment(envelope.state.equipment),
         spellTree: deserializeSpellTree(envelope.state.spellTree, true),
+        companions: createInitialCompanionsState(),
       };
       return {
         savedAt: new Date(envelope.savedAt ?? Date.now()),
@@ -202,12 +256,18 @@ export class SaveCodec {
       };
     }
 
-    const envelope = raw as SaveEnvelopeV6;
+    const envelope = raw as SaveEnvelopeV7 | LegacySaveEnvelopeV6;
     const state: GameState = {
       run: deserializeRunV3(envelope.state.run),
       meta: deserializeMeta(envelope.state.meta),
       equipment: deserializeEquipment(envelope.state.equipment),
       spellTree: deserializeSpellTree(envelope.state.spellTree, version === 5),
+      // v5 and v6 predate companions: those saves arrive with the feature
+      // simply not started, rather than losing anything they had.
+      companions:
+        version === 7
+          ? deserializeCompanions((envelope as SaveEnvelopeV7).state.companions)
+          : createInitialCompanionsState(),
     };
     state.run.spell = buildSpellFromTree(state.spellTree);
     if (version === 5) clearSpellCombat(state.run);
@@ -230,6 +290,70 @@ function serializeEnemy(enemy: EnemyState): SerializedEnemy {
   };
 }
 
+function serializeCompanion(companion: CompanionCombatant): SerializedCompanion {
+  const { hp, maxHp, shield, ...rest } = companion;
+  return {
+    ...rest,
+    hp: hp.toString(),
+    maxHp: maxHp.toString(),
+    shield: shield ? shield.toString() : undefined,
+  };
+}
+
+function deserializeCompanion(companion: SerializedCompanion): CompanionCombatant {
+  const { hp, maxHp, shield, ...rest } = companion;
+  return {
+    ...rest,
+    hp: big(hp),
+    maxHp: big(maxHp),
+    shield: shield === undefined || shield === null ? undefined : big(shield),
+  };
+}
+
+/** Drops anything the catalog no longer knows, rather than trusting the blob. */
+function deserializeCompanionList(raw: SerializedCompanion[] | undefined): CompanionCombatant[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((companion) => companion && COMPANION_BY_ID.has(companion.definitionId))
+    .map(deserializeCompanion);
+}
+
+/**
+ * Everything here is replayed into authoritative state, so a hand-edited or
+ * truncated blob must degrade rather than corrupt the roster.
+ */
+function deserializeCompanions(companions: SerializedCompanions | undefined): CompanionsState {
+  const initial = createInitialCompanionsState();
+  if (!companions || typeof companions !== 'object') return initial;
+
+  const owned: Record<string, OwnedCompanion> = {};
+  for (const [id, entry] of Object.entries(companions.owned ?? {})) {
+    if (!entry || typeof entry !== 'object') continue;
+    // An id the catalog does not know reaches `requireCompanion` later and
+    // throws. `importSaveFile` writes the blob and then reloads, so trusting it
+    // here leaves the game unable to boot until storage is cleared by hand.
+    if (!COMPANION_BY_ID.has(id)) continue;
+    owned[id] = {
+      definitionId: id,
+      stars: Math.max(1, Math.floor(entry.stars ?? 1)),
+      shards: Math.max(0, Math.floor(entry.shards ?? 0)),
+    };
+  }
+
+  const party = initial.party.map((_, slot) => {
+    const id = companions.party?.[slot];
+    return typeof id === 'string' && owned[id] ? id : null;
+  });
+
+  return {
+    starlight: big(companions.starlight ?? '0'),
+    owned,
+    party,
+    drawSerial: Math.max(0, Math.floor(companions.drawSerial ?? 0)),
+    pityCounter: Math.max(0, Math.floor(companions.pityCounter ?? 0)),
+  };
+}
+
 function deserializeEnemy(enemy: SerializedEnemy): EnemyState {
   const { reward: _legacyReward, ...current } = enemy;
   return {
@@ -246,6 +370,8 @@ function deserializeRunV3(run: SerializedRunV3): GameState['run'] {
     essence: big(run.essence),
     mage: { hp: big(run.mage.hp), maxHp: big(run.mage.maxHp) },
     enemies: Array.isArray(run.enemies) ? run.enemies.map(deserializeEnemy) : [],
+    companions: deserializeCompanionList(run.companions),
+    benchedCompanions: deserializeCompanionList(run.benchedCompanions),
     encounter: run.encounter ?? null,
     nextEnemyInstanceId: Math.max(1, run.nextEnemyInstanceId ?? 1),
   };
@@ -261,6 +387,10 @@ function migrateLegacyRun(run: LegacySerializedRun): GameState['run'] {
     essence: big(run.essence),
     mage: { hp: big(run.mage.maxHp), maxHp: big(run.mage.maxHp) },
     enemies: [],
+    // Saves this old predate companions; the party starts empty rather than
+    // arriving undefined and failing the first time combat iterates it.
+    companions: [],
+    benchedCompanions: [],
     encounter: null,
     nextEnemyInstanceId: 1,
   };
