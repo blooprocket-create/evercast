@@ -35,6 +35,9 @@
   inset: 0;
   overflow: hidden;
   touch-action: none;
+  /* A drag is a pan, not a text selection over the node labels. */
+  -webkit-user-select: none;
+  user-select: none;
   cursor: grab;
   background:
     radial-gradient(ellipse 70% 55% at 46% 42%, color-mix(in srgb, var(--route) 6%, transparent), transparent 70%);
@@ -166,11 +169,53 @@
     flex-direction: column;
   }
 
+  /*
+   * The graph is the surface; the inspector reads back what you tapped. 40%
+   * rather than 45% is the difference between a graph you can aim at and one
+   * you cannot.
+   */
   .inspector {
     width: 100%;
-    max-height: 45%;
+    flex: none;
+    max-height: 40%;
     border-left: 0;
     border-top: 1px solid var(--line);
+    padding: var(--space-3) max(var(--space-3), var(--safe-right)) var(--space-3)
+      max(var(--space-3), var(--safe-left));
+  }
+
+  /*
+   * 150x104 of minimap over a 375px-wide graph is a quarter of the viewport,
+   * covering the nodes it is meant to help find. Pan and pinch are the way
+   * around a graph on a phone.
+   */
+  .minimap {
+    display: none;
+  }
+
+  /* Zoom and Fit are thumb targets here, not 32px cursor targets. */
+  .controls {
+    right: max(var(--space-3), var(--safe-right));
+    bottom: var(--space-3);
+    gap: var(--space-1);
+  }
+
+  .control {
+    width: var(--touch-target);
+    height: var(--touch-target);
+  }
+
+  /*
+   * The cluster floats over a graph that is only a couple of hundred pixels
+   * tall here, so it carries only what you cannot get from the picture: the
+   * zoom percentage goes, the two buttons that change it stay.
+   */
+  .zoomLevel {
+    display: none;
+  }
+
+  .fit {
+    padding: 0 var(--space-2);
   }
 
   /*
@@ -183,12 +228,36 @@
     flex-direction: column;
   }
 
+  /*
+   * One row that scrolls sideways, rather than two that wrap. Wrapped, the
+   * toolbar took 100px of the 377px a 375px-wide phone has between the nav
+   * rail and the shelf, and the graph underneath it was left with less height
+   * than one node and its label.
+   */
   .toolbar {
     position: static;
-    flex-wrap: wrap;
-    padding: var(--space-2);
+    /*
+     * It is a bar here rather than an overlay, so it takes the pointer back:
+     * a scrollable row whose own surface is not hit-testable can only be
+     * dragged by the chips in it.
+     */
+    pointer-events: auto;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding: var(--space-2) max(var(--space-2), var(--safe-right)) var(--space-2)
+      max(var(--space-2), var(--safe-left));
     border-bottom: 1px solid var(--line);
     background: var(--panel);
+  }
+
+  .toolbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Nothing in the row gives up width; the row scrolls instead. */
+  .toolbar > * {
+    flex: none;
   }
 
   .viewport {
@@ -196,5 +265,52 @@
     inset: auto;
     flex: 1;
     min-height: 0;
+  }
+}
+
+/*
+ * Sideways, every pixel of height the toolbar and the inspector take comes off
+ * a graph that only has ~245px to start with. Both go back to where the wide
+ * layout puts them: the inspector beside the graph, the toolbar floating over
+ * the top of it.
+ */
+@media (max-height: 520px) and (min-width: 640px) and (orientation: landscape) {
+  .graph {
+    flex-direction: row;
+  }
+
+  .main {
+    display: block;
+  }
+
+  .toolbar {
+    position: absolute;
+    pointer-events: none;
+    left: var(--space-2);
+    top: var(--space-2);
+    right: var(--space-2);
+    padding: 0;
+    border-bottom: 0;
+    background: transparent;
+  }
+
+  .viewport {
+    position: absolute;
+    inset: 0;
+  }
+
+  .inspector {
+    /* As with the rail: the notch is added to the column, not taken from it. */
+    width: calc(240px + var(--safe-right));
+    max-height: none;
+    border-top: 0;
+    border-left: 1px solid var(--line);
+    padding: var(--space-3) max(var(--space-3), var(--safe-right)) var(--space-3) var(--space-3);
+  }
+
+  /* Clear of the inspector's edge, and clear of the toolbar above it. */
+  .controls {
+    right: var(--space-2);
+    bottom: var(--space-2);
   }
 }

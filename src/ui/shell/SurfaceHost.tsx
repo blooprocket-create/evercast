@@ -34,15 +34,18 @@ export function SurfaceHost({
         <h2 className={styles.title}>{destination.label}</h2>
         <span className={styles.spacer} />
         <div className={styles.wallets}>
-          <span className={styles.walletItem}>
-            <span className={styles.gold}>
-              <NumberCell value={gold} />
-            </span>
+          {/*
+            The header covers the HUD, so it carries the only naming of these
+            two numbers on screen. Below 360px the labels give way to a
+            coloured dot - see SurfaceHost.module.css.
+          */}
+          <span className={`${styles.walletItem} ${styles.gold}`}>
+            <span className={styles.walletLabel}>Gold</span>
+            <NumberCell value={gold} inline />
           </span>
-          <span className={styles.walletItem}>
-            <span className={styles.essence}>
-              <NumberCell value={essence} />
-            </span>
+          <span className={`${styles.walletItem} ${styles.essence}`}>
+            <span className={styles.walletLabel}>Essence</span>
+            <NumberCell value={essence} inline />
           </span>
         </div>
       </header>
