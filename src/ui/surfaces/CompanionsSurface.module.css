@@ -51,8 +51,14 @@
   color: var(--ink-dim);
 }
 
+/*
+ * 9rem, not 13: at 13 a 375px pane still fitted only one fact per row, which
+ * is what pushed Damage and everything under it off the bottom. Two per row
+ * clears the whole stat block on a phone.
+ */
 .facts {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
   gap: var(--space-2);
 }
 
@@ -166,8 +172,40 @@
  */
 .slots {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(6.5rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 6.5rem), 1fr));
   gap: var(--space-2);
+}
+
+/*
+ * The pane is the bottom 55% of a phone, under the roster. A 24px display
+ * heading and a full-width description spent most of it before reaching the
+ * stats, so both come down a step and the slots pack tighter.
+ */
+@media (max-width: 560px) {
+  .name {
+    font-size: var(--text-lead);
+  }
+
+  .description {
+    font-size: var(--text-small);
+    line-height: 1.45;
+  }
+
+  .fact {
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .slots {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 4.75rem), 1fr));
+  }
+
+  .rowLabel {
+    flex-basis: 3.25rem;
+  }
+
+  .ascend {
+    font-size: var(--text-small);
+  }
 }
 
 .slot {

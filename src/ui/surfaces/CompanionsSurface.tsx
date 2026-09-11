@@ -62,7 +62,7 @@ export function CompanionsSurface() {
                 iconLive={companion.canAscend}
                 label={companion.name}
                 sub={`${RARITY_LABEL[companion.rarity]} · ${CLASS_LABEL[companion.companionClass]}${
-                  companion.slot === null ? '' : ` · Slot ${companion.slot + 1}`
+                  companion.slot === null ? '' : ` · ${companion.slot + 1}`
                 }`}
                 value={<span className={styles.stars}>{starText(companion.stars)}</span>}
                 selected={companion.definitionId === selected.definitionId}

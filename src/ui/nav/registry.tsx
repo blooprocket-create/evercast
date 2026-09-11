@@ -57,7 +57,9 @@ export const DESTINATIONS: RegisteredDestination[] = [
     group: 'power',
     label: 'Summon',
     icon: 'summon',
-    archetype: 'detail',
+    // A dashboard, not a detail: one banner never justified a list pane, and
+    // on a phone that pane pushed both draw buttons below the fold.
+    archetype: 'dashboard',
     badge: (snapshot) => (snapshot.canSummon ? 'dot' : null),
     Component: SummonSurface,
   },
