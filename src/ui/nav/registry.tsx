@@ -3,6 +3,7 @@ import { OverviewSurface } from '../surfaces/OverviewSurface';
 import { SpellTreeSurface } from '../surfaces/SpellTreeSurface';
 import { GearSurface } from '../surfaces/GearSurface';
 import { CompanionsSurface } from '../surfaces/CompanionsSurface';
+import { PartySurface } from '../surfaces/PartySurface';
 import { SummonSurface } from '../surfaces/SummonSurface';
 import { RebirthSurface } from '../surfaces/RebirthSurface';
 import { SettingsSurface } from '../surfaces/SettingsSurface';
@@ -44,7 +45,7 @@ export const DESTINATIONS: RegisteredDestination[] = [
   },
   {
     id: 'companions',
-    group: 'power',
+    group: 'companion',
     label: 'Companions',
     icon: 'companions',
     archetype: 'detail',
@@ -53,8 +54,22 @@ export const DESTINATIONS: RegisteredDestination[] = [
     Component: CompanionsSurface,
   },
   {
+    id: 'party',
+    group: 'companion',
+    label: 'Party',
+    icon: 'party',
+    archetype: 'detail',
+    // An empty slot while companions sit on the bench is wasted power.
+    badge: (snapshot) =>
+      snapshot.party.some((member) => member === null) &&
+      snapshot.companions.some((companion) => companion.slot === null)
+        ? 'dot'
+        : null,
+    Component: PartySurface,
+  },
+  {
     id: 'summon',
-    group: 'power',
+    group: 'companion',
     label: 'Summon',
     icon: 'summon',
     // A dashboard, not a detail: one banner never justified a list pane, and

@@ -5,6 +5,7 @@ import styles from './NavRail.module.css';
 
 const GROUP_LABELS: Record<string, string> = {
   power: 'Power',
+  companion: 'Companions',
   world: 'World',
   record: 'Record',
 };

@@ -149,6 +149,12 @@ session would have made next. Pity follows the Genshin/HSR shape — the publish
 rate is not the experienced one, and almost every high-rarity pull comes out of
 the ramp.
 
+Companions occupy their own rail group rather than sitting under Power, because
+the three jobs are distinct: **Companions** manages the roster (stats, ability,
+ascension), **Party** deploys it (pick a slot, then pick who fills it), and
+**Summon** draws. The group set in `ui/nav/destinations.ts` is asserted closed by
+`ui/architecture.test.ts`, so a fifth is again a deliberate decision.
+
 Formation slots are gameplay geometry and live in the engine: they decide reach
 and who is reached first. They separate mostly along x for the reason
 `Contact.ts` gives about the enemy slots — z is nearly the depth axis at this

@@ -148,6 +148,15 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <path d="M17.2 14.4c2 .7 3.3 2.4 3.3 4.7" />
     </>
   ),
+  /* Three marks in formation: who stands where. */
+  party: (
+    <>
+      <path d="M12 3.2 14.4 8h-4.8Z" />
+      <circle cx="5.6" cy="14" r="2.4" />
+      <circle cx="18.4" cy="14" r="2.4" />
+      <circle cx="12" cy="19.2" r="2.4" />
+    </>
+  ),
   /* A star pulled out of a gate: the draw. */
   summon: (
     <>

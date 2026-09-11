@@ -93,7 +93,7 @@ describe('ui architecture', () => {
 
   it('keeps the archetype and group sets closed', () => {
     expect([...ARCHETYPES]).toEqual(['dashboard', 'ledger', 'graph', 'detail', 'moment']);
-    expect([...GROUP_ORDER]).toEqual(['power', 'world', 'record']);
+    expect([...GROUP_ORDER]).toEqual(['power', 'companion', 'world', 'record']);
   });
 
   it('leaves spell-tree geometry out of the engine and content', () => {

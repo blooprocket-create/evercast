@@ -8,8 +8,17 @@ import type { IconName } from '../icons/names';
 export const ARCHETYPES = ['dashboard', 'ledger', 'graph', 'detail', 'moment'] as const;
 export type Archetype = (typeof ARCHETYPES)[number];
 
-/** Rail section order. Groups render in this order and never re-sort. */
-export const GROUP_ORDER = ['power', 'world', 'record'] as const;
+/**
+ * Rail section order. Groups render in this order and never re-sort.
+ *
+ * `companion` is the fourth, and it is a deliberate addition rather than a
+ * feature helping itself: managing a roster, deploying a party and summoning
+ * are three different jobs that share one subject, and filing them under Power
+ * put three of the six entries there under a heading that describes none of
+ * them. `ui/architecture.test.ts` asserts this set so that adding a fifth is
+ * again a decision someone has to make on purpose.
+ */
+export const GROUP_ORDER = ['power', 'companion', 'world', 'record'] as const;
 export type DestinationGroup = (typeof GROUP_ORDER)[number];
 
 export type Badge = number | 'dot';
