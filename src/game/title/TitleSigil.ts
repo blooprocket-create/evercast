@@ -85,11 +85,19 @@ export interface SigilLayer {
  * only spins changes phase; rings that swell and shrink on different clocks
  * change the *spacing between them*, which is a change of shape, and a change of
  * shape survives symmetry. It is what stops the sigil reading as a rigid wheel.
+ *
+ * Six clocks run here, and the number that matters about them is not how far
+ * apart they look - it is how long until two of them line up again, because
+ * that is when the picture repeats. Picking them by eye does not work: one set
+ * put three turns of the inner ring against seven breaths of the outer, both
+ * landing on 130.9 seconds, and the set before that hid a five-to-two. These
+ * are searched rather than chosen, and no two come back together inside twelve
+ * minutes. `TitleSigil.test.ts` computes that directly.
  */
 export const SIGIL_LAYERS: readonly SigilLayer[] = [
-  { id: 'arcane_ring_a', scaling: 7.6, drift: 0.055, breadth: 0.028, breathSeconds: 18.7 },
-  { id: 'arcane_glyph_a', scaling: 7.0, drift: -0.089, breadth: 0.042, breathSeconds: 26.3 },
-  { id: 'arcane_ring_b', scaling: 5.4, drift: 0.144, breadth: 0.035, breathSeconds: 14.9 },
+  { id: 'arcane_ring_a', scaling: 7.6, drift: 0.055, breadth: 0.028, breathSeconds: 17.0 },
+  { id: 'arcane_glyph_a', scaling: 7.0, drift: -0.089, breadth: 0.042, breathSeconds: 23.7 },
+  { id: 'arcane_ring_b', scaling: 5.4, drift: 0.144, breadth: 0.035, breathSeconds: 31.8 },
 ];
 
 /**

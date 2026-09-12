@@ -98,41 +98,61 @@ describe('title sigil', () => {
   });
 
   /**
-   * What keeps the composition from settling, now that it is more than spin.
+   * What keeps the composition from settling, measured as the thing it is.
    *
-   * An earlier version of this test claimed the rings never return to their
-   * starting arrangement inside an hour, and at the old rates that was true to
-   * within eleven degrees. At these rates the phases wrap far more often and
-   * they come back within three, so the claim no longer holds and has been
-   * dropped rather than loosened into meaninglessness.
+   * Two earlier versions of this test compared each pair of periods against a
+   * list of simple fractions someone had remembered to write down, and both
+   * times a coincidence walked straight through the gaps in that list: first a
+   * five-to-two, then - after retuning to escape it - a seven-to-three, where
+   * three turns of the inner ring and seven breaths of the outer both land on
+   * 130.9 seconds. A third list would have had a third gap.
    *
-   * What is true, and is what the design actually rests on, is that no two
-   * clocks in the sigil agree: three rotation periods in the golden ratio, and
-   * three breath periods sharing no factor with them or with each other. A
-   * rotational near-coincidence no longer produces the same picture, because the
-   * rings will be at different points of their swell when it happens.
+   * So this computes the quantity the design actually cares about: for every
+   * pair of clocks, the soonest moment they come back into step. No fractions,
+   * no list, nothing to forget.
    */
-  it('runs every layer on a clock that agrees with no other', () => {
-    const rotation = SIGIL_LAYERS.map((layer) => (2 * Math.PI) / Math.abs(layer.drift));
-    const breath = SIGIL_LAYERS.map((layer) => layer.breathSeconds);
+  it('keeps every pair of clocks from lining up again for twelve minutes', () => {
+    const periods = [
+      ...SIGIL_LAYERS.map((layer) => (2 * Math.PI) / Math.abs(layer.drift)),
+      ...SIGIL_LAYERS.map((layer) => layer.breathSeconds),
+    ];
 
-    for (let i = 1; i < rotation.length; i += 1) {
-      // Golden, so the rotations themselves are as far from a shared period as
-      // two numbers can be.
-      expect(Math.abs(rotation[i - 1] / rotation[i])).toBeCloseTo(1.618, 2);
-    }
+    /** Half a second apart is indistinguishable; that is what "in step" means. */
+    const TOLERANCE = 0.5;
+    const CYCLES = 60;
 
-    const every = [...rotation, ...breath];
-    expect(new Set(every.map((period) => period.toFixed(3))).size).toBe(every.length);
-    for (let i = 0; i < every.length; i += 1) {
-      for (let j = i + 1; j < every.length; j += 1) {
-        // No period is a simple multiple of another, which is what a shared
-        // factor would mean and what would let the picture recur.
-        const ratio = every[i] / every[j];
-        for (const simple of [0.5, 1, 1.5, 2, 2.5, 3]) {
-          expect(Math.abs(ratio - simple)).toBeGreaterThan(0.04);
+    const resyncOf = (a: number, b: number) => {
+      let soonest = Number.POSITIVE_INFINITY;
+      for (let p = 1; p <= CYCLES; p += 1) {
+        for (let q = 1; q <= CYCLES; q += 1) {
+          if (Math.abs(p * a - q * b) < TOLERANCE) soonest = Math.min(soonest, p * a);
         }
       }
+      return soonest;
+    };
+
+    let soonest = Number.POSITIVE_INFINITY;
+    let culprit = '';
+    for (let i = 0; i < periods.length; i += 1) {
+      for (let j = i + 1; j < periods.length; j += 1) {
+        const when = resyncOf(periods[i], periods[j]);
+        if (when < soonest) {
+          soonest = when;
+          culprit = `${periods[i].toFixed(2)}s and ${periods[j].toFixed(2)}s`;
+        }
+      }
+    }
+
+    // Measured at 731s for the current set. Far past any title screen's welcome.
+    expect(soonest, `${culprit} come back into step after ${soonest.toFixed(0)}s`).toBeGreaterThan(
+      600,
+    );
+  });
+
+  it('still runs the three rotations in the golden ratio', () => {
+    const rotation = SIGIL_LAYERS.map((layer) => (2 * Math.PI) / Math.abs(layer.drift));
+    for (let i = 1; i < rotation.length; i += 1) {
+      expect(rotation[i - 1] / rotation[i]).toBeCloseTo(1.618, 2);
     }
   });
 
