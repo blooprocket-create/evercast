@@ -16,7 +16,8 @@ function fakeStorage(seed: Record<string, string> = {}): SaveStorage & { peek(ke
 }
 
 const KEY = 'evercast.save.v1';
-const store = (storage: SaveStorage) => new BrowserSaveStore(DEFAULT_ENGINE_CONFIG, KEY, storage);
+const store = (storage: SaveStorage | null) =>
+  new BrowserSaveStore(DEFAULT_ENGINE_CONFIG, KEY, storage);
 
 function playedState() {
   const simulation = new EvercastSimulation();
@@ -94,6 +95,37 @@ describe('BrowserSaveStore', () => {
     it('reports no save rather than an empty one when storage is empty', () => {
       expect(store(fakeStorage()).load()).toBeNull();
     });
+  });
+
+  /**
+   * Reaching for `localStorage` throws outright in a sandboxed iframe or on an
+   * opaque origin, so the store is handed its storage and accepts not having any.
+   * It is constructed while the module graph is evaluating: a throw here is a
+   * blank page on every reload, which is the failure this class exists to avoid.
+   */
+  describe('without storage', () => {
+    it('constructs, loads and saves without reaching for a global', () => {
+      expect(() => store(null)).not.toThrow();
+      expect(store(null).load()).toBeNull();
+      expect(() => store(null).save(playedState())).not.toThrow();
+      expect(() => store(null).clear()).not.toThrow();
+    });
+
+    it('still hands back an export the player can keep', () => {
+      const exported = store(null).exportSave(playedState());
+      expect(JSON.parse(exported).version).toBe(CURRENT_SAVE_VERSION);
+    });
+  });
+
+  it('stamps an export with the time it is given, so owed time rides along', () => {
+    const owedSeconds = 3 * 3600;
+    const exported = store(fakeStorage()).exportSave(
+      playedState(),
+      new Date(Date.now() - owedSeconds * 1000),
+    );
+    const owedOnImport = (Date.now() - new Date(JSON.parse(exported).savedAt).getTime()) / 1000;
+    expect(owedOnImport).toBeGreaterThanOrEqual(owedSeconds);
+    expect(owedOnImport).toBeLessThan(owedSeconds + 60);
   });
 
   it('rejects an unsupported import before it can overwrite anything', () => {

@@ -6,7 +6,7 @@ import {
 import type { EvercastScene } from '../game/EvercastScene';
 import { sceneMoodFor } from '../game/audio/AudioEngine';
 // prettier-ignore
-import { audio, returnPendingAwaySeconds, saveGame, simulation, snapshotStore, takePendingAwaySeconds } from './runtime';
+import { audio, awayDebt, saveGame, setAwayDebt, simulation, snapshotStore } from './runtime';
 
 /**
  * Owns the browser-side cadences so they are named and separable rather than
@@ -58,20 +58,23 @@ export function startGameLoop({ scene, onAwayProgress }: GameLoopOptions): () =>
   let frame = 0;
   let hiddenAt = document.hidden ? Date.now() : null;
 
-  // Time owed from before this session, handed over exactly once.
+  /**
+   * The debt itself lives in the runtime, so a loop rebuilt mid catch-up picks up
+   * where the last one left off and every save carries what is still owed. This
+   * is only the worker that pays it down.
+   */
   let catchUp: OfflineCatchUp | null = null;
   const owe = (seconds: number) => {
     if (seconds <= 0) return;
     if (catchUp) catchUp.extend(seconds);
     else catchUp = backgroundProgressor.begin(simulation, seconds);
+    // Report it back already capped, so the stamp on the next save is honest.
+    setAwayDebt(catchUp.remainingSeconds);
   };
-  owe(takePendingAwaySeconds());
+  owe(awayDebt());
 
-  /** Saves, deferring whatever away time is still owed to the next boot. */
-  const save = () => saveGame(catchUp && !catchUp.done ? catchUp.remainingSeconds : 0);
-
-  const saveTimer = window.setInterval(save, AUTOSAVE_MS);
-  const onBeforeUnload = () => save();
+  const saveTimer = window.setInterval(saveGame, AUTOSAVE_MS);
+  const onBeforeUnload = () => saveGame();
 
   /** Works the away-time debt down within this frame's share, if any is owed. */
   const drainCatchUp = (frameMs: number) => {
@@ -82,9 +85,8 @@ export function startGameLoop({ scene, onAwayProgress }: GameLoopOptions): () =>
       Math.max(CATCH_UP_MIN_BUDGET_MS, frameMs * CATCH_UP_FRAME_SHARE),
     );
     const deadline = performance.now() + budgetMs;
-    do {
-      catchUp.advance(CATCH_UP_SLICE_SECONDS);
-    } while (!catchUp.done && performance.now() < deadline);
+    catchUp.advanceWhile(CATCH_UP_SLICE_SECONDS, () => performance.now() < deadline);
+    setAwayDebt(catchUp.remainingSeconds);
 
     if (!catchUp.done) return;
 
@@ -93,7 +95,7 @@ export function startGameLoop({ scene, onAwayProgress }: GameLoopOptions): () =>
     // Whatever happened while away is already in the summary; replaying it as
     // sound would be a wall of hits for a fight nobody watched.
     simulation.drainPresentationEvents();
-    save();
+    saveGame();
     if (summary.secondsApplied > 0) onAwayProgress(summary);
   };
 
@@ -101,7 +103,7 @@ export function startGameLoop({ scene, onAwayProgress }: GameLoopOptions): () =>
     if (document.hidden) {
       hiddenAt = Date.now();
       audio.setSuspended(true);
-      save();
+      saveGame();
       return;
     }
 
@@ -115,7 +117,7 @@ export function startGameLoop({ scene, onAwayProgress }: GameLoopOptions): () =>
     // Hidden time joins the same debt the boot catch-up uses, so a long spell in
     // a background tab cannot lock the frame it comes back on either.
     owe(elapsedSeconds);
-    save();
+    saveGame();
   };
 
   const loop = (now: number) => {
@@ -156,7 +158,6 @@ export function startGameLoop({ scene, onAwayProgress }: GameLoopOptions): () =>
     window.clearInterval(saveTimer);
     window.removeEventListener('beforeunload', onBeforeUnload);
     document.removeEventListener('visibilitychange', onVisibilityChange);
-    save();
-    if (catchUp && !catchUp.done) returnPendingAwaySeconds(catchUp.remainingSeconds);
+    saveGame();
   };
 }

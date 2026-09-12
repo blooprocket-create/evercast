@@ -3,6 +3,7 @@ import { DEFAULT_ENGINE_CONFIG } from '../config';
 import { EvercastSimulation } from '../EvercastSimulation';
 import { GEAR_SLOT_ORDER } from '../gear/GearCatalog';
 import { SPELL_TREE_NODES } from '../spellTree/SpellTreeCatalog';
+import { big } from '../numbers';
 import { OfflineProgressor } from './OfflineProgressor';
 
 /**
@@ -144,6 +145,16 @@ describe('OfflineProgressor', () => {
       expect(catchUp.advance(60)).toBe(0);
     });
 
+    it('applies one slice per batch even when the budget is already spent', () => {
+      const simulation = new EvercastSimulation();
+      const catchUp = new OfflineProgressor(600).begin(simulation, 600);
+
+      // A caller whose frame is gone must still make progress, not spin forever.
+      const applied = catchUp.advanceWhile(5, () => false);
+      expect(applied).toBe(5);
+      expect(catchUp.remainingSeconds).toBe(595);
+    });
+
     it('caps each away period in its own right when one is folded into another', () => {
       const simulation = new EvercastSimulation();
       const catchUp = new OfflineProgressor(300).begin(simulation, 10_000);
@@ -151,6 +162,54 @@ describe('OfflineProgressor', () => {
 
       catchUp.extend(10_000);
       expect(catchUp.remainingSeconds).toBe(600);
+    });
+
+    /**
+     * The catch-up now spans many frames, and between them the caller runs live
+     * time and the player is free to spend. A summary read off a first and last
+     * snapshot would hand them credit for live play, and show a loss to anyone
+     * who spent their gold on the way past.
+     */
+    describe('counts only the away time it applied', () => {
+      it('ignores live simulation between batches', () => {
+        const simulation = new EvercastSimulation();
+        const catchUp = new OfflineProgressor(600).begin(simulation, 600);
+
+        catchUp.advance(300);
+        const awayKills = catchUp.summary().kills;
+        const awayGold = catchUp.summary().goldGained.raw;
+
+        // Live play, exactly as the game loop runs it between catch-up batches.
+        for (let frame = 0; frame < 600; frame += 1) simulation.update(1 / 60);
+        simulation.drainPresentationEvents();
+
+        expect(catchUp.summary().kills).toBe(awayKills);
+        expect(catchUp.summary().goldGained.raw).toBe(awayGold);
+
+        // And the rest of the absence still adds to it.
+        catchUp.advance(300);
+        expect(catchUp.summary().kills).toBeGreaterThan(awayKills);
+        expect(catchUp.summary().secondsApplied).toBe(600);
+      });
+
+      it('is never negative when the player spends between batches', () => {
+        const simulation = new EvercastSimulation();
+        const catchUp = new OfflineProgressor(1800).begin(simulation, 1800);
+        catchUp.advance(900);
+
+        const earned = catchUp.summary().goldGained.raw;
+        expect(big(earned).cmp(0)).toBeGreaterThan(0);
+
+        // Spend it all, the way a returning player immediately would.
+        let levelled = 0;
+        for (const slot of GEAR_SLOT_ORDER) {
+          while (simulation.execute({ type: 'level_gear', slot })) levelled += 1;
+        }
+        expect(levelled).toBeGreaterThan(0);
+
+        catchUp.advance(900);
+        expect(big(catchUp.summary().goldGained.raw).cmp(0)).toBeGreaterThan(0);
+      });
     });
 
     it('suppresses presentation events across every slice', () => {
