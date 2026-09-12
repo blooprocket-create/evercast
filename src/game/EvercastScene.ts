@@ -11,6 +11,8 @@ import {
   HemisphericLight,
   ImageProcessingConfiguration,
   Material,
+  type Nullable,
+  type Observer,
   PBRMaterial,
   Scene,
   ShadowGenerator,
@@ -35,6 +37,8 @@ import { castDuration } from './vfx/CombatVfxPlan';
 import { BossTracker } from './BossTracker';
 import { CombatFeel } from './render/CombatFeel';
 import { watchContextLoss } from './render/ContextLoss';
+import { type CameraPose, applyPose, capturePose, titlePose } from './title/TitleFraming';
+import { TitleSigil } from './title/TitleSigil';
 
 /** Roughly head height above an enemy's feet. */
 const HEALTH_BAR_OFFSET = new Vector3(0, 1.55, 0);
@@ -69,6 +73,11 @@ const FINISH = {
 
 export class EvercastScene {
   private readonly engine: Engine;
+  private readonly camera: ArcRotateCamera;
+  /** Non-null only while the boot gate is up. */
+  private title: TitleSigil | null = null;
+  private titleObserver: Nullable<Observer<Scene>> = null;
+  private gamePose: CameraPose | null = null;
   private readonly scene: Scene;
   private readonly mage: ActorVisual;
   private readonly actors: ActorAssets;
@@ -142,6 +151,7 @@ export class EvercastScene {
     camera.minZ = 0.2;
     camera.maxZ = 180;
     camera.inputs.clear();
+    this.camera = camera;
 
     const finish = FINISH[quality];
     const presentation = new DefaultRenderingPipeline('environment finish', true, this.scene, [camera]);
@@ -428,6 +438,77 @@ export class EvercastScene {
    * without it. Only a wait with no end is worse than a missing prop, and
    * `ASSET_WAIT_CEILING_MS` covers that from the other side.
    */
+  /**
+   * Lifts the camera clear of the world and raises the title sigil.
+   *
+   * Resolves when the sigil is built *and* a frame carrying it has been
+   * presented, and the boot gate waits on that before it lifts its curtain.
+   * Both halves are load-bearing, and for different reasons:
+   *
+   *   - the rendered frame is what guarantees the player never sees the world
+   *     assembling. Whatever state the diorama is in, the camera is already
+   *     looking somewhere else by the time anything becomes see-through - it is
+   *     ordering that keeps the promise, not opacity.
+   *   - waiting on the meshes is what stops the curtain lifting on an empty
+   *     void. The VFX pool has usually cached these same GLBs by now, but
+   *     `ASSET_WAIT_CEILING_MS` can open the gate before it ever finished, and
+   *     then the rings would arrive one at a time onto a title screen already
+   *     in view - the exact pop-in the curtain exists to cover.
+   *
+   * The drift observer is attached *after* the meshes land rather than before,
+   * which is the subtler half. It owns the ignition clock, so starting it at
+   * construction would spend the two and a half seconds of fade-up while the
+   * sigil was still invisible and loading - and a slow enough load would burn
+   * the ignition entirely, snapping a fully lit sigil on screen the instant the
+   * curtain moved.
+   *
+   * The camera moves rather than being replaced. `DefaultRenderingPipeline` is
+   * built around this one camera, so a second would have had no bloom - and
+   * bloom is the whole reason an additive sigil reads as light rather than as
+   * coloured geometry.
+   */
+  async showTitle(): Promise<void> {
+    if (this.title) return;
+    this.gamePose = capturePose(this.camera);
+    applyPose(this.camera, titlePose(this.gamePose));
+
+    const sigil = new TitleSigil(this.scene);
+    this.title = sigil;
+    sigil.root.position.copyFrom(this.camera.target);
+    this.applyDepthOfField();
+
+    // Always settles, however the downloads went: a mesh that never arrived is
+    // substituted rather than skipped, so this cannot leave the gate waiting.
+    await sigil.ready;
+    // Begin pressed, or the quality changed, while the meshes were in flight.
+    if (this.title !== sigil) return;
+
+    // The scene's own render loop is running; the game loop is not. This is what
+    // drives the ignition and the drift until the player presses Begin.
+    this.titleObserver = this.scene.onBeforeRenderObservable.add(() => {
+      sigil.update(this.engine.getDeltaTime() / 1000);
+    });
+
+    await new Promise<void>((resolve) => {
+      this.scene.onAfterRenderObservable.addOnce(() => resolve());
+    });
+  }
+
+  /** Puts the camera back and tears the sigil down. Idempotent. */
+  hideTitle(): void {
+    if (!this.title) return;
+    if (this.titleObserver) {
+      this.scene.onBeforeRenderObservable.remove(this.titleObserver);
+      this.titleObserver = null;
+    }
+    this.title.dispose();
+    this.title = null;
+    if (this.gamePose) applyPose(this.camera, this.gamePose);
+    this.gamePose = null;
+    // Back to whatever the player's display setting asks for.
+    this.applyDepthOfField();
+  }
+
   async whenReady(): Promise<void> {
     await Promise.allSettled([
       this.actors.whenReady(),
@@ -458,7 +539,12 @@ export class EvercastScene {
    * and landscape read alike.
    */
   private applyDepthOfField(): void {
-    const strength = this.depthOfFieldStrength;
+    // The title is a composed frame, not a diorama. Depth of field exists to
+    // hold the combat lane sharp against a soft background, and at the default
+    // strength the aperture is wide enough that a sigil sitting a fraction off
+    // the focal plane goes to mush. Nothing behind it needs separating, so the
+    // effect has no work to do here.
+    const strength = this.title ? 0 : this.depthOfFieldStrength;
     this.presentation.depthOfFieldEnabled = strength > 0.02;
     if (strength <= 0.02) return;
     const fov = this.scene.activeCamera?.fov ?? BASE_FOV;
@@ -470,6 +556,10 @@ export class EvercastScene {
   }
 
   dispose(): void {
+    // Before anything else: a quality change disposes the scene while the title
+    // effect's cleanup is still to run, and `hideTitle` must not touch a scene
+    // that is already going away.
+    this.hideTitle();
     this.stopWatchingContext();
     this.feel.dispose();
     this.bosses.clear();

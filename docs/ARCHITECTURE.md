@@ -74,11 +74,22 @@ Start, loading and first-run onboarding are one state machine rather than three 
 
 The expensive part of boot streams *behind* the gate. `App.tsx` reaches `EvercastScene` through a dynamic `import()` rather than a static one, which keeps Babylon out of the entry chunk: the gate is React and CSS and paints while the renderer is still arriving, and `index.html` carries a wordmark in plain markup so something is on screen before any script has parsed at all. The game loop does not start until the gate opens, so nothing ticks against a world nobody can see; time spent waiting lands in the away debt like any other absence.
 
-Three properties the gate has to keep:
+Four properties the gate has to keep:
 
+- **It shows what it is waiting for.** Once the world is genuinely loaded, `EvercastScene.showTitle()` lifts the camera clear of it and raises an arcane sigil built from the game's own VFX meshes; the gate then fades its curtain and the sigil comes up through it. That ignition *is* the readiness signal - the difference between `preparing` and `ready` used to be a button label and nothing else. See **The title sigil** below.
 - **It is never a trap.** `ASSET_WAIT_CEILING_MS` opens it regardless after a bounded wait, and `begun` outranks readiness in the reducer. A 404 on a GLB costs the player their scenery, never their session - `ActorAssets` already draws primitives for a mesh that never came, and the simulation never wanted the meshes at all.
 - **It never reopens.** A VFX-quality change disposes the scene and builds another, unsettling its assets under a game already in progress. `begun` winning outright is what stops that throwing the title back up.
 - **It is the only guaranteed gesture.** Browsers refuse to open an `AudioContext` without one, and an idle game asks for none - the mage fights unattended. Before the gate existed, a first session could run its whole length in silence.
+
+### The title sigil
+
+The camera moves; it is not replaced. With the angles held and `radius` pinned, translating the target translates the camera and the view direction is unchanged - so bloom, the ACES tone map, the vignette, grain and the colour grade all still apply, because it is still the camera `DefaultRenderingPipeline` was built around. A second camera would have had none of them, and bloom is the whole reason an additive sigil reads as light. Depth of field is the one effect suppressed while the title is up: it exists to separate a combat lane from its background, and at the default aperture it turns a sigil sitting a fraction off the focal plane to mush.
+
+Parking it 400 units up is what hides the world, and hiding is the right word - `WorldGenerator`'s constructor calls `rebuildVisibleChunks()`, so terrain and props exist from the first frame even though `updateAtmosphere()` has not run and the fog is still at Babylon's default. The world is outside `camera.maxZ` and clipped, rather than disabled.
+
+The curtain lifts on *ordering*, not opacity: `showTitle()` resolves on `onAfterRenderObservable`, so a frame of the void is already on screen before anything becomes see-through. `src/game/title/` owns the sigil and the framing; `src/ui/shell/BootGate.tsx` only knows whether it may lift.
+
+`.layer[inert]` also hides the HUD and shelf, which `inert` alone does not do. They were being painted behind the gate all along, invisible only because it was opaque.
 
 ## Onboarding
 
@@ -231,7 +242,7 @@ The solver is analytical past its sample window, as the seam always anticipated:
 
 `npm run validate` runs unit/integration tests and a production TypeScript/Vite build. GitHub Actions runs the same validation on PRs and `main`.
 
-Coverage includes the boot phase reducer and the gate it drives, onboarding marks (that each retires on the state it describes, that one speaks at a time, and that none precedes the premise), deterministic advancement, multi-enemy overlap, push/farm behavior, content references, spell compilation, gear, Spell Point economy/pathing, first-clear Essence, save migrations and the version window the codec accepts, offline settlement (a day away from a played save inside a bounded budget, exactness within the sample window, rate scaling past it, and no synthesised Essence or stage), the advance loop's runaway guard, save loading that never throws on the way up, prestige reset boundaries, and architecture guards preventing presentation dependencies from entering `src/engine`.
+Coverage includes the boot phase reducer and the gate it drives, the title framing (a camera pose round-trip, and the Babylon `setTarget` behaviour it depends on) and the sigil it raises (fog opt-out, drift bounds, reduced motion, teardown), onboarding marks (that each retires on the state it describes, that one speaks at a time, and that none precedes the premise), deterministic advancement, multi-enemy overlap, push/farm behavior, content references, spell compilation, gear, Spell Point economy/pathing, first-clear Essence, save migrations and the version window the codec accepts, offline settlement (a day away from a played save inside a bounded budget, exactness within the sample window, rate scaling past it, and no synthesised Essence or stage), the advance loop's runaway guard, save loading that never throws on the way up, prestige reset boundaries, and architecture guards preventing presentation dependencies from entering `src/engine`.
 
 ## Still intentionally deferred
 

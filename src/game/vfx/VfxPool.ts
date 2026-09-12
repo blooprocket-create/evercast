@@ -23,7 +23,12 @@ export const VFX_BUDGETS = {
   medium: { meshes: 96, paths: 32, jobs: 384, shards: 4, segments: 12, lights: 0 },
   high: { meshes: 160, paths: 48, jobs: 576, shards: 7, segments: 16, lights: 1 },
 } as const;
-const COLORS: Record<School, string> = {
+/**
+ * The authored colour per school. Exported because the title sigil paints from
+ * the same arcane violet: two definitions of it would drift the moment either
+ * was tuned, and the one thing the title must not do is be a different purple.
+ */
+export const SCHOOL_COLORS: Record<School, string> = {
   plague: '#8ee36f',
   arcane: '#9b70ff',
   fire: '#ff762b',
@@ -53,7 +58,7 @@ export type VfxLoader = (url: string, scene: Scene) => Promise<AssetContainer>;
  * Depth writes go off with it: an additive effect that occludes the effect
  * behind it punches a hole in its own glow.
  */
-function additive(material: StandardMaterial): void {
+export function additive(material: StandardMaterial): void {
   material.alphaMode = Constants.ALPHA_ADD;
   material.disableDepthWrite = true;
   // A little under one, so a dense stack still has somewhere to go before the
@@ -86,10 +91,10 @@ export class VfxPool {
     this.heart.disableLighting = true;
     this.heart.emissiveColor = new Color3(0.92, 0.82, 1);
     additive(this.heart);
-    for (const school of Object.keys(COLORS) as School[]) {
+    for (const school of Object.keys(SCHOOL_COLORS) as School[]) {
       const mat = new StandardMaterial(`VFX / ${school}`, scene);
       mat.disableLighting = true;
-      mat.emissiveColor = Color3.FromHexString(COLORS[school]);
+      mat.emissiveColor = Color3.FromHexString(SCHOOL_COLORS[school]);
       mat.diffuseColor = Color3.Black();
       mat.specularColor = Color3.Black();
       mat.backFaceCulling = false;

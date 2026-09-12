@@ -39,9 +39,28 @@
  * Above the damage-number pool, which DamageNumbers appends straight to
  * document.body at z-index 2, outside the React tree.
  */
+/*
+ * `inert` makes this unreachable, not invisible - and the two came apart the
+ * moment the boot gate learned to lift its curtain. A live HUD and shelf were
+ * being painted behind the title, invisible only because the gate was opaque.
+ *
+ * Keyed on the attribute rather than a second prop so the two can never
+ * disagree: whatever is unreachable is also unseen.
+ */
 .layer {
   position: absolute;
   inset: 0;
   z-index: 3;
   pointer-events: none;
+  transition: opacity 400ms ease-out;
+}
+
+.layer[inert] {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .layer {
+    transition: none;
+  }
 }

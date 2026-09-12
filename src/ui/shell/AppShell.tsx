@@ -26,6 +26,8 @@ interface AppShellProps {
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
   bootPhase: BootPhase;
   resumedFromSave: boolean;
+  /** The scene has the title void on screen; the gate may lift its curtain. */
+  titleLit: boolean;
   onBegin: () => void;
   awayProgress: OfflineSummary | null;
   onDismissAwayProgress: () => void;
@@ -35,6 +37,7 @@ export function AppShell({
   canvasRef,
   bootPhase,
   resumedFromSave,
+  titleLit,
   onBegin,
   awayProgress,
   onDismissAwayProgress,
@@ -72,7 +75,17 @@ export function AppShell({
         ref={canvasRef}
         className={styles.canvas}
         role="img"
-        aria-label="The Evercast diorama: the mage, the companions and the oncoming wave, drawn in 3D. Everything it shows is also written in the heads-up display and the log beneath it."
+        /*
+          The label follows what is actually drawn. Before the player begins,
+          the camera is parked above the world and the canvas carries the title
+          sigil - describing a mage and an oncoming wave there would be a
+          description of something not on screen.
+        */
+        aria-label={
+          titleLit && !playing
+            ? 'An arcane sigil: three slowly turning rings of violet light around a bright core, drawn in 3D over darkness.'
+            : 'The Evercast diorama: the mage, the companions and the oncoming wave, drawn in 3D. Everything it shows is also written in the heads-up display and the log beneath it.'
+        }
       />
       {/*
         `aria-modal` on the gate is a promise to assistive technology, not a
@@ -107,7 +120,7 @@ export function AppShell({
         )}
         {playing && !welcoming && <PremiseGate />}
       </div>
-      <BootGate phase={bootPhase} resumed={resumedFromSave} onBegin={onBegin} />
+      <BootGate phase={bootPhase} resumed={resumedFromSave} lit={titleLit} onBegin={onBegin} />
     </main>
   );
 }

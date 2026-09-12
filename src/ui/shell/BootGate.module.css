@@ -1,9 +1,14 @@
 /*
- * Opaque, not a scrim. The Babylon scene owns its own render loop and starts
- * drawing the moment it is built, so a translucent gate would show a world
- * assembling itself behind the title - actors popping from primitives into
- * meshes, props arriving in load order. That is the exact thing the gate exists
- * to cover, so it covers it.
+ * Opaque until the scene says otherwise, and the distinction is the whole
+ * feature. Babylon owns its own render loop and starts drawing the moment it is
+ * built, so a gate that was simply translucent would show a world assembling
+ * itself behind the title - actors popping from primitives into meshes, props
+ * arriving in load order.
+ *
+ * So the curtain below only lifts once `showTitle()` reports that a frame of
+ * the title void has actually been presented. By then the camera is 400 units
+ * above the world and it is clipped by the far plane, so what shows through is
+ * the sigil and nothing else. Ordering, not opacity, is what keeps the promise.
  *
  * Top of the shell's stack, and it has to be: the layers it covers are the
  * canvas, the damage-number pool DamageNumbers appends to document.body at 2,
@@ -17,12 +22,44 @@
   place-items: center;
   padding: max(var(--space-5), var(--safe-top)) max(var(--space-5), var(--safe-right))
     max(var(--space-5), var(--safe-bottom)) max(var(--space-5), var(--safe-left));
-  background: var(--bg);
+  /*
+   * The vignette, which only becomes visible once the curtain goes. It is static
+   * rather than animated: against the opaque curtain it is invisible anyway, so
+   * fading it in would be a second transition saying nothing.
+   *
+   * The inner pool is what keeps the wordmark and the button legible over a
+   * bright, additive sigil; the outer one closes the corners down so the frame
+   * reads as a frame rather than as a leak.
+   */
+  background:
+    radial-gradient(closest-side at 50% 50%, var(--scrim), transparent),
+    radial-gradient(farthest-corner at 50% 50%, transparent 55%, var(--bg));
   pointer-events: auto;
   z-index: 7;
 }
 
+/*
+ * The curtain. Its own element so that only `opacity` animates - the house
+ * vocabulary is opacity and transform, and animating `background` would be
+ * neither.
+ */
+.gate::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+  opacity: 1;
+  transition: opacity 1200ms ease-out;
+}
+
+.lit::before {
+  opacity: 0;
+}
+
 .plate {
+  /* Load-bearing: the curtain is positioned, and a static grid item would paint
+     underneath it. */
+  position: relative;
   display: grid;
   justify-items: center;
   text-align: center;
@@ -44,6 +81,11 @@
   letter-spacing: 0.34em;
   text-indent: 0.34em;
   color: var(--ink);
+  /* The same pair the HUD uses over the diorama, for the same reason: display
+     type has to hold against a bright, moving background. */
+  text-shadow:
+    0 1px 2px var(--wordmark-shadow),
+    0 2px 14px var(--wordmark-shadow);
 }
 
 .premise {
@@ -62,4 +104,15 @@
   min-height: var(--space-4);
   font-size: var(--text-small);
   color: var(--ink-dim);
+}
+
+/*
+ * Someone who asked for less motion still gets the title screen and still gets
+ * the sigil; what they do not get is the dark sliding off it. The sigil's own
+ * drift is stopped separately, in `TitleSigil`.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .gate::before {
+    transition: none;
+  }
 }
