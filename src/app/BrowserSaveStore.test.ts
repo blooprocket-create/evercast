@@ -138,4 +138,44 @@ describe('BrowserSaveStore', () => {
     ).toThrow();
     expect(storage.peek(KEY)).toBe(before);
   });
+
+  /**
+   * The two ends of the digest, which deliberately disagree.
+   *
+   * Importing is someone choosing a file while their own run is still intact,
+   * so "this one has been changed" is information they can act on. Booting has
+   * no alternative to offer: refusing there would cost a player their run over
+   * a `setItem` the browser was killed half-way through, and would stop no
+   * cheating, because anyone who can edit a save can recompute its digest.
+   */
+  describe('the integrity digest', () => {
+    const edited = () => {
+      const exported = JSON.parse(store(null).exportSave(playedState()));
+      exported.state.equipment.gold = '999999999999';
+      return JSON.stringify(exported);
+    };
+
+    it('refuses an edited file on import, leaving the existing run alone', () => {
+      const storage = fakeStorage();
+      store(storage).save(playedState());
+      const before = storage.peek(KEY);
+
+      expect(() => store(storage).importSave(edited())).toThrow(/checksum/);
+      expect(storage.peek(KEY)).toBe(before);
+    });
+
+    it('accepts an untouched export on import', () => {
+      const storage = fakeStorage();
+      const exported = store(null).exportSave(playedState());
+      expect(() => store(storage).importSave(exported)).not.toThrow();
+      expect(store(storage).load()?.integrity).toBe('ok');
+    });
+
+    it('still loads an edited save on boot, and says so', () => {
+      const storage = fakeStorage({ [KEY]: edited() });
+      const loaded = store(storage).load();
+      expect(loaded).not.toBeNull();
+      expect(loaded?.integrity).toBe('mismatch');
+    });
+  });
 });
