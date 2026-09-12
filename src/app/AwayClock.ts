@@ -47,6 +47,15 @@ export const AWAY_CLOCK_KEY = 'evercast.clock.v1';
 
 export class AwayClock {
   private mark: number;
+  /**
+   * The furthest reading handed out by `claim` and not yet paid for.
+   *
+   * In memory only, and that is the point: a session that dies before settling
+   * forgets it, which is what leaves the absence owed rather than consumed. It
+   * still floors successive claims within a session, so boot and the wait at
+   * the gate bill for their own interval instead of the same one twice.
+   */
+  private reserved = 0;
 
   /**
    * `storage` is injected for the same reason the save store's is: reaching for
@@ -83,10 +92,10 @@ export class AwayClock {
   }
 
   /**
-   * Raises the mark to `at`, never lowers it.
+   * Raises the persisted mark to `at`, never lowers it.
    *
-   * A save's own stamp is passed through here on load so that clearing this
-   * key leaves the save as the floor rather than leaving no floor at all.
+   * This is the commit: everything before `at` is now paid for and can never be
+   * credited again.
    */
   observe(at: number): void {
     if (!Number.isFinite(at) || at <= this.mark) return;
@@ -94,14 +103,27 @@ export class AwayClock {
     this.write(at);
   }
 
-  /** The latest wall-clock reading this installation has ever seen. */
+  /** The latest wall-clock reading this installation has been *paid* for. */
   highWaterMark(): number {
     return this.mark;
   }
 
   /**
-   * The seconds of absence that may be credited for a session that was last
-   * seen at `stamp`, and the side effect of having now seen the current time.
+   * Commits everything claimed so far, because the debt it represents has now
+   * been simulated.
+   *
+   * Called by the game loop once `OfflineProgressor` has actually applied the
+   * away time - never on the path where applying it threw, so a failed
+   * settlement leaves the absence owed instead of swallowing it.
+   */
+  settle(): void {
+    this.observe(this.reserved);
+  }
+
+  /**
+   * The seconds of absence that may be credited for a session last seen at
+   * `stamp`, reserved but not yet consumed. Nothing is persisted here: `settle`
+   * is what makes the claim permanent, once the debt has actually been paid.
    *
    * Returns zero rather than a negative number when the clock has moved
    * backwards, which is both the honest answer and what stops a rollback being
@@ -109,12 +131,14 @@ export class AwayClock {
    */
   claim(stamp: number): number {
     const now = this.now();
-    // The stamp is a floor on the mark: it came out of a save whose digest
-    // covers it, so a blob claiming to be from last year moves nothing.
-    this.observe(stamp);
-    const since = this.mark;
-    this.observe(now);
-    if (!Number.isFinite(now) || !Number.isFinite(since)) return 0;
+    if (!Number.isFinite(now)) return 0;
+    // Three floors, and the latest of them wins. The persisted mark is time
+    // already paid for. `stamp` is the save's own account of when it was last
+    // written - a floor rather than the answer, so a blob claiming to be from
+    // last year buys nothing, and a wiped clock key still has somewhere to
+    // start. `reserved` is what this session has already handed out.
+    const since = Math.max(this.mark, Number.isFinite(stamp) ? stamp : 0, this.reserved);
+    this.reserved = Math.max(this.reserved, now);
     const seconds = (now - since) / 1000;
     if (!Number.isFinite(seconds) || seconds <= 0) return 0;
     return Math.min(seconds, this.maxSeconds);

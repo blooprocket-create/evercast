@@ -117,6 +117,20 @@ export function setAwayDebt(seconds: number): void {
   awayDebtSeconds = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
 }
 
+/**
+ * The debt was simulated, so the time it covered is now spent.
+ *
+ * Separate from `setAwayDebt(0)` because the two mean different things and the
+ * loop needs both: this one commits the clock's high-water mark, and it must
+ * never run on the path where applying the away progress threw. Dropping a debt
+ * that could not be applied is a bad frame; dropping it *and* marking the hours
+ * as paid would be those hours gone for good.
+ */
+export function settleAwayDebt(): void {
+  awayDebtSeconds = 0;
+  awayClock.settle();
+}
+
 /** Hidden time joins whatever boot already owed, so one path settles both. */
 export function addAwayDebt(seconds: number): void {
   if (Number.isFinite(seconds) && seconds > 0) awayDebtSeconds += seconds;
