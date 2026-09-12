@@ -57,12 +57,18 @@ Settings → Account, in the game:
 
 - **Export save** writes the whole save to a file the player keeps.
 - **Import save** replaces it from such a file.
-- **Erase progress** deletes the save key outright.
+- **Erase progress** deletes `evercast.save.v1`, and only that. Settings and the
+  clock key are not progress, so a reset does not take a player's volume levels
+  or reopen the offline-time question with them.
 
-Clearing site data for the origin removes all three keys and leaves nothing
-behind. There is no copy anywhere else, which is the other half of "nothing
-leaves the device": there is nothing to request, nothing to rectify and nothing
-to delete on request, because there is no controller holding it.
+Clearing site data for the origin is what removes all three keys and leaves
+nothing behind. The distinction is worth keeping straight in both directions:
+the in-game copy in Settings says the same thing, and a disclosure that
+overstates what a button does is worse than no disclosure at all.
+
+There is no copy anywhere else, which is the other half of "nothing leaves the
+device": there is nothing to request, nothing to rectify and nothing to delete
+on request, because there is no controller holding it.
 
 ## If this ever changes
 

@@ -273,9 +273,12 @@ function AccountSection() {
           Three things, all in this browser and none of them about you: your run, your settings,
           and one number that stops offline progress being farmed by moving the clock. There are no
           accounts, no analytics and no third-party scripts - Evercast makes no network request
-          except for its own files, and the server it is hosted on refuses any other kind. Erase
-          progress above, or clearing site data for this page, removes all three and leaves nothing
-          behind.
+          except for its own files, and the server it is hosted on refuses any other kind.
+        </p>
+        <p className={styles.blurb}>
+          Erase progress deletes the run and only the run: your settings and that one number are
+          not progress, and a reset should not silently take your volume levels with it. Clearing
+          site data for this page is what removes all three and leaves nothing behind.
         </p>
       </div>
 
