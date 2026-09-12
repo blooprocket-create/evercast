@@ -25,6 +25,48 @@ npm run validate
 
 Validation runs the full Vitest suite and a production Vite/TypeScript build.
 
+## Security, privacy and accessibility
+
+Evercast has no server and no accounts, which decides what each of these can
+honestly promise.
+
+- **The save is the only untrusted input**, and it is validated rather than
+  trusted: `src/engine/save/SaveGuards.ts` bounds every field on the way in, so
+  no file - edited, corrupted or truncated - can produce a state the simulation
+  could not have reached by playing, or a `NaN` that breaks an economy
+  permanently. Saves also carry a checksum, which is tamper-*evident* and not
+  tamper-proof; `src/engine/save/SaveIntegrity.ts` is explicit about the
+  difference and about why a client-side game cannot close that gap.
+- **Offline time cannot be farmed.** `src/app/AwayClock.ts` keeps a monotonic
+  high-water mark of the wall clock, so moving the system clock forward pays
+  once and then costs that much future progress, and moving it back pays
+  nothing.
+- **The deploy sets a strict CSP** and seven other headers - see `vercel.json`,
+  pinned by `src/app/SecurityHeaders.test.ts`. `connect-src 'self'` is what
+  turns "Evercast sends nothing" from a claim into something the browser
+  enforces.
+- **Nothing leaves the device.** Three `localStorage` keys, no telemetry, no
+  third-party requests, no fonts from a CDN. See [the privacy
+  note](docs/PRIVACY.md), which includes the commands to check it, and
+  [third-party notices](THIRD_PARTY_NOTICES.md) for the Apache-2.0 attribution
+  Babylon.js requires.
+- **WCAG 2.2 AA** is enforced where it can be, in
+  `src/ui/accessibility.test.ts`: contrast ratios computed from the token
+  sheet, a focus ring on every focusable, reduced-motion honoured, and every
+  `aria-modal` backed by something that actually manages focus.
+
+## Licence
+
+Evercast is proprietary: copyright (c) 2026 Blooprocket, all rights reserved.
+See [LICENSE](LICENSE). It covers this project's own code and assets only -
+the third-party dependencies stay under their own terms, reproduced in
+[third-party notices](THIRD_PARTY_NOTICES.md).
+
+Note that the production build ships source maps, so the TypeScript is
+readable in any browser's developer tools. That is deliberate - it makes a
+production stack trace worth reading - and the licence says plainly that being
+able to read the source is not a licence to use it.
+
 ## Architecture rules
 
 - `src/content` owns authored enemies, zones, gear data and spell-tree definitions.

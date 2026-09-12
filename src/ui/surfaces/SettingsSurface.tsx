@@ -214,8 +214,20 @@ function AccountSection() {
     URL.revokeObjectURL(url);
   };
 
+  /**
+   * Read before the size is checked is read regardless, so the check comes
+   * first. A save is a few hundred kilobytes; anything past this is a file
+   * picked by mistake, and reading a gigabyte of it into a string to find that
+   * out costs the player the tab.
+   */
+  const MAX_SAVE_BYTES = 4_000_000;
+
   const upload = async (file: File) => {
     setError(null);
+    if (file.size > MAX_SAVE_BYTES) {
+      setError('That file is far too large to be an Evercast save.');
+      return;
+    }
     try {
       importSaveFile(await file.text());
     } catch (cause) {
@@ -249,6 +261,27 @@ function AccountSection() {
         </Field>
       </div>
 
+      {/*
+        Said in the game rather than only in a document nobody opens. It is a
+        short claim because there is little to say: three keys in this browser,
+        nothing sent anywhere, and a button above that deletes the lot. The
+        long version, with the commands to check it, is docs/PRIVACY.md.
+      */}
+      <div className={styles.heading}>
+        <h3 className={styles.title}>What Evercast keeps</h3>
+        <p className={styles.blurb}>
+          Three things, all in this browser and none of them about you: your run, your settings,
+          and one number that stops offline progress being farmed by moving the clock. There are no
+          accounts, no analytics and no third-party scripts - Evercast makes no network request
+          except for its own files, and the server it is hosted on refuses any other kind.
+        </p>
+        <p className={styles.blurb}>
+          Erase progress deletes the run and only the run: your settings and that one number are
+          not progress, and a reset should not silently take your volume levels with it. Clearing
+          site data for this page is what removes all three and leaves nothing behind.
+        </p>
+      </div>
+
       {error !== null && <p className={styles.error}>{error}</p>}
 
       <input
@@ -271,6 +304,7 @@ function AccountSection() {
           consequence="Every frontier, point and coin goes. Export it first if you might want it back - there is no undo."
           primary={{ label: 'Erase everything', onClick: eraseSave }}
           secondary={{ label: 'Keep my run', onClick: () => setConfirmingErase(false) }}
+          onDismiss={() => setConfirmingErase(false)}
         />
       )}
     </div>

@@ -30,3 +30,15 @@ export function accentForZone(zoneNumber: number): BiomeAccent {
 export function accentVariable(accent: BiomeAccent): string {
   return `var(--accent-${accent})`;
 }
+
+/**
+ * The same accent at a lightness that can carry text.
+ *
+ * Chrome reads `--accent` and owes 3:1 under WCAG 1.4.11; text reads this and
+ * owes 4.5:1 under 1.4.3. Gravehollow's authored purple clears the first and
+ * not the second, so the two properties are set together and differ only where
+ * legibility requires it. See the `--accent-ink-*` block in `tokens.css`.
+ */
+export function accentInkVariable(accent: BiomeAccent): string {
+  return `var(--accent-ink-${accent})`;
+}

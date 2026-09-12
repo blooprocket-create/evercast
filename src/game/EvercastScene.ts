@@ -95,7 +95,29 @@ export class EvercastScene {
   private readonly canvasObserver?: ResizeObserver;
 
   constructor(canvas: HTMLCanvasElement, quality: VfxQuality = 'medium') {
-    this.engine = new Engine(canvas, true, { preserveDrawingBuffer: false, stencil: true });
+    /*
+     * `canvasTabIndex: -1` because Babylon's default is 1.
+     *
+     * A *positive* tabindex does not join the tab order, it jumps the queue:
+     * every element carrying one is visited before every element that does not,
+     * whatever the document says. So the diorama was the first thing a keyboard
+     * player reached - ahead of the boot gate's own button - as an announced but
+     * entirely inert stop, and every subsequent Tab cycle began there again.
+     *
+     * Nothing here wanted the focus: the camera takes no input (`attachControl`
+     * is never called) and the one keyboard shortcut this class owns is bound to
+     * `window`. It has to be set as an engine option rather than on the element,
+     * because Babylon re-asserts `canvas.tabIndex = engine.canvasTabIndex` from
+     * its pointer-move handler - an assignment to the canvas survives until the
+     * player moves the mouse. `-1` rather than no attribute at all keeps
+     * `.focus()` working for anything that ever does need to point at the
+     * picture.
+     */
+    this.engine = new Engine(canvas, true, {
+      preserveDrawingBuffer: false,
+      stencil: true,
+      canvasTabIndex: -1,
+    });
     // A browser reclaims GPU resources from a backgrounded tab, so a long
     // absence can end with the context already gone. Babylon restores what it
     // can; this is only so that it is not silent when it happens.

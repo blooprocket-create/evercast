@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { BootPhase } from '../../app/BootPhase';
-import { accentForZone, accentVariable } from '../theme/biome';
+import { accentForZone, accentInkVariable, accentVariable } from '../theme/biome';
 import { BootGate } from './BootGate';
 import { CoachMark } from '../onboarding/CoachMark';
 import { HudOverlay, ShelfLog, ShelfVitals } from './HudOverlay';
@@ -44,15 +44,36 @@ export function AppShell({
 
   // The interface wears the accent of the zone the player is standing in.
   const zone = useSnapshotSelector((s) => s.zone);
-  const accent = accentVariable(accentForZone(zone));
+  const biome = accentForZone(zone);
+  const accent = accentVariable(biome);
+  // Text takes the legible variant of the same accent; chrome keeps the
+  // authored one. See `accentInkVariable`.
+  const accentInk = accentInkVariable(biome);
   const playing = bootPhase === 'playing';
   // The threshold is the away report's own, not a second guess at it: a moment
   // that is not drawn must not silence the onboarding standing behind it.
   const welcoming = awayProgress !== null && awayProgress.secondsApplied >= 5;
 
   return (
-    <main className={styles.shell} style={{ '--accent': accent } as React.CSSProperties}>
-      <canvas ref={canvasRef} className={styles.canvas} aria-label="Evercast game world" />
+    <main
+      className={styles.shell}
+      style={{ '--accent': accent, '--accent-ink': accentInk } as React.CSSProperties}
+    >
+      {/*
+        `role="img"` rather than a bare label: a canvas with no role is a
+        generic element, and a name on one is not reliably announced. The
+        diorama draws no text and nothing in it is only available there - the
+        HUD carries the frontier, the wallets, both health bars and the enemy,
+        and the shelf log narrates what happens as it happens - so this
+        describes the picture and points at the readable copy rather than
+        pretending to transcribe a 3D scene.
+      */}
+      <canvas
+        ref={canvasRef}
+        className={styles.canvas}
+        role="img"
+        aria-label="The Evercast diorama: the mage, the companions and the oncoming wave, drawn in 3D. Everything it shows is also written in the heads-up display and the log beneath it."
+      />
       {/*
         `aria-modal` on the gate is a promise to assistive technology, not a
         mechanism: it makes nothing inert and traps no focus. The shelf renders

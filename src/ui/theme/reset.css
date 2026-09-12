@@ -65,3 +65,59 @@ label {
     -webkit-overflow-scrolling: touch;
   }
 }
+
+/*
+ * The focus ring.
+ *
+ * There was none. Not a subtle one - none at all: the only `:focus-visible`
+ * rule in `src/ui` was on a coach mark, so a player navigating by keyboard
+ * moved through the shelf, the rail, the spell tree and every settings control
+ * with nothing on screen telling them where they were. That is WCAG 2.4.7
+ * (Focus Visible, AA), and on a game whose whole interface is buttons it is
+ * the difference between playable and not.
+ *
+ * `:focus-visible` rather than `:focus`, so a mouse click does not leave a ring
+ * behind. The offset does two things: it keeps the ring clear of the control's
+ * own border, and it puts the ring outside the element's own fill - so it is
+ * drawn against the dark surface behind rather than against a gold badge or an
+ * accent-filled meter, which is what keeps `--focus` at the 3:1 WCAG 2.4.11
+ * asks of it wherever it lands. Modern browsers follow the element's own
+ * border-radius, so nothing here sets one: a radius applied on focus would
+ * change the shape of the control the moment it was reached.
+ *
+ * `:where()` keeps this at zero specificity, so any component that needs its
+ * own indicator can simply say so and win.
+ */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/*
+ * Nothing in the shell scrolls the page, but the surfaces and rails inside it
+ * do, and a focused row at the very edge of one is a row the player cannot see.
+ */
+:where(a, button, input, select, textarea, summary, [tabindex]) {
+  scroll-margin: var(--space-4);
+}
+
+/*
+ * Motion the player did not ask for.
+ *
+ * The interface is nearly all static already - the only CSS animations in
+ * `src/ui` are the summon reveal's, which handles this itself - so this is a
+ * standing guarantee for whatever gets added next rather than a fix for
+ * something specific. The 3D diorama is deliberately untouched: it is the game
+ * rather than decoration around it, and Settings already carries the controls
+ * that quieten it.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

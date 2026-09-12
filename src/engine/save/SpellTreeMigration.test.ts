@@ -28,7 +28,12 @@ function build(fusion: string) {
   return sim;
 }
 function normalized(sim: EvercastSimulation) {
-  const value = codec.encode(sim.getState(), new Date(0));
+  // The digest covers the bytes as written, so it cannot survive the rounding
+  // below - which is the entire job of this helper. Two runs that agree to
+  // seven decimal places are what these tests assert; two runs that agree
+  // bit-for-bit is a stronger claim than a chunked and a whole simulation can
+  // make about floating point, and the digest would be asserting it.
+  const { integrity: _exactBytes, ...value } = codec.encode(sim.getState(), new Date(0));
   return JSON.parse(
     JSON.stringify(value, (_key, v) => {
       if (typeof v === 'number') return Math.round(v * 1e7) / 1e7;

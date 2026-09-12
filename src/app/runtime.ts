@@ -1,3 +1,4 @@
+import { AwayClock } from './AwayClock';
 import { DEFAULT_ENGINE_CONFIG } from '../engine/config';
 import { EvercastSimulation } from '../engine/EvercastSimulation';
 import type { EngineCommand } from '../engine/types';
@@ -27,6 +28,14 @@ function resolveStorage(): Storage | null {
 const storage = resolveStorage();
 const saveStore = new BrowserSaveStore(DEFAULT_ENGINE_CONFIG, SAVE_KEY, storage);
 const loaded = saveStore.load();
+
+/**
+ * Every measurement of absence goes through here rather than through a bare
+ * `Date.now()` subtraction. `AwayClock` explains why at length; the short of it
+ * is that the only clock this game has belongs to the player, and a high-water
+ * mark is what stops moving it forward paying out twice.
+ */
+const awayClock = new AwayClock(storage, DEFAULT_ENGINE_CONFIG.maxOfflineSeconds);
 
 /**
  * Nothing here may throw. This module is imported on the way to the first
@@ -71,8 +80,7 @@ export const resumedFromSave = boot.resumed;
  * down loop. A save stamped `now` while time is still owed banks a partial day
  * as though it were the whole one.
  */
-let awayDebtSeconds =
-  loaded && boot.resumed ? Math.max(0, (Date.now() - loaded.savedAt.getTime()) / 1000) : 0;
+let awayDebtSeconds = loaded && boot.resumed ? awayClock.claim(loaded.savedAt.getTime()) : 0;
 
 export function awayDebt(): number {
   return awayDebtSeconds;
@@ -101,7 +109,7 @@ let gateCredited = false;
 export function creditTimeAtTheGate(): void {
   if (gateCredited) return;
   gateCredited = true;
-  addAwayDebt((Date.now() - bootedAt) / 1000);
+  addAwayDebt(awayClock.claim(bootedAt));
 }
 
 /** The loop reports back once it has settled what was owed. */
@@ -109,9 +117,33 @@ export function setAwayDebt(seconds: number): void {
   awayDebtSeconds = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
 }
 
+/**
+ * The debt was simulated, so the time it covered is now spent.
+ *
+ * Separate from `setAwayDebt(0)` because the two mean different things and the
+ * loop needs both: this one commits the clock's high-water mark, and it must
+ * never run on the path where applying the away progress threw. Dropping a debt
+ * that could not be applied is a bad frame; dropping it *and* marking the hours
+ * as paid would be those hours gone for good.
+ */
+export function settleAwayDebt(): void {
+  awayDebtSeconds = 0;
+  awayClock.settle();
+}
+
 /** Hidden time joins whatever boot already owed, so one path settles both. */
 export function addAwayDebt(seconds: number): void {
   if (Number.isFinite(seconds) && seconds > 0) awayDebtSeconds += seconds;
+}
+
+/**
+ * What a stretch of hidden time is worth, measured against the same high-water
+ * mark the boot path uses. The loop asks rather than subtracting two
+ * `Date.now()` readings of its own, so a clock moved forward while the tab was
+ * in the background is worth no more than one moved forward before it opened.
+ */
+export function claimAwaySince(stamp: number): number {
+  return awayClock.claim(stamp);
 }
 
 export const snapshotStore = new SnapshotStore(simulation.getSnapshot());

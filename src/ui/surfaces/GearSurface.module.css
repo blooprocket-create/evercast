@@ -2,7 +2,7 @@
   font: 600 var(--text-label) / 1 var(--font-ui);
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .name {
@@ -159,7 +159,7 @@
   font: 600 var(--text-label) / 1 var(--font-ui);
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--accent-ink);
   margin-left: auto;
 }
 
@@ -173,7 +173,7 @@
   font: 400 var(--text-label) / 1 var(--font-ui);
   letter-spacing: 0.06em;
   text-transform: none;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 @media (pointer: coarse) {

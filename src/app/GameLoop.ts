@@ -2,7 +2,7 @@ import { OfflineProgressor, type OfflineSummary } from '../engine/offline/Offlin
 import type { EvercastScene } from '../game/EvercastScene';
 import { sceneMoodFor } from '../game/audio/AudioEngine';
 // prettier-ignore
-import { addAwayDebt, audio, awayDebt, saveGame, setAwayDebt, simulation, snapshotStore } from './runtime';
+import { addAwayDebt, audio, awayDebt, claimAwaySince, saveGame, setAwayDebt, settleAwayDebt, simulation, snapshotStore } from './runtime';
 
 /**
  * Owns the browser-side cadences so they are named and separable rather than
@@ -56,7 +56,10 @@ export function startGameLoop({ scene, onAwayProgress }: GameLoopOptions): () =>
   const settleAway = (seconds: number) => {
     if (seconds <= 0) return;
     const summary = backgroundProgressor.apply(simulation, seconds);
-    setAwayDebt(0);
+    // Only now is the time actually spent, so only now does the clock's mark
+    // move. Everything above this line is recoverable by a reload; past it, the
+    // hours are in the save.
+    settleAwayDebt();
 
     // Whatever happened while away is already in the summary; replaying it as
     // sound would be a wall of hits for a fight nobody watched.
@@ -83,7 +86,10 @@ export function startGameLoop({ scene, onAwayProgress }: GameLoopOptions): () =>
     previous = performance.now();
     if (hiddenAt === null) return;
 
-    const elapsedSeconds = Math.max(0, (Date.now() - hiddenAt) / 1000);
+    // Measured by `AwayClock` rather than by subtracting two `Date.now()`
+    // readings: a background tab is exactly where a clock moved forward would
+    // otherwise be worth a free day, and the mark is what makes it worth once.
+    const elapsedSeconds = claimAwaySince(hiddenAt);
     hiddenAt = null;
     // Handed to the loop rather than settled here, so a tab that was hidden at
     // boot settles one absence and shows one summary instead of two.
