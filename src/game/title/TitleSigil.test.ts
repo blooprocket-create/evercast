@@ -122,6 +122,35 @@ describe('title sigil', () => {
   });
 
   /**
+   * The ignition has to start from dark, and that is a claim about the moment
+   * the meshes land rather than about the curve.
+   *
+   * `EvercastScene` attaches the drift observer only after `ready`, because the
+   * observer owns this clock: start it at construction and the two and a half
+   * seconds of fade-up are spent while the sigil is still invisible and
+   * loading, so a slow enough download burns the ignition completely and the
+   * sigil snaps on fully lit. This is the half of that contract which can be
+   * tested without a GPU.
+   */
+  it('is built dark, and lights only once something drives it', async () => {
+    const scene = freshScene();
+    const sigil = sigilIn(scene);
+    await sigil.ready;
+
+    for (const layer of SIGIL_LAYERS) {
+      const mesh = scene.meshes.find((candidate) => candidate.name === `Title ${layer.id}`)!;
+      expect(mesh.visibility).toBe(0);
+    }
+
+    // A full ignition's worth of clock, in frame-sized steps.
+    for (let frame = 0; frame < 150; frame += 1) sigil.update(1 / 60);
+    for (const layer of SIGIL_LAYERS) {
+      const mesh = scene.meshes.find((candidate) => candidate.name === `Title ${layer.id}`)!;
+      expect(mesh.visibility).toBeCloseTo(1, 3);
+    }
+  });
+
+  /**
    * The house doctrine, quoted from `SummonReveal.module.css`: "Someone who has
    * asked for less motion still gets the result." The result is the sigil.
    */

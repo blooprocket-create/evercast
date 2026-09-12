@@ -441,33 +441,55 @@ export class EvercastScene {
   /**
    * Lifts the camera clear of the world and raises the title sigil.
    *
-   * Resolves once a frame of the void has actually been presented, and the boot
-   * gate waits on that before it starts lifting its curtain. That ordering - not
-   * opacity - is what guarantees the player never sees the world assembling:
-   * whatever state the diorama is in, the camera is already looking somewhere
-   * else by the time anything becomes see-through.
+   * Resolves when the sigil is built *and* a frame carrying it has been
+   * presented, and the boot gate waits on that before it lifts its curtain.
+   * Both halves are load-bearing, and for different reasons:
+   *
+   *   - the rendered frame is what guarantees the player never sees the world
+   *     assembling. Whatever state the diorama is in, the camera is already
+   *     looking somewhere else by the time anything becomes see-through - it is
+   *     ordering that keeps the promise, not opacity.
+   *   - waiting on the meshes is what stops the curtain lifting on an empty
+   *     void. The VFX pool has usually cached these same GLBs by now, but
+   *     `ASSET_WAIT_CEILING_MS` can open the gate before it ever finished, and
+   *     then the rings would arrive one at a time onto a title screen already
+   *     in view - the exact pop-in the curtain exists to cover.
+   *
+   * The drift observer is attached *after* the meshes land rather than before,
+   * which is the subtler half. It owns the ignition clock, so starting it at
+   * construction would spend the two and a half seconds of fade-up while the
+   * sigil was still invisible and loading - and a slow enough load would burn
+   * the ignition entirely, snapping a fully lit sigil on screen the instant the
+   * curtain moved.
    *
    * The camera moves rather than being replaced. `DefaultRenderingPipeline` is
    * built around this one camera, so a second would have had no bloom - and
    * bloom is the whole reason an additive sigil reads as light rather than as
    * coloured geometry.
    */
-  showTitle(): Promise<void> {
-    if (this.title) return Promise.resolve();
+  async showTitle(): Promise<void> {
+    if (this.title) return;
     this.gamePose = capturePose(this.camera);
     applyPose(this.camera, titlePose(this.gamePose));
 
     const sigil = new TitleSigil(this.scene);
     this.title = sigil;
     sigil.root.position.copyFrom(this.camera.target);
+    this.applyDepthOfField();
+
+    // Always settles, however the downloads went: a mesh that never arrived is
+    // substituted rather than skipped, so this cannot leave the gate waiting.
+    await sigil.ready;
+    // Begin pressed, or the quality changed, while the meshes were in flight.
+    if (this.title !== sigil) return;
+
     // The scene's own render loop is running; the game loop is not. This is what
-    // drives the drift until the player presses Begin.
+    // drives the ignition and the drift until the player presses Begin.
     this.titleObserver = this.scene.onBeforeRenderObservable.add(() => {
       sigil.update(this.engine.getDeltaTime() / 1000);
     });
-    this.applyDepthOfField();
 
-    return new Promise((resolve) => {
+    await new Promise<void>((resolve) => {
       this.scene.onAfterRenderObservable.addOnce(() => resolve());
     });
   }
