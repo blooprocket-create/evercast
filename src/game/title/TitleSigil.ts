@@ -81,10 +81,17 @@ export interface SigilLayer {
  * turn, so the relative motion a viewer actually sees is the sum of two rates,
  * not one.
  *
- * `breadth` is the other half of the answer, and the better half. A ring that
- * only spins changes phase; rings that swell and shrink on different clocks
- * change the *spacing between them*, which is a change of shape, and a change of
- * shape survives symmetry. It is what stops the sigil reading as a rigid wheel.
+ * `breadth` is the other half of the answer. A ring that only spins changes
+ * phase; rings that swell on different clocks change the *spacing between
+ * them*, which is a change of shape, and shape survives symmetry.
+ *
+ * It survived it rather too well. At the first amplitudes the breath was the
+ * only motion anyone reported seeing - the sigil read as pulsing, not turning,
+ * because a scale change moves every pixel outward at once while a rotation
+ * moves spokes into the places other spokes just left. So the breath is pulled
+ * back here, and `SIGIL_MOTES` carries the job it was over-doing: a handful of
+ * shards orbiting outside the rim, where a single point of light has no
+ * symmetry to hide in and its travel is unmistakable.
  *
  * Six clocks run here, and the number that matters about them is not how far
  * apart they look - it is how long until two of them line up again, because
@@ -95,9 +102,51 @@ export interface SigilLayer {
  * minutes. `TitleSigil.test.ts` computes that directly.
  */
 export const SIGIL_LAYERS: readonly SigilLayer[] = [
-  { id: 'arcane_ring_a', scaling: 7.6, drift: 0.055, breadth: 0.028, breathSeconds: 17.0 },
-  { id: 'arcane_glyph_a', scaling: 7.0, drift: -0.089, breadth: 0.042, breathSeconds: 23.7 },
-  { id: 'arcane_ring_b', scaling: 5.4, drift: 0.144, breadth: 0.035, breathSeconds: 31.8 },
+  { id: 'arcane_ring_a', scaling: 7.6, drift: 0.055, breadth: 0.017, breathSeconds: 17.0 },
+  { id: 'arcane_glyph_a', scaling: 7.0, drift: -0.089, breadth: 0.025, breathSeconds: 23.7 },
+  { id: 'arcane_ring_b', scaling: 5.4, drift: 0.144, breadth: 0.021, breathSeconds: 31.8 },
+];
+
+export interface SigilMote {
+  readonly id: string;
+  readonly scaling: number;
+  /** How far out it orbits. The outer ring's rim sits at about 5.1. */
+  readonly radius: number;
+  /**
+   * Which layer's angle it rides, by that layer's `id`.
+   *
+   * A name rather than an index into `SIGIL_LAYERS`, and the distinction has
+   * already cost one bug: the rings are built from inside a `Promise.all`, so
+   * the order they arrive in is the order their downloads happened to finish.
+   * Anything positional silently pairs a shard with whichever ring landed
+   * first, which on a warm cache is a different ring than on a cold one.
+   */
+  readonly rides: string;
+  /** Where on that orbit it starts. Golden-angle stagger, as the VFX already use. */
+  readonly phase: number;
+}
+
+/**
+ * What makes the rotation legible.
+ *
+ * The rings cannot show their own turning: twelve spokes means twelve positions
+ * that look alike, so a ring can sweep thirty degrees and arrive looking exactly
+ * as it left. A single shard has no such symmetry - there is one of it, it is
+ * somewhere, and a moment later it is somewhere else.
+ *
+ * They ride the rings' own angles rather than keeping clocks of their own. That
+ * is not only tidier: every independent period is another pair that can fall
+ * into step, and the six already here were hard enough to choose. These add
+ * none.
+ *
+ * Placed outside the rim, in the clear, where there is nothing for the eye to
+ * confuse them with - and the one on the fastest ring is furthest out, because
+ * angular speed is only half of what the eye reads as movement.
+ */
+export const SIGIL_MOTES: readonly SigilMote[] = [
+  { id: 'arcane_shard_a', scaling: 0.52, radius: 5.95, rides: 'arcane_ring_a', phase: 0 },
+  { id: 'arcane_shard_b', scaling: 0.46, radius: 4.45, rides: 'arcane_glyph_a', phase: 2.399 },
+  { id: 'arcane_shard_c', scaling: 0.5, radius: 6.4, rides: 'arcane_ring_b', phase: 4.798 },
 ];
 
 /**
@@ -134,7 +183,16 @@ export function prefersReducedMotion(): boolean {
   );
 }
 
+interface Orbiting {
+  node: TransformNode;
+  radius: number;
+  /** The ring itself, resolved once at build time - never an index. */
+  ring: Turning | null;
+  phase: number;
+}
+
 interface Turning {
+  id: string;
   node: TransformNode;
   drift: number;
   /** The scale it was built at; the breath is measured against this. */
@@ -150,6 +208,7 @@ export class TitleSigil {
   readonly ready: Promise<void>;
   private readonly material: StandardMaterial;
   private readonly turning: Turning[] = [];
+  private readonly orbiting: Orbiting[] = [];
   /** Everything that ignites. The void behind them does not. */
   private readonly owned: Mesh[] = [];
   private heart: Mesh | null = null;
@@ -216,6 +275,7 @@ export class TitleSigil {
         if (layer.id === HEART.id) this.heart = mesh;
         if (layer.drift !== 0) {
           this.turning.push({
+            id: layer.id,
             node: mesh,
             drift: layer.drift,
             base: layer.scaling,
@@ -226,6 +286,32 @@ export class TitleSigil {
         }
       }),
     );
+
+    await Promise.all(
+      SIGIL_MOTES.map(async (mote) => {
+        const mesh = await this.instantiate(load, mote.id, mote.scaling);
+        if (!mesh) return;
+        // By identity. `turning` was filled from inside the `Promise.all`
+        // above, so its order is download-completion order and reading slot
+        // `n` from it would hand this shard an arbitrary ring.
+        this.orbiting.push({
+          node: mesh,
+          radius: mote.radius,
+          ring: this.turning.find((candidate) => candidate.id === mote.rides) ?? null,
+          phase: mote.phase,
+        });
+        // Standing the shard up out of the ring plane's normal, once.
+        //
+        // These meshes are slivers along their own local Y - which the root's
+        // quarter turn about X aims straight down the camera's axis, so left
+        // alone they render as three dots, and `rotation.y` only spins each one
+        // about its own length where nothing can see it. A quarter turn about X
+        // here lays the long axis into the orbit plane instead, leaving the
+        // broad face toward the camera and the heading to `update`.
+        mesh.rotation.x = Math.PI / 2;
+      }),
+    );
+
     // Nothing is visible until the first update, so an ignition that never runs
     // cannot leave a half-lit sigil on screen.
     this.update(0);
@@ -270,6 +356,23 @@ export class TitleSigil {
     }
     if (!mesh) mesh = MeshBuilder.CreateTorus(`Title ${id}`, { diameter: 1, thickness: 0.06 }, this.scene);
 
+    /*
+     * The line that makes this thing turn, and it was missing.
+     *
+     * The glTF loader gives every node it imports a `rotationQuaternion`, and
+     * `clone()` carries it across. Babylon reads `rotation` only while that is
+     * null - so `update()` was setting Euler angles that nothing composed into
+     * a world matrix, and the sigil that shipped never rotated a degree. The
+     * breath was the only motion on screen, which is exactly what it looked
+     * like. Three tests asserted `rotation.y` and all three passed, because the
+     * property they read was faithfully set and simply never used.
+     *
+     * `VfxPool` does this too, on the line after its own `bakeTransformInto-
+     * Vertices`, and that is the point: this file deliberately does not borrow
+     * the pool, and quietly inherited none of what the pool had learned. The
+     * two lines above are copied from it; this is the one that was not.
+     */
+    mesh.rotationQuaternion = null;
     mesh.material = this.material;
     mesh.isPickable = false;
     mesh.scaling.setAll(scaling);
@@ -302,6 +405,25 @@ export class TitleSigil {
       ring.node.scaling.setAll(ring.base * swell);
     }
 
+    // Riding a ring's angle rather than a clock of their own - see SIGIL_MOTES.
+    // The rings lie in the root's XZ plane, which the root's quarter turn about
+    // X stands up to face the camera, so an orbit is drawn there too.
+    for (const mote of this.orbiting) {
+      const angle = (mote.ring ? mote.ring.node.rotation.y : 0) + mote.phase;
+      mote.node.position.set(
+        Math.cos(angle) * mote.radius,
+        0,
+        Math.sin(angle) * mote.radius,
+      );
+      // The heading, on top of the quarter turn `build` already applied. Babylon
+      // composes Euler angles as Y then X then Z, so that quarter turn has
+      // carried the shard's long axis to local +Z and this swings it round to
+      // the orbit's tangent, which at `angle` is (-sin, 0, cos) - hence the
+      // negative. A sliver pointing along its own travel reads as flying;
+      // pointing across it, it reads as sliding sideways.
+      mote.node.rotation.y = -angle;
+    }
+
     this.root.scaling.setAll(0.94 + 0.06 * ignition);
 
     for (const mesh of this.owned) mesh.visibility = ignition;
@@ -322,6 +444,7 @@ export class TitleSigil {
     for (const mesh of this.owned) mesh.dispose();
     this.owned.length = 0;
     this.turning.length = 0;
+    this.orbiting.length = 0;
     this.heart = null;
     this.material.dispose();
     this.root.dispose();
