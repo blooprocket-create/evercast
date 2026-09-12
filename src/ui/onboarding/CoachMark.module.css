@@ -1,0 +1,41 @@
+/*
+ * Sits directly above the shelf, in the strip the HUD already leaves clear, so
+ * it never covers the thing it is pointing at. It is a button rather than a
+ * tooltip because the useful half of a hint is getting to where it is about.
+ */
+.mark {
+  position: absolute;
+  left: max(var(--space-4), var(--safe-left));
+  right: max(var(--space-4), var(--safe-right));
+  bottom: calc(var(--shelf-inset) + var(--space-3));
+  margin: 0 auto;
+  width: fit-content;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent);
+  border-radius: var(--radius-pill);
+  background: var(--glass-strong);
+  color: var(--ink-mid);
+  font-family: var(--font-ui);
+  font-size: var(--text-small);
+  text-align: left;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.mark:hover,
+.mark:focus-visible {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+.dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+}

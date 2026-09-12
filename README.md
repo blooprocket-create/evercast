@@ -72,6 +72,20 @@ Companion models are procedural placeholder art built from primitives at
 runtime, not authored GLBs — `modelKey` is the seam a Blender pack would drop
 into later. See the Companions section of [the architecture guide](docs/ARCHITECTURE.md).
 
+## Starting up
+
+Start, loading and first-run onboarding are one screen, not three. The boot gate
+shows the title while Babylon and six megabytes of models stream in behind it,
+so the world arrives complete rather than assembling itself in view, and the
+button that opens it is also the gesture browsers demand before any sound can
+play - which an idle game otherwise never collects.
+
+Onboarding is derived rather than scripted. One hint shows at a time, each one a
+question about live state, and each retires because the player did the thing it
+asked for rather than because anything recorded that they saw it. Only the
+opening premise is stored, in the save rather than beside the preferences, so it
+travels with an export and a Rebirth never replays it.
+
 ## Spell tree
 
 One spell, 127 nodes: three routes, nine identities with three-rank side paths,

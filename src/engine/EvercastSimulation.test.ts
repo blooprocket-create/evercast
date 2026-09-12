@@ -88,6 +88,35 @@ describe('EvercastSimulation', () => {
     expect(snapshot.farmStage).toBeLessThan(snapshot.stage);
   });
 
+  describe('story flags', () => {
+    it('records a beat once and refuses it thereafter', () => {
+      const sim = new EvercastSimulation();
+      expect(sim.getSnapshot().storyFlags).toEqual([]);
+
+      expect(sim.execute({ type: 'mark_story_flag', flag: 'premise_seen' })).toBe(true);
+      expect(sim.getSnapshot().storyFlags).toEqual(['premise_seen']);
+
+      // Idempotent, and the refusal matters: `runCommand` publishes and saves
+      // on acceptance, so a re-dismissal that returned true would spend a write
+      // on nothing.
+      expect(sim.execute({ type: 'mark_story_flag', flag: 'premise_seen' })).toBe(false);
+      expect(sim.getSnapshot().storyFlags).toEqual(['premise_seen']);
+    });
+
+    it('survives a Rebirth, because reading something is not run progress', () => {
+      // Same shape prestige/RebirthSystem.test.ts uses: the unlock stage is
+      // config, so the boundary can be reached in a test rather than waited for.
+      const sim = new EvercastSimulation({ config: { rebirthUnlockStage: 2 } });
+      sim.execute({ type: 'mark_story_flag', flag: 'premise_seen' });
+      sim.advance(30, { presentationEvents: false });
+
+      expect(sim.getSnapshot().canRebirth).toBe(true);
+      expect(sim.execute({ type: 'rebirth' })).toBe(true);
+      expect(sim.getSnapshot().rebirths).toBe(1);
+      expect(sim.getSnapshot().storyFlags).toEqual(['premise_seen']);
+    });
+  });
+
   describe('advance guard', () => {
     it('still stops a loop that has run away', () => {
       const sim = new EvercastSimulation({

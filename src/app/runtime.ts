@@ -50,6 +50,15 @@ const boot = startSimulation();
 export const simulation = boot.simulation;
 
 /**
+ * Whether this session picked up a save or started one. The boot gate reads it
+ * to decide whether it is greeting someone or welcoming them back, which is the
+ * whole difference between a title screen and a Continue button. A save that
+ * failed to resume counts as fresh, because that is what the player is about to
+ * be playing.
+ */
+export const resumedFromSave = boot.resumed;
+
+/**
  * Away time accepted but not yet simulated.
  *
  * It is deliberately not applied at boot. A day of catch-up is seconds of solid
