@@ -65,9 +65,15 @@ describe('title sigil', () => {
   });
 
   /**
-   * "Barely there" and "never resolves", as numbers CI can hold us to.
+   * Perceptible, and unhurried, as numbers CI can hold us to.
+   *
+   * The interesting measure is not the full turn - it is the *symmetry*. These
+   * rings have twelve spokes, so one looks identical again after a twelfth of a
+   * turn however slowly it is going. The first build chose rates that took
+   * forty-two seconds to cross that, and on a phone the sigil read as a still
+   * image. Under ten seconds is what makes it read as alive.
    */
-  it('drifts slowly, in alternating directions, without ever repeating', async () => {
+  it('turns fast enough to be seen and slow enough not to spin', async () => {
     const scene = freshScene();
     const sigil = sigilIn(scene);
     await sigil.ready;
@@ -76,49 +82,88 @@ describe('title sigil', () => {
     for (let second = 0; second < 10; second += 1) sigil.update(1);
 
     const turned = SIGIL_LAYERS.map((layer) => named(layer.id).rotation.y);
-    // Ten seconds in, nothing has moved more than a third of a radian.
-    for (const rotation of turned) expect(Math.abs(rotation) / 10).toBeLessThan(0.035);
-    // Neighbours counter-turn, which is what stops it reading as one spinning disc.
+    for (const layer of SIGIL_LAYERS) {
+      const rate = Math.abs(layer.drift);
+      // A twelfth of a turn in under twelve seconds: visible without staring.
+      expect((2 * Math.PI) / 12 / rate).toBeLessThan(12);
+      // A full turn no faster than forty seconds: drift, never a spin.
+      expect((2 * Math.PI) / rate).toBeGreaterThan(40);
+    }
+
+    // Neighbours counter-turn, which is what stops it reading as one spinning
+    // disc - and it means the relative motion a viewer sees is the sum of two
+    // rates rather than one.
     expect(Math.sign(turned[0])).not.toBe(Math.sign(turned[1]));
     expect(Math.sign(turned[1])).not.toBe(Math.sign(turned[2]));
   });
 
   /**
-   * "Never resolves", tested the way a player would notice it rather than by
-   * arithmetic about ratios.
+   * What keeps the composition from settling, now that it is more than spin.
    *
-   * The rates are in the golden ratio, and the useful consequence is not that
-   * the numbers are irrational - it is that the three rings never come back to
-   * the arrangement they started in. So simulate an hour, far longer than any
-   * title screen is looked at, and assert the composition never returns.
+   * An earlier version of this test claimed the rings never return to their
+   * starting arrangement inside an hour, and at the old rates that was true to
+   * within eleven degrees. At these rates the phases wrap far more often and
+   * they come back within three, so the claim no longer holds and has been
+   * dropped rather than loosened into meaninglessness.
    *
-   * Worth noting why the obvious test is wrong: demanding each pairwise ratio
-   * sit far from every simple p/q fails for phi, because Fibonacci fractions
-   * like 3/5 are its *best* rational approximations. Phi is the hardest number
-   * to approximate relative to denominator size, not in absolute terms.
+   * What is true, and is what the design actually rests on, is that no two
+   * clocks in the sigil agree: three rotation periods in the golden ratio, and
+   * three breath periods sharing no factor with them or with each other. A
+   * rotational near-coincidence no longer produces the same picture, because the
+   * rings will be at different points of their swell when it happens.
    */
-  it('never returns the rings to the arrangement they started in', () => {
-    const rates = SIGIL_LAYERS.map((layer) => layer.drift);
-    const fromStart = (radians: number) => {
-      const wrapped = Math.abs(radians) % (2 * Math.PI);
-      return Math.min(wrapped, 2 * Math.PI - wrapped);
-    };
+  it('runs every layer on a clock that agrees with no other', () => {
+    const rotation = SIGIL_LAYERS.map((layer) => (2 * Math.PI) / Math.abs(layer.drift));
+    const breath = SIGIL_LAYERS.map((layer) => layer.breathSeconds);
 
-    const closestWithin = (seconds: number) => {
-      let closest = Number.POSITIVE_INFINITY;
-      // Skip the first few seconds, where the rings have not yet left the
-      // arrangement they are being measured against.
-      for (let t = 10; t <= seconds; t += 0.25) {
-        closest = Math.min(closest, Math.max(...rates.map((rate) => fromStart(rate * t))));
+    for (let i = 1; i < rotation.length; i += 1) {
+      // Golden, so the rotations themselves are as far from a shared period as
+      // two numbers can be.
+      expect(Math.abs(rotation[i - 1] / rotation[i])).toBeCloseTo(1.618, 2);
+    }
+
+    const every = [...rotation, ...breath];
+    expect(new Set(every.map((period) => period.toFixed(3))).size).toBe(every.length);
+    for (let i = 0; i < every.length; i += 1) {
+      for (let j = i + 1; j < every.length; j += 1) {
+        // No period is a simple multiple of another, which is what a shared
+        // factor would mean and what would let the picture recur.
+        const ratio = every[i] / every[j];
+        for (const simple of [0.5, 1, 1.5, 2, 2.5, 3]) {
+          expect(Math.abs(ratio - simple)).toBeGreaterThan(0.04);
+        }
       }
-      return closest;
-    };
+    }
+  });
 
-    // Measured: half an hour never brings it within 18.7 degrees of the start,
-    // and a full hour never within 11.1. The thresholds sit just under those, so
-    // this fails if the rates are retuned into something that does loop.
-    expect(closestWithin(1800)).toBeGreaterThan(0.3);
-    expect(closestWithin(3600)).toBeGreaterThan(0.15);
+  /**
+   * The swell is the half that survives symmetry.
+   *
+   * A ring that only spins changes phase, and a twelve-spoke ring hides a change
+   * of phase. Rings that swell on different clocks change the gaps between them,
+   * which is a change of shape - and that is what reads as alive on a form this
+   * regular.
+   */
+  it('changes the spacing between rings, not just their phase', async () => {
+    const scene = freshScene();
+    const sigil = sigilIn(scene);
+    await sigil.ready;
+
+    const named = (id: string) => scene.meshes.find((mesh) => mesh.name === `Title ${id}`)!;
+    const gapNow = () =>
+      named(SIGIL_LAYERS[0].id).scaling.x - named(SIGIL_LAYERS[2].id).scaling.x;
+
+    sigil.update(0);
+    const gaps = [gapNow()];
+    for (let sample = 0; sample < 12; sample += 1) {
+      for (let frame = 0; frame < 60; frame += 1) sigil.update(1 / 60);
+      gaps.push(gapNow());
+    }
+
+    const spread = Math.max(...gaps) - Math.min(...gaps);
+    // In world units, against an outer ring built at 7.6 - a visible change in
+    // the composition, not a rounding wobble.
+    expect(spread).toBeGreaterThan(0.15);
   });
 
   /**

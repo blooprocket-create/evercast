@@ -59,21 +59,37 @@ export interface SigilLayer {
   readonly scaling: number;
   /** Radians per second. Signs alternate so neighbouring rings counter-turn. */
   readonly drift: number;
+  /** How far this ring swells and shrinks, as a fraction of its own size. */
+  readonly breadth: number;
+  /** Seconds for one swell. Non-commensurate with every other period here. */
+  readonly breathSeconds: number;
 }
 
 /**
  * Three rings, and the rates are the whole design.
  *
  * They are in ratio 1 : phi : phi squared, so no two ever return to a shared
- * phase and the composition is never twice the same for the length of a
- * session. The outer rim travels about 3.7 px/s on a 1080-tall frame: findable
- * if you fix on one spoke, invisible as motion. That is the number "barely
- * there" means here, and `TitleSigil.test.ts` holds it to it.
+ * phase and the composition is never twice the same for the length of a session.
+ *
+ * The first build ran these four times slower, on the theory that a title screen
+ * should be barely-there. On a phone it read as a still image, and the reason is
+ * worth writing down: a twelve-spoke ring is *rotationally symmetric every
+ * thirty degrees*, so it looks identical again after 0.52 radians however
+ * carefully the rate was chosen. Rotating a symmetric form is close to the least
+ * perceptible motion available. At these rates the outer rim turns through that
+ * symmetry in about ten seconds instead of forty, and neighbouring rings counter-
+ * turn, so the relative motion a viewer actually sees is the sum of two rates,
+ * not one.
+ *
+ * `breadth` is the other half of the answer, and the better half. A ring that
+ * only spins changes phase; rings that swell and shrink on different clocks
+ * change the *spacing between them*, which is a change of shape, and a change of
+ * shape survives symmetry. It is what stops the sigil reading as a rigid wheel.
  */
 export const SIGIL_LAYERS: readonly SigilLayer[] = [
-  { id: 'arcane_ring_a', scaling: 7.6, drift: 0.0125 },
-  { id: 'arcane_glyph_a', scaling: 7.0, drift: -0.0202 },
-  { id: 'arcane_ring_b', scaling: 5.4, drift: 0.0327 },
+  { id: 'arcane_ring_a', scaling: 7.6, drift: 0.055, breadth: 0.028, breathSeconds: 18.7 },
+  { id: 'arcane_glyph_a', scaling: 7.0, drift: -0.089, breadth: 0.042, breathSeconds: 26.3 },
+  { id: 'arcane_ring_b', scaling: 5.4, drift: 0.144, breadth: 0.035, breathSeconds: 14.9 },
 ];
 
 /**
@@ -87,8 +103,7 @@ export const SIGIL_LAYERS: readonly SigilLayer[] = [
  */
 const HEART = { id: 'arcane_core_a', scaling: 0.8 } as const;
 
-/** Non-commensurate with each other and with every drift rate above. */
-const BREATH_SECONDS = 19.3;
+/** Non-commensurate with each other and with every period above. */
 const PULSE_SECONDS = 11.7;
 const IGNITE_SECONDS = 2.4;
 
@@ -114,6 +129,12 @@ export function prefersReducedMotion(): boolean {
 interface Turning {
   node: TransformNode;
   drift: number;
+  /** The scale it was built at; the breath is measured against this. */
+  base: number;
+  breadth: number;
+  breathSeconds: number;
+  /** Golden-angle stagger, so no two rings are ever at the same point of their swell. */
+  phase: number;
 }
 
 export class TitleSigil {
@@ -175,13 +196,26 @@ export class TitleSigil {
    */
 
   private async build(load: TitleSigilLoader): Promise<void> {
-    const layers = [...SIGIL_LAYERS, { ...HEART, drift: 0 }];
+    // The heart neither turns nor swells; it pulses, so it joins with zeros.
+    const layers: readonly SigilLayer[] = [
+      ...SIGIL_LAYERS,
+      { ...HEART, drift: 0, breadth: 0, breathSeconds: 1 },
+    ];
     await Promise.all(
-      layers.map(async (layer) => {
+      layers.map(async (layer, index) => {
         const mesh = await this.instantiate(load, layer.id, layer.scaling);
         if (!mesh) return;
         if (layer.id === HEART.id) this.heart = mesh;
-        if (layer.drift !== 0) this.turning.push({ node: mesh, drift: layer.drift });
+        if (layer.drift !== 0) {
+          this.turning.push({
+            node: mesh,
+            drift: layer.drift,
+            base: layer.scaling,
+            breadth: layer.breadth,
+            breathSeconds: layer.breathSeconds,
+            phase: index * 2.399,
+          });
+        }
       }),
     );
     // Nothing is visible until the first update, so an ignition that never runs
@@ -250,10 +284,17 @@ export class TitleSigil {
     // effect: the sigil coming up is how the player learns the world has landed.
     const ignition = this.drift ? smoothstep(Math.min(1, this.clock / IGNITE_SECONDS)) : 1;
 
-    for (const { node, drift } of this.turning) node.rotation.y = this.clock * drift;
+    for (const ring of this.turning) {
+      ring.node.rotation.y = this.clock * ring.drift;
+      // Each ring on its own clock, so the gaps between them open and close
+      // rather than the whole wheel pumping as one.
+      const swell = this.drift
+        ? 1 + ring.breadth * Math.sin((2 * Math.PI * this.clock) / ring.breathSeconds + ring.phase)
+        : 1;
+      ring.node.scaling.setAll(ring.base * swell);
+    }
 
-    const breath = this.drift ? 1 + 0.012 * Math.sin((2 * Math.PI * this.clock) / BREATH_SECONDS) : 1;
-    this.root.scaling.setAll(breath * (0.94 + 0.06 * ignition));
+    this.root.scaling.setAll(0.94 + 0.06 * ignition);
 
     for (const mesh of this.owned) mesh.visibility = ignition;
     if (this.heart) {
