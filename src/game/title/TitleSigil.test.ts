@@ -2,14 +2,17 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  AbstractMesh,
+  TransformNode,
   AssetContainer,
   Constants,
   LoadAssetContainerAsync,
   NullEngine,
   Scene,
   StandardMaterial,
+  Vector3,
 } from '@babylonjs/core';
-import { SIGIL_LAYERS, TitleSigil } from './TitleSigil';
+import { SIGIL_LAYERS, SIGIL_MOTES, TitleSigil, type TitleSigilLoader } from './TitleSigil';
 
 /**
  * The real GLBs off disk through a `NullEngine`, which is how every other
@@ -27,6 +30,46 @@ function local(url: string, scene: Scene): Promise<AssetContainer> {
 const sigilIn = (scene: Scene, drift = true) => new TitleSigil(scene, { drift, loader: local });
 
 const freshScene = () => new Scene(new NullEngine());
+
+const meshIn = (scene: Scene, id: string) =>
+  scene.meshes.find((mesh) => mesh.name === `Title ${id}`)!;
+
+/**
+ * Which way a mesh is long, taken from the geometry rather than written down.
+ *
+ * The shards are slivers, and which axis they are slivers along is a fact about
+ * the art - so the test that cares reads it off the vertices instead of
+ * repeating a number that the next export could quietly change.
+ */
+/**
+ * Where a mesh is actually pointing, in world space.
+ *
+ * Not `rotation.y`, and the difference is the whole reason this helper exists.
+ * The glTF loader hands every imported node a `rotationQuaternion`, Babylon
+ * ignores `rotation` outright while one is set, and `clone()` copies it - so
+ * the first sigil to ship set Euler angles that no world matrix ever read and
+ * never turned at all. Three tests asserted the property and passed.
+ *
+ * Everything about turning is therefore asserted through the transform, which
+ * is the thing a renderer would use.
+ */
+function headingOf(mesh: AbstractMesh, root: TransformNode): Vector3 {
+  // The root carries the sigil's own quarter turn, so it has to be current
+  // before anything composed against it means anything.
+  root.computeWorldMatrix(true);
+  mesh.computeWorldMatrix(true);
+  return Vector3.TransformNormal(new Vector3(1, 0, 0), mesh.getWorldMatrix()).normalize();
+}
+
+/** The angle between two headings, which is how far the mesh swept. */
+const sweptBetween = (from: Vector3, to: Vector3) =>
+  Math.acos(Math.min(1, Math.max(-1, Vector3.Dot(from, to))));
+
+function longestAxisOf(mesh: AbstractMesh): Vector3 {
+  const extent = mesh.getBoundingInfo().boundingBox.extendSize;
+  if (extent.x >= extent.y && extent.x >= extent.z) return new Vector3(1, 0, 0);
+  return extent.y >= extent.z ? new Vector3(0, 1, 0) : new Vector3(0, 0, 1);
+}
 
 describe('title sigil', () => {
   it('builds every layer from the real arcane meshes', async () => {
@@ -78,23 +121,36 @@ describe('title sigil', () => {
     const sigil = sigilIn(scene);
     await sigil.ready;
 
-    const named = (id: string) => scene.meshes.find((mesh) => mesh.name === `Title ${id}`)!;
-    for (let second = 0; second < 10; second += 1) sigil.update(1);
+    const before = SIGIL_LAYERS.map((layer) => headingOf(meshIn(scene, layer.id), sigil.root));
+    // Ten seconds in frame-sized steps, because `update` clamps a delta to a
+    // quarter second - ten calls of `update(1)` is two and a half seconds of
+    // sigil, which is how an earlier version of this test came to compare a
+    // rate against a quarter of its own elapsed time and not notice.
+    for (let frame = 0; frame < 600; frame += 1) sigil.update(1 / 60);
+    const after = SIGIL_LAYERS.map((layer) => headingOf(meshIn(scene, layer.id), sigil.root));
 
-    const turned = SIGIL_LAYERS.map((layer) => named(layer.id).rotation.y);
-    for (const layer of SIGIL_LAYERS) {
+    for (const [index, layer] of SIGIL_LAYERS.entries()) {
       const rate = Math.abs(layer.drift);
       // A twelfth of a turn in under twelve seconds: visible without staring.
       expect((2 * Math.PI) / 12 / rate).toBeLessThan(12);
       // A full turn no faster than forty seconds: drift, never a spin.
       expect((2 * Math.PI) / rate).toBeGreaterThan(40);
+      // And the mesh is what moved, not a field nothing composes.
+      expect(sweptBetween(before[index], after[index]), `${layer.id} never turned`).toBeCloseTo(
+        rate * 10,
+        6,
+      );
     }
 
     // Neighbours counter-turn, which is what stops it reading as one spinning
     // disc - and it means the relative motion a viewer sees is the sum of two
-    // rates rather than one.
-    expect(Math.sign(turned[0])).not.toBe(Math.sign(turned[1]));
-    expect(Math.sign(turned[1])).not.toBe(Math.sign(turned[2]));
+    // rates rather than one. Read as the direction the transform swept: the
+    // rings turn about their own local Y, which the root stands up onto world Z.
+    const sense = SIGIL_LAYERS.map((_, index) =>
+      Math.sign(Vector3.Cross(before[index], after[index]).z),
+    );
+    expect(sense[0]).not.toBe(sense[1]);
+    expect(sense[1]).not.toBe(sense[2]);
   });
 
   /**
@@ -224,13 +280,130 @@ describe('title sigil', () => {
     const sigil = sigilIn(scene, false);
     await sigil.ready;
 
+    const before = SIGIL_LAYERS.map((layer) => headingOf(meshIn(scene, layer.id), sigil.root));
     for (let second = 0; second < 10; second += 1) sigil.update(1);
 
-    for (const layer of SIGIL_LAYERS) {
-      const mesh = scene.meshes.find((candidate) => candidate.name === `Title ${layer.id}`)!;
-      // Negative drift times a zero clock is -0, which is still no rotation.
-      expect(Math.abs(mesh.rotation.y)).toBe(0);
+    for (const [index, layer] of SIGIL_LAYERS.entries()) {
+      const mesh = meshIn(scene, layer.id);
+      expect(sweptBetween(before[index], headingOf(mesh, sigil.root))).toBeCloseTo(0, 9);
       expect(mesh.visibility).toBe(1);
+    }
+  });
+
+  /**
+   * The shards are the only part of this that can show a rotation, so which way
+   * they point is not a detail.
+   *
+   * They import as slivers along their own local Y, and the root's quarter turn
+   * about X aims local Y straight down the camera's axis - so a shard left
+   * alone renders end-on, as a dot, and setting `rotation.y` on it spins it
+   * about its own length where there is nothing to see. That shipped, under a
+   * comment claiming the opposite.
+   *
+   * Asserted as the thing it is rather than as the fix: a shard's long axis has
+   * to lie along the direction it is actually travelling. Measured by moving it
+   * and comparing, so it stays true whichever axis a future export is long on.
+   */
+  it('flies its shards along their travel rather than end-on to the camera', async () => {
+    const scene = freshScene();
+    const sigil = sigilIn(scene);
+    await sigil.ready;
+
+    // Past the ignition first. It scales the root, and a root that is still
+    // growing adds a radial component to every shard's travel.
+    for (let frame = 0; frame < 200; frame += 1) sigil.update(1 / 60);
+
+    const posed = (id: string) => {
+      const mesh = meshIn(scene, id);
+      // The root carries the sigil's whole transform, so it has to be current
+      // before a child composed against it means anything.
+      sigil.root.computeWorldMatrix(true);
+      mesh.computeWorldMatrix(true);
+      return mesh;
+    };
+
+    const before = SIGIL_MOTES.map((mote) => posed(mote.id).getAbsolutePosition().clone());
+    // Short enough that the chord of the arc is the tangent to well inside the
+    // tolerance below, long enough to be far above float noise.
+    sigil.update(0.2);
+
+    for (const [index, mote] of SIGIL_MOTES.entries()) {
+      const mesh = posed(mote.id);
+      const travel = mesh.getAbsolutePosition().subtract(before[index]);
+      expect(travel.length(), `${mote.id} never moved`).toBeGreaterThan(1e-3);
+
+      const along = Vector3.TransformNormal(longestAxisOf(mesh), mesh.getWorldMatrix()).normalize();
+      // Either end of the sliver leads; only the axis is the claim.
+      const alignment = Math.abs(Vector3.Dot(along, travel.normalize()));
+      expect(alignment, `${mote.id} is broadside to its own orbit`).toBeGreaterThan(0.99);
+    }
+  });
+
+  /**
+   * Which ring a shard rides has to survive the network.
+   *
+   * `turning` is filled from inside a `Promise.all`, so its order is whichever
+   * download finished first - and the first version of this looked the ring up
+   * by position in that array. On a cold cache the shards rode the rings they
+   * name; on a warm one they rode whichever landed first, and the pairing was
+   * different from load to load.
+   *
+   * The releases below make the completion order the exact reverse of the
+   * declared order, which is the condition under which a positional lookup is
+   * wrong about all three.
+   */
+  it('rides the ring it names, whatever order the downloads land in', async () => {
+    const scene = freshScene();
+    const rings = SIGIL_LAYERS.map((layer) => layer.id);
+    const gates = new Map<string, () => void>();
+    const held = new Map<string, Promise<void>>();
+    for (const id of rings) {
+      let open!: () => void;
+      held.set(
+        id,
+        new Promise<void>((resolve) => {
+          open = resolve;
+        }),
+      );
+      gates.set(id, open);
+    }
+
+    const landed: string[] = [];
+    const staggered: TitleSigilLoader = async (url, target) => {
+      const id = url.slice(url.lastIndexOf('/') + 1).replace('.glb', '');
+      // Undefined for the heart and the shards, and awaiting that resolves at
+      // once - only the rings are held.
+      await held.get(id);
+      const container = await local(url, target);
+      landed.push(id);
+      return container;
+    };
+
+    const sigil = new TitleSigil(scene, { drift: true, loader: staggered });
+    for (const id of [...rings].reverse()) {
+      gates.get(id)!();
+      // Drained rather than raced: one ring has to be all the way through the
+      // loader before the next is let go, or the order is not actually decided.
+      for (let tick = 0; tick < 4; tick += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+    }
+    await sigil.ready;
+
+    // Without this the test is vacuous - it only says anything while the
+    // completion order really does disagree with the declared one.
+    expect(landed.filter((id) => rings.includes(id))).toEqual([...rings].reverse());
+
+    for (let frame = 0; frame < 200; frame += 1) sigil.update(1 / 60);
+
+    for (const mote of SIGIL_MOTES) {
+      const shard = meshIn(scene, mote.id);
+      const ring = meshIn(scene, mote.rides);
+      const want = ring.rotation.y + mote.phase;
+      const got = Math.atan2(shard.position.z, shard.position.x);
+      // Wrapped into (-pi, pi], because these are angles and 0 is 2pi.
+      const gap = Math.atan2(Math.sin(got - want), Math.cos(got - want));
+      expect(Math.abs(gap), `${mote.id} is not riding ${mote.rides}`).toBeLessThan(1e-6);
     }
   });
 
