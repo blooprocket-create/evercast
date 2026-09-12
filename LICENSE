@@ -1,0 +1,36 @@
+Copyright (c) 2026 Blooprocket. All rights reserved.
+
+Evercast - including its source code, game design, written content, 3D models,
+textures, animations, audio and every other asset in this repository - is
+proprietary.
+
+No licence is granted. You may not copy, modify, merge, publish, distribute,
+sublicense, sell, reverse engineer, or create derivative works from any part of
+this software or its assets, in whole or in part, without the express prior
+written permission of the copyright holder.
+
+Having access to this repository does not grant any of the rights above. Nor
+does being able to read the source: the deployed application ships source maps
+alongside its bundle, so the original TypeScript can be read in any browser's
+developer tools. That is a convenience for debugging, not a licence.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+--------------------------------------------------------------------------
+
+Third-party components
+
+The terms above cover Evercast's own code and assets only.
+
+Evercast depends on third-party software that stays under its own licence:
+Babylon.js under Apache-2.0, React, React DOM and break_eternity.js under MIT.
+Nothing above restricts, or purports to restrict, any right those licences
+grant you in respect of those components. Their notices are reproduced in
+THIRD_PARTY_NOTICES.md, which is where the Apache-2.0 attribution Babylon.js
+requires is kept.

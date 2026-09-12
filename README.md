@@ -55,6 +55,18 @@ honestly promise.
   sheet, a focus ring on every focusable, reduced-motion honoured, and every
   `aria-modal` backed by something that actually manages focus.
 
+## Licence
+
+Evercast is proprietary: copyright (c) 2026 Blooprocket, all rights reserved.
+See [LICENSE](LICENSE). It covers this project's own code and assets only -
+the third-party dependencies stay under their own terms, reproduced in
+[third-party notices](THIRD_PARTY_NOTICES.md).
+
+Note that the production build ships source maps, so the TypeScript is
+readable in any browser's developer tools. That is deliberate - it makes a
+production stack trace worth reading - and the licence says plainly that being
+able to read the source is not a licence to use it.
+
 ## Architecture rules
 
 - `src/content` owns authored enemies, zones, gear data and spell-tree definitions.
