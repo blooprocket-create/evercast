@@ -24,16 +24,38 @@ export function Field({ label, hint, disabled, children }: FieldProps) {
   );
 }
 
+/**
+ * The keys that move a range input. `onCommit` fires on the way up from one of
+ * these and on the end of a drag - not on every keyup, or tabbing out of a
+ * volume slider would play a sound at the player.
+ */
+const ADJUST_KEYS = new Set([
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowUp',
+  'ArrowDown',
+  'Home',
+  'End',
+  'PageUp',
+  'PageDown',
+]);
+
 interface SliderProps {
   value: number;
   onChange: (value: number) => void;
+  /**
+   * Called once the player finishes setting the value, rather than on every
+   * step through it. A volume slider auditions itself here: doing it from
+   * `onChange` fires up to twenty times across one drag.
+   */
+  onCommit?: () => void;
   /** Rendered to the right of the track. */
   format?: (value: number) => string;
   disabled?: boolean;
   label: string;
 }
 
-export function Slider({ value, onChange, format, disabled, label }: SliderProps) {
+export function Slider({ value, onChange, onCommit, format, disabled, label }: SliderProps) {
   return (
     <>
       <input
@@ -46,6 +68,10 @@ export function Slider({ value, onChange, format, disabled, label }: SliderProps
         disabled={disabled}
         aria-label={label}
         onChange={(event) => onChange(Number(event.target.value) / 100)}
+        onPointerUp={onCommit}
+        onKeyUp={(event) => {
+          if (ADJUST_KEYS.has(event.key)) onCommit?.();
+        }}
       />
       <span className={styles.readout}>
         {format ? format(value) : `${Math.round(value * 100)}%`}

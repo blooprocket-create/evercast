@@ -44,6 +44,13 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <path d="M6 4v16M18 4v16M6 9h12M6 15h12" />
     </>
   ),
+  audio: (
+    <>
+      <path d="M4 9.5h3.5L12 5.5v13L7.5 14.5H4z" />
+      <path d="M15.8 9.4a3.6 3.6 0 0 1 0 5.2" />
+      <path d="M18.6 6.8a7.4 7.4 0 0 1 0 10.4" />
+    </>
+  ),
   map: (
     <>
       <path d="m3 6 6-2 6 2 6-2v14l-6 2-6-2-6 2z" />
