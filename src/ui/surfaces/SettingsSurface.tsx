@@ -59,8 +59,8 @@ export function SettingsSurface() {
 function AudioSection({ settings }: { settings: ReturnType<typeof useUiSettings>['audio'] }) {
   /**
    * Only ever set by a real attempt to make a sound. A browser that will not
-   * open an audio device is worth saying out loud, but guessing at it up front
-   * would put a warning across a game that works.
+   * play is worth saying out loud, but guessing at it up front would put a
+   * warning across a game that works.
    */
   const [blocked, setBlocked] = useState(false);
 
@@ -68,10 +68,13 @@ function AudioSection({ settings }: { settings: ReturnType<typeof useUiSettings>
    * A level you cannot hear is a level you cannot set: the settings screen is
    * covering the fight, so there is nothing playing to judge a slider against.
    * Releasing one plays a hit through the same bus at the same mix.
+   *
+   * The engine answers rather than being asked: whether a device took the
+   * sound is only known after a suspended context has been given the chance to
+   * resume, which is a promise, not a flag to read on the next line.
    */
   const audition = () => {
-    audio.preview();
-    setBlocked(!audio.running);
+    void audio.preview().then((played) => setBlocked(!played));
   };
 
   return (
@@ -135,8 +138,8 @@ function AudioSection({ settings }: { settings: ReturnType<typeof useUiSettings>
 
       {blocked && (
         <p className={styles.notice}>
-          This browser will not let Evercast open an audio device, so nothing will play. The levels
-          here are still saved; reloading the page tries again.
+          This browser will not play sound for Evercast, so the levels here are set but silent.
+          They are still saved; reloading the page tries again.
         </p>
       )}
     </div>

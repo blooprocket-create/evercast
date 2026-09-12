@@ -33,6 +33,35 @@ const SILENT_MIX: AudioMix = { master: 0, music: 0, effects: 0, muted: true };
 const LOOKAHEAD_SECONDS = 0.4;
 const SCHEDULER_MS = 90;
 
+/**
+ * The time constant the bus gains ramp with, and how long to call them settled.
+ *
+ * `setTargetAtTime` is asymptotic, so "settled" is a judgement: five time
+ * constants leaves 0.7% of the change outstanding, which is 43dB down and
+ * inaudible under anything.
+ */
+const MIX_RAMP_SECONDS = 0.04;
+const MIX_SETTLE_SECONDS = MIX_RAMP_SECONDS * 5;
+
+/**
+ * Auditions start a touch ahead of `currentTime`, which a busy thread can
+ * otherwise leave already in the past - a voice starting late begins
+ * mid-envelope and clicks.
+ */
+const PREVIEW_LEAD_SECONDS = 0.02;
+
+/**
+ * When an audition should start, given the clock and when the gains will have
+ * caught up with the mix.
+ *
+ * The wait is the whole point. Dropping a slider from 85% to zero and pressing
+ * test moves the gain by a ramp, not a jump: 20ms later the bus is still at
+ * 61% of where it was, so the hit lands loud on a slider that reads zero.
+ */
+export function previewStartAt(now: number, mixSettledAt: number): number {
+  return Math.max(now + PREVIEW_LEAD_SECONDS, mixSettledAt);
+}
+
 /** Sliders are linear; ears are not. */
 const perceived = (value: number) => Math.pow(Math.min(1, Math.max(0, value)), 1.6);
 
@@ -94,6 +123,8 @@ export class AudioEngine {
   private intensity = 0;
   private bar = 0;
   private nextBarAt = 0;
+  /** When the bus gains will have caught up with the last mix set. */
+  private mixSettledAt = 0;
   private scheduler: number | null = null;
   private detach: (() => void) | null = null;
 
@@ -185,9 +216,10 @@ export class AudioEngine {
     const now = context.currentTime;
     const level = this.mix.muted ? 0 : perceived(this.mix.master);
     // A time constant rather than a jump, so dragging a slider does not click.
-    this.master.gain.setTargetAtTime(level, now, 0.04);
-    this.musicBus.gain.setTargetAtTime(perceived(this.mix.music) * 0.9, now, 0.04);
-    this.effectsBus.gain.setTargetAtTime(perceived(this.mix.effects) * 0.8, now, 0.04);
+    this.master.gain.setTargetAtTime(level, now, MIX_RAMP_SECONDS);
+    this.musicBus.gain.setTargetAtTime(perceived(this.mix.music) * 0.9, now, MIX_RAMP_SECONDS);
+    this.effectsBus.gain.setTargetAtTime(perceived(this.mix.effects) * 0.8, now, MIX_RAMP_SECONDS);
+    this.mixSettledAt = now + MIX_SETTLE_SECONDS;
   }
 
   setScene(scene: SceneMood): void {
@@ -227,7 +259,8 @@ export class AudioEngine {
   }
 
   /**
-   * Plays one voice on the effects bus, on demand.
+   * Plays one voice on the effects bus, on demand, resolving with whether the
+   * device was actually able to take it.
    *
    * A volume slider that can only prove itself mid-fight is a slider nobody can
    * set: the settings screen is covering the game while you drag it, so there
@@ -240,15 +273,34 @@ export class AudioEngine {
    * button reads as a broken control - and one voice per press is a rate no
    * hand can push anywhere near the ceiling anyway.
    */
-  preview(voice: VoiceName = 'impact'): void {
+  async preview(voice: VoiceName = 'impact'): Promise<boolean> {
     const context = this.context;
-    if (!context || !this.effectsBus || this.mix.muted) return;
+    const effectsBus = this.effectsBus;
+    if (!context || !effectsBus) return false;
+    // Silence the player chose is not a device that cannot play.
+    if (this.mix.muted) return true;
 
-    // Scheduled a beat ahead rather than at `currentTime`, which a busy thread
-    // can leave already in the past - a voice starting late begins mid-envelope
-    // and clicks.
-    const at = context.currentTime + 0.02;
-    VOICES[voice]({ context, destination: this.effectsBus, at, gain: 0.6, detune: 0 });
+    /*
+     * Every caller is a click, so this is a gesture the browser will accept.
+     * `running` only says a context exists: Safari can hand one back that has
+     * never started, and a tab coming out of the background resumes on a
+     * promise. Both leave a context whose clock is not moving, where an
+     * audition is queued and simply never heard.
+     */
+    if (context.state === 'suspended') {
+      try {
+        await context.resume();
+      } catch {
+        return false;
+      }
+    }
+    // Re-checked rather than assumed: the await above is long enough for the
+    // scene to rebuild or the engine to be disposed out from under us.
+    if (this.context !== context || context.state !== 'running') return false;
+
+    const at = previewStartAt(context.currentTime, this.mixSettledAt);
+    VOICES[voice]({ context, destination: effectsBus, at, gain: 0.6, detune: 0 });
+    return true;
   }
 
   /**

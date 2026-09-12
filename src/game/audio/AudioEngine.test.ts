@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EvercastSimulation } from '../../engine/EvercastSimulation';
-import { AudioEngine, sceneMoodFor } from './AudioEngine';
+import { AudioEngine, previewStartAt, sceneMoodFor } from './AudioEngine';
 
 const at = (phase: 'travel' | 'combat', alive: number, boss = false, zone = 1) =>
   sceneMoodFor({ zone, boss, phase, encounterAliveEnemies: alive });
@@ -58,22 +58,44 @@ describe('AudioEngine without a browser', () => {
 
   /**
    * The settings screen calls this on every slider release, so it runs long
-   * before the first gesture has built a context - and it must say so through
-   * `running` rather than by throwing, because that is the flag the screen
-   * reads to tell the player their browser is refusing to play.
+   * before the first gesture has built a context. It has to answer rather than
+   * throw: the screen shows its "this browser will not play sound" warning off
+   * what this resolves with.
    */
-  it('auditions nothing, and reports it, before there is a context', () => {
+  it('auditions nothing, and reports it, before there is a context', async () => {
     const engine = new AudioEngine();
     engine.setMix({ master: 1, music: 1, effects: 1, muted: false });
 
-    expect(() => engine.preview()).not.toThrow();
-    expect(() => engine.preview('bossKill')).not.toThrow();
+    await expect(engine.preview()).resolves.toBe(false);
+    await expect(engine.preview('bossKill')).resolves.toBe(false);
     expect(engine.running).toBe(false);
   });
 
-  it('auditions nothing while muted', () => {
+  it('auditions nothing while muted, without throwing', async () => {
     const engine = new AudioEngine();
     engine.setMix({ master: 1, music: 1, effects: 1, muted: true });
-    expect(() => engine.preview()).not.toThrow();
+    await expect(engine.preview()).resolves.toBe(false);
+  });
+});
+
+/**
+ * `applyMix` ramps the bus gains rather than jumping them, so an audition fired
+ * the instant a slider is released plays through whatever the gain happens to
+ * be partway there. Dropping effects from 85% to zero and pressing test used to
+ * land a hit at 61% of the old level on a slider reading zero.
+ */
+describe('previewStartAt', () => {
+  it('waits for a gain ramp still in flight', () => {
+    expect(previewStartAt(1, 1.2)).toBe(1.2);
+  });
+
+  it('does not wait once the gains have caught up', () => {
+    expect(previewStartAt(2, 1.2)).toBeCloseTo(2.02);
+  });
+
+  it('always leads the clock, so a voice never starts in the past', () => {
+    for (const [now, settled] of [[0, 0], [5, -1], [3, 3]]) {
+      expect(previewStartAt(now, settled)).toBeGreaterThan(now);
+    }
   });
 });
