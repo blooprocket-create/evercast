@@ -5,15 +5,9 @@ import type { EquipmentState, GearPieceState, GearSlot } from '../gear/types';
 import { COMPANION_BY_ID } from '../companions/CompanionCatalog';
 import { createInitialCompanionsState } from '../companions/CompanionSystem';
 import type { CompanionCombatant, CompanionsState, OwnedCompanion } from '../companions/types';
-import { PARTY_SIZE } from '../companions/types';
 import type { EnemyState, GameState } from '../model';
 import { big } from '../numbers';
-import { totalFirstClearEssenceEarned } from '../progression/EssenceEconomy';
-import {
-  SPELL_TREE_NODE_BY_ID,
-  SPELL_TREE_STARTER_POINTS,
-  spellPointCost,
-} from '../spellTree/SpellTreeCatalog';
+import { SPELL_TREE_NODE_BY_ID } from '../spellTree/SpellTreeCatalog';
 import {
   buildSpellFromTree,
   canActivateSpellNode,
@@ -25,12 +19,22 @@ import { createInitialGameState } from '../state';
 
 export const CURRENT_SAVE_VERSION = 7;
 
+/**
+ * The oldest save still brought forward.
+ *
+ * v1-v4 migrations were dropped once the format settled: they carried a second
+ * enemy shape, a pre-encounter run shape and a reconciliation pass for the
+ * repeatable-Essence economy that no longer exists. v5 and v6 stay because they
+ * are read by the current path and cost two conditionals, not a code path.
+ * Anything older is refused, `BrowserSaveStore.load` reports it, and the player
+ * starts fresh rather than loading a state this codec can no longer describe.
+ */
+export const MINIMUM_SAVE_VERSION = 5;
+
 type SerializedEnemy = Omit<EnemyState, 'hp' | 'maxHp' | 'attackDamage'> & {
   hp: string;
   maxHp: string;
   attackDamage: string;
-  // v3-v5 saves may contain the old repeatable-Essence reward field. It is ignored on load.
-  reward?: string;
 };
 
 /**
@@ -45,7 +49,7 @@ type SerializedCompanion = Omit<CompanionCombatant, 'hp' | 'maxHp' | 'shield'> &
   shield?: string;
 };
 
-type SerializedRunV3 = Omit<
+type SerializedRun = Omit<
   GameState['run'],
   'essence' | 'mage' | 'enemies' | 'companions' | 'benchedCompanions'
 > & {
@@ -65,22 +69,6 @@ interface SerializedCompanions {
   pityCounter: number;
 }
 
-type LegacyEnemy = Omit<EnemyState, 'instanceId' | 'hp' | 'maxHp' | 'attackDamage'> & {
-  hp: string;
-  maxHp: string;
-  attackDamage: string;
-  reward?: string;
-};
-
-type LegacySerializedRun = Omit<
-  GameState['run'],
-  'essence' | 'mage' | 'enemies' | 'encounter' | 'nextEnemyInstanceId' | 'companions'
-> & {
-  essence: string;
-  mage: { hp: string; maxHp: string };
-  enemy?: LegacyEnemy | null;
-};
-
 type SerializedMeta = Omit<GameState['meta'], 'knowledge'> & { knowledge: string };
 
 interface SerializedEquipment {
@@ -93,32 +81,11 @@ interface SerializedSpellTree {
   activatedNodeIds: string[];
 }
 
-interface LegacySaveEnvelopeV3 {
-  version: 3;
-  savedAt?: string;
-  state: {
-    run: SerializedRunV3;
-    meta: SerializedMeta;
-    equipment: SerializedEquipment;
-  };
-}
-
-interface LegacySaveEnvelopeV4 {
-  version: 4;
-  savedAt?: string;
-  state: {
-    run: SerializedRunV3;
-    meta: SerializedMeta;
-    equipment: SerializedEquipment;
-    spellTree: SerializedSpellTree;
-  };
-}
-
 interface LegacySaveEnvelopeV6 {
   version: 6;
   savedAt?: string;
   state: {
-    run: SerializedRunV3;
+    run: SerializedRun;
     meta: SerializedMeta;
     equipment: SerializedEquipment;
     spellTree: SerializedSpellTree;
@@ -129,24 +96,12 @@ export interface SaveEnvelopeV7 {
   version: 7;
   savedAt: string;
   state: {
-    run: SerializedRunV3;
+    run: SerializedRun;
     meta: SerializedMeta;
     equipment: SerializedEquipment;
     spellTree: SerializedSpellTree;
     companions: SerializedCompanions;
   };
-}
-
-interface LegacySaveEnvelopeV1 {
-  version: 1;
-  savedAt?: string;
-  state: { run: LegacySerializedRun; meta: SerializedMeta };
-}
-
-interface LegacySaveEnvelopeV2 {
-  version: 2;
-  savedAt?: string;
-  state: { run: LegacySerializedRun; meta: SerializedMeta; equipment?: SerializedEquipment };
 }
 
 export class SaveCodec {
@@ -203,62 +158,18 @@ export class SaveCodec {
     }
 
     const version = (raw as { version?: unknown }).version;
-    if (typeof version !== 'number' || !Number.isInteger(version) || version < 1 || version > CURRENT_SAVE_VERSION) {
+    if (
+      typeof version !== 'number' ||
+      !Number.isInteger(version) ||
+      version < MINIMUM_SAVE_VERSION ||
+      version > CURRENT_SAVE_VERSION
+    ) {
       throw new Error(`Unsupported Evercast save version: ${String(version)}`);
-    }
-
-    if (version === 1 || version === 2) {
-      const envelope = raw as LegacySaveEnvelopeV1 | LegacySaveEnvelopeV2;
-      const equipment =
-        version === 2
-          ? deserializeEquipment((envelope as LegacySaveEnvelopeV2).state.equipment)
-          : createInitialEquipmentState();
-      const state: GameState = {
-        run: migrateLegacyRun(envelope.state.run),
-        meta: deserializeMeta(envelope.state.meta),
-        equipment,
-        spellTree: createInitialSpellTreeState(),
-        companions: createInitialCompanionsState(),
-      };
-      return {
-        savedAt: new Date(envelope.savedAt ?? Date.now()),
-        state: reconcileLegacyEssenceEconomy(state, this.config),
-      };
-    }
-
-    if (version === 3) {
-      const envelope = raw as LegacySaveEnvelopeV3;
-      const state: GameState = {
-        run: deserializeRunV3(envelope.state.run),
-        meta: deserializeMeta(envelope.state.meta),
-        equipment: deserializeEquipment(envelope.state.equipment),
-        spellTree: createInitialSpellTreeState(),
-        companions: createInitialCompanionsState(),
-      };
-      return {
-        savedAt: new Date(envelope.savedAt ?? Date.now()),
-        state: reconcileLegacyEssenceEconomy(state, this.config),
-      };
-    }
-
-    if (version === 4) {
-      const envelope = raw as LegacySaveEnvelopeV4;
-      const state: GameState = {
-        run: deserializeRunV3(envelope.state.run),
-        meta: deserializeMeta(envelope.state.meta),
-        equipment: deserializeEquipment(envelope.state.equipment),
-        spellTree: deserializeSpellTree(envelope.state.spellTree, true),
-        companions: createInitialCompanionsState(),
-      };
-      return {
-        savedAt: new Date(envelope.savedAt ?? Date.now()),
-        state: reconcileLegacyEssenceEconomy(state, this.config),
-      };
     }
 
     const envelope = raw as SaveEnvelopeV7 | LegacySaveEnvelopeV6;
     const state: GameState = {
-      run: deserializeRunV3(envelope.state.run),
+      run: deserializeRun(envelope.state.run),
       meta: deserializeMeta(envelope.state.meta),
       equipment: deserializeEquipment(envelope.state.equipment),
       spellTree: deserializeSpellTree(envelope.state.spellTree, version === 5),
@@ -355,16 +266,15 @@ function deserializeCompanions(companions: SerializedCompanions | undefined): Co
 }
 
 function deserializeEnemy(enemy: SerializedEnemy): EnemyState {
-  const { reward: _legacyReward, ...current } = enemy;
   return {
-    ...current,
+    ...enemy,
     hp: big(enemy.hp),
     maxHp: big(enemy.maxHp),
     attackDamage: big(enemy.attackDamage),
   };
 }
 
-function deserializeRunV3(run: SerializedRunV3): GameState['run'] {
+function deserializeRun(run: SerializedRun): GameState['run'] {
   return {
     ...run,
     essence: big(run.essence),
@@ -374,25 +284,6 @@ function deserializeRunV3(run: SerializedRunV3): GameState['run'] {
     benchedCompanions: deserializeCompanionList(run.benchedCompanions),
     encounter: run.encounter ?? null,
     nextEnemyInstanceId: Math.max(1, run.nextEnemyInstanceId ?? 1),
-  };
-}
-
-function migrateLegacyRun(run: LegacySerializedRun): GameState['run'] {
-  const { enemy: _legacyEnemy, ...rest } = run;
-  return {
-    ...rest,
-    phase: 'travel',
-    travelElapsed: 0,
-    castCooldown: 0,
-    essence: big(run.essence),
-    mage: { hp: big(run.mage.maxHp), maxHp: big(run.mage.maxHp) },
-    enemies: [],
-    // Saves this old predate companions; the party starts empty rather than
-    // arriving undefined and failing the first time combat iterates it.
-    companions: [],
-    benchedCompanions: [],
-    encounter: null,
-    nextEnemyInstanceId: 1,
   };
 }
 
@@ -446,29 +337,5 @@ function deserializeSpellTree(serialized: SerializedSpellTree | undefined, legac
     });
     if (before === pending.length) break;
   }
-  return state;
-}
-
-function reconcileLegacyEssenceEconomy(state: GameState, config: EngineConfig): GameState {
-  const earnedBudget = totalFirstClearEssenceEarned(state.meta.highestStageEver, config.bossCadence);
-  const requestedPurchased = Math.max(0, Math.floor(state.spellTree.purchasedPoints));
-  let affordablePurchased = 0;
-  let spent = big(0);
-
-  while (affordablePurchased < requestedPurchased) {
-    const cost = big(spellPointCost(affordablePurchased));
-    if (spent.add(cost).cmp(earnedBudget) > 0) break;
-    spent = spent.add(cost);
-    affordablePurchased += 1;
-  }
-
-  const totalAffordablePoints = SPELL_TREE_STARTER_POINTS + affordablePurchased;
-  state.spellTree = {
-    purchasedPoints: affordablePurchased,
-    // Nodes are stored in activation order, so a prefix preserves connected pathing.
-    activatedNodeIds: state.spellTree.activatedNodeIds.slice(0, totalAffordablePoints),
-  };
-  state.run.essence = earnedBudget.sub(spent);
-  state.run.spell = buildSpellFromTree(state.spellTree);
   return state;
 }

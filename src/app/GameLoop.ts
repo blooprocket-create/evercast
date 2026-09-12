@@ -79,10 +79,42 @@ export function startGameLoop({ scene, onAwayProgress }: GameLoopOptions): () =>
     saveGame();
   };
 
-  const loop = (now: number) => {
+  /**
+   * A frame that threw used to end the game.
+   *
+   * The loop re-arms itself at the end of its own callback, so an exception
+   * anywhere in a frame meant it was never re-armed: the world stopped advancing
+   * and stopped being drawn, permanently, with no way back but a reload. It did
+   * not present as an error either. Babylon drives its own render loop, so the
+   * canvas went on painting the last state it was given, and React went on
+   * handling clicks - a frozen game with working menus.
+   *
+   * So the frame is wrapped and the loop is re-armed regardless. A transient
+   * failure now costs one frame instead of the session, and a persistent one
+   * says so instead of looking like a hang.
+   */
+  /**
+   * Consecutive failures, not failures ever. The backoff has to be per run of
+   * them: counted cumulatively, a later unrelated failure arrives with the
+   * counter already past one and is swallowed until the six hundredth, which
+   * loses the first trace of the incident that actually matters.
+   */
+  let failureStreak = 0;
+  const reportFrameFailure = (error: unknown) => {
+    failureStreak += 1;
+    // The first of a run carries the trace worth having. After that, back off: a
+    // wedged simulation would otherwise write sixty lines a second and bury it.
+    if (failureStreak === 1 || failureStreak % 600 === 0) {
+      console.error(
+        `Evercast frame failed (${failureStreak}x in a row) - the loop is still running.`,
+        error,
+      );
+    }
+  };
+
+  const step = (now: number) => {
     if (document.hidden) {
       previous = now;
-      frame = requestAnimationFrame(loop);
       return;
     }
 
@@ -116,7 +148,17 @@ export function startGameLoop({ scene, onAwayProgress }: GameLoopOptions): () =>
       audio.setScene(sceneMoodFor(next));
       publishAccumulator = 0;
     }
+  };
 
+  const loop = (now: number) => {
+    try {
+      step(now);
+      // A frame got through, so the next failure is a new incident and reports.
+      failureStreak = 0;
+    } catch (error) {
+      reportFrameFailure(error);
+    }
+    // Outside the catch on purpose: this is what makes a bad frame survivable.
     frame = requestAnimationFrame(loop);
   };
 
