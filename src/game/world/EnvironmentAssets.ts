@@ -53,6 +53,19 @@ export class EnvironmentAssets {
     return placement;
   }
 
+  /**
+   * Every prop requested so far. Mirrors `ActorAssets.whenReady`, and exists for
+   * the same caller: the boot gate promises a world that has finished arriving,
+   * and four of the six megabytes it is covering are scenery.
+   *
+   * Settled rather than all - a prop that failed already falls back to primitive
+   * geometry, and one missing shrine must not hold the gate shut over a world
+   * that is otherwise complete.
+   */
+  async whenReady(): Promise<void> {
+    await Promise.allSettled(this.requests.values());
+  }
+
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;

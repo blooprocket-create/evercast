@@ -166,6 +166,18 @@ export class EvercastSimulation {
         }
         return activated;
       }
+      /**
+       * The one piece of onboarding that cannot be derived. A hint about gold
+       * stops being true the moment gold is spent, so nothing needs recording;
+       * a premise the player has read leaves no mark on the state it described,
+       * so it does. Refusing a flag already held keeps it idempotent, and keeps
+       * a re-dismissal from spending a publish and a save on nothing.
+       */
+      case 'mark_story_flag': {
+        if (this.state.meta.storyFlags.includes(command.flag)) return false;
+        this.state.meta.storyFlags.push(command.flag);
+        return true;
+      }
       case 'respec_spell_tree':
         return this.spellTreeSystem.respec(this.state);
       case 'rebirth': {

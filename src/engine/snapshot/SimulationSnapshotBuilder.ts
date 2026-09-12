@@ -124,6 +124,7 @@ export function buildSimulationSnapshot({
       run.phase === 'travel' ? Math.min(1, run.travelElapsed / config.travelSeconds) : 1,
     highestStageEver: state.meta.highestStageEver,
     rebirths: state.meta.rebirths,
+    storyFlags: [...state.meta.storyFlags],
     canRebirth,
     rebirthKnowledgeGain: quantity(rebirthKnowledgeGain),
     gear: GEAR_SLOT_ORDER.map((slot) => {

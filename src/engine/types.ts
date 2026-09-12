@@ -164,6 +164,13 @@ export interface SimulationSnapshot {
   /** Exactly PARTY_SIZE entries; null is an empty slot. */
   party: (CompanionSnapshot | null)[];
   ascendableCompanions: number;
+  /**
+   * Permanent narrative beats the player has already been shown. Onboarding is
+   * derived from live state wherever it can be - a hint about gold stops being
+   * true the moment gold is spent - so this carries only the beats that leave no
+   * trace in the state they were about.
+   */
+  storyFlags: readonly string[];
   lastSummon: LastSummonSnapshot | null;
   lastEvent: string;
 }
@@ -180,4 +187,5 @@ export type EngineCommand =
   | { type: 'summon_draw'; count: number }
   | { type: 'ascend_companion'; definitionId: string }
   | { type: 'equip_companion'; definitionId: string; slot: number }
-  | { type: 'unequip_companion'; slot: number };
+  | { type: 'unequip_companion'; slot: number }
+  | { type: 'mark_story_flag'; flag: string };

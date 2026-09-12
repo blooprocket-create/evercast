@@ -13,8 +13,61 @@
     />
     <meta name="theme-color" content="#070d10" />
     <title>Evercast</title>
+    <!--
+      The only styling in this file, and it earns its place: everything else the
+      game draws is behind a module graph that includes Babylon, and a megabytes
+      -long parse is a blank white page for as long as it takes. This paints on
+      the HTML parser, before a line of script has run.
+
+      It duplicates two values from src/ui/theme/tokens.css - --bg and --ink -
+      because it has to be readable before any stylesheet loads. That is the
+      whole licence: no third colour belongs here, and the token sheet stays the
+      authority for everything downstream of it.
+    -->
+    <style>
+      body {
+        margin: 0;
+        background: #070d10;
+      }
+      #splash {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-content: center;
+        justify-items: center;
+        gap: 1.1rem;
+        font: 600 0.78rem/1 ui-sans-serif, system-ui, sans-serif;
+        letter-spacing: 0.42em;
+        text-indent: 0.42em;
+        color: #eee5c9;
+      }
+      #splash::after {
+        content: '';
+        width: 6.5rem;
+        height: 1px;
+        background: currentColor;
+        opacity: 0.25;
+        animation: splash-breathe 2.4s ease-in-out infinite;
+      }
+      @keyframes splash-breathe {
+        50% {
+          opacity: 0.7;
+          transform: scaleX(0.55);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #splash::after {
+          animation: none;
+        }
+      }
+    </style>
   </head>
   <body>
+    <!--
+      Removed by src/main.tsx on mount rather than by a timer, so it is on
+      screen for exactly as long as there is nothing else to show.
+    -->
+    <div id="splash">EVERCAST</div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

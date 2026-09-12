@@ -19,26 +19,25 @@ export class ActorAssets {
   constructor(private readonly scene: Scene, private readonly shadows?: ShadowGenerator,
     private readonly loader: ActorLoader = (url, scene) => LoadAssetContainerAsync(url, scene)) {}
 
+  /**
+   * Starts every animated model downloading without building a visual for it.
+   *
+   * Enemies are created by `sync`, which only runs once the game loop does, so
+   * without this the boot gate could only ever wait for the mage: the first
+   * foe's GLB was not even requested until after the gate had gone, and travel
+   * is 1.8 seconds to cover it. Nine models and about 1.1 MB buys every enemy in
+   * every zone, which is cheaper than the zone lookup that would narrow it and
+   * cannot go stale when a zone's roster changes.
+   */
+  prewarm(): void {
+    for (const id of models) this.request(id);
+  }
+
   create(id: string, name: string, mage = false): ActorVisual {
     if (!models.has(id)) throw new Error(`Unknown actor model: ${id}`);
     const actor = new ActorVisual(name, this.scene);
     actor.root.metadata = { actorId: id, assetState: 'loading', animation: 'idle' };
-    let request = this.requests.get(id);
-    if (!request) {
-      request = this.loader(`${import.meta.env.BASE_URL}models/characters/${id}.glb`, this.scene).then((container) => {
-        if (this.disposed || this.scene.isDisposed) { container.dispose(); return undefined; }
-        for (const mesh of container.meshes) { mesh.isPickable = false; mesh.receiveShadows = true; }
-        for (const material of container.materials) {
-          if (material instanceof PBRMaterial) stylizeActorMaterial(material);
-        }
-        this.containers.add(container);
-        return container;
-      }).catch((error: unknown) => {
-        if (!this.disposed) console.warn(`Evercast: could not load character ${id}.`, error);
-        return undefined;
-      });
-      this.requests.set(id, request);
-    }
+    const request = this.request(id);
     void request.then((container) => {
       if (this.disposed || actor.root.isDisposed() || this.scene.isDisposed) return;
       if (!container) { actor.fallback(mage); return; }
@@ -56,6 +55,27 @@ export class ActorAssets {
       actor.root.metadata.assetState = 'ready';
     });
     return actor;
+  }
+
+  /** One download per model, however many combatants end up sharing it. */
+  private request(id: string): Promise<AssetContainer | undefined> {
+    let request = this.requests.get(id);
+    if (!request) {
+      request = this.loader(`${import.meta.env.BASE_URL}models/characters/${id}.glb`, this.scene).then((container) => {
+        if (this.disposed || this.scene.isDisposed) { container.dispose(); return undefined; }
+        for (const mesh of container.meshes) { mesh.isPickable = false; mesh.receiveShadows = true; }
+        for (const material of container.materials) {
+          if (material instanceof PBRMaterial) stylizeActorMaterial(material);
+        }
+        this.containers.add(container);
+        return container;
+      }).catch((error: unknown) => {
+        if (!this.disposed) console.warn(`Evercast: could not load character ${id}.`, error);
+        return undefined;
+      });
+      this.requests.set(id, request);
+    }
+    return request;
   }
 
   async whenReady(): Promise<void> { await Promise.all(this.requests.values()); }

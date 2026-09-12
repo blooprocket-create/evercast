@@ -231,6 +231,9 @@ export class EvercastScene {
     };
     this.world = new WorldGenerator(this.scene, skyLight, sun, this.shadows);
     this.actors = new ActorAssets(this.scene, this.shadows);
+    // Before the mage, so every enemy model is in flight while the gate is up
+    // rather than being requested during the 1.8 seconds of travel after it.
+    this.actors.prewarm();
     this.mage = this.actors.create('mage', 'mage-character', true);
     // The engine holds the mage at the origin and measures every reach from
     // there. Standing him anywhere else silently adds that offset to the reach
@@ -392,8 +395,23 @@ export class EvercastScene {
     }
   }
 
+  /**
+   * Everything the boot gate is waiting on, and it has to be everything: a gate
+   * that released on the mage alone still showed enemies popping in from
+   * primitives and props arriving in load order, which is the one thing it
+   * exists to hide.
+   *
+   * Settled rather than all, for the same reason the pieces below are: an asset
+   * that failed has already degraded to a fallback, and the game is playable
+   * without it. Only a wait with no end is worse than a missing prop, and
+   * `ASSET_WAIT_CEILING_MS` covers that from the other side.
+   */
   async whenReady(): Promise<void> {
-    await Promise.all([this.actors.whenReady(), this.vfx.pool.ready]);
+    await Promise.allSettled([
+      this.actors.whenReady(),
+      this.vfx.pool.ready,
+      this.world.whenReady(),
+    ]);
   }
 
   /**

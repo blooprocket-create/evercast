@@ -1,0 +1,65 @@
+/*
+ * Opaque, not a scrim. The Babylon scene owns its own render loop and starts
+ * drawing the moment it is built, so a translucent gate would show a world
+ * assembling itself behind the title - actors popping from primitives into
+ * meshes, props arriving in load order. That is the exact thing the gate exists
+ * to cover, so it covers it.
+ *
+ * Top of the shell's stack, and it has to be: the layers it covers are the
+ * canvas, the damage-number pool DamageNumbers appends to document.body at 2,
+ * the HUD and shelf layer at 3, and the summon reveal at 6. A gate under any of
+ * them is a title screen with a live HUD drawn over it.
+ */
+.gate {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: max(var(--space-5), var(--safe-top)) max(var(--space-5), var(--safe-right))
+    max(var(--space-5), var(--safe-bottom)) max(var(--space-5), var(--safe-left));
+  background: var(--bg);
+  pointer-events: auto;
+  z-index: 7;
+}
+
+.plate {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: var(--space-4);
+  width: min(420px, 100%);
+}
+
+/*
+ * Picks up where the index.html wordmark leaves off: same letterform, same
+ * tracking, so the handover from the pre-script splash to the real gate is not
+ * a jump. It grows into the display face here because by this point there is a
+ * stylesheet to grow into.
+ */
+.wordmark {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-title);
+  font-weight: 400;
+  letter-spacing: 0.34em;
+  text-indent: 0.34em;
+  color: var(--ink);
+}
+
+.premise {
+  margin: 0;
+  font-size: var(--text-lead);
+  color: var(--ink-mid);
+}
+
+.action {
+  min-width: 11rem;
+  margin-top: var(--space-3);
+}
+
+.note {
+  margin: 0;
+  min-height: var(--space-4);
+  font-size: var(--text-small);
+  color: var(--ink-dim);
+}

@@ -52,7 +52,11 @@ const clock = installBrowser();
 const { startGameLoop } = await import('./GameLoop');
 
 function sceneThat(sync: () => void) {
-  return { sync: vi.fn(sync) } as unknown as Parameters<typeof startGameLoop>[0]['scene'];
+  // NonNullable because the option is nullable now - a loop with no renderer is
+  // a supported state, but every test that inspects `scene.sync` has one.
+  return { sync: vi.fn(sync) } as unknown as NonNullable<
+    Parameters<typeof startGameLoop>[0]['scene']
+  >;
 }
 
 describe('startGameLoop', () => {
@@ -100,6 +104,25 @@ describe('startGameLoop', () => {
 
     stop();
     failure.mockRestore();
+  });
+
+  /**
+   * The renderer is optional; the loop is not.
+   *
+   * A chunk that never arrived or a machine with no WebGL context used to mean
+   * `startGameLoop` was never called at all - no ticking, no autosave, no
+   * visibility handling - which is the same frozen game with working menus the
+   * test above exists to prevent, reached from the other direction.
+   */
+  it('runs without a scene, so a failed renderer costs the picture and not the save', () => {
+    const stop = startGameLoop({ scene: null, onAwayProgress: () => {} });
+
+    expect(clock.armed()).toBe(1);
+    for (let frame = 1; frame <= 5; frame += 1) {
+      expect(clock.tick(frame * 16)).toBe(1);
+      expect(clock.armed()).toBe(1);
+    }
+    stop();
   });
 
   it('recovers completely once a transient failure passes', () => {

@@ -50,6 +50,15 @@ const boot = startSimulation();
 export const simulation = boot.simulation;
 
 /**
+ * Whether this session picked up a save or started one. The boot gate reads it
+ * to decide whether it is greeting someone or welcoming them back, which is the
+ * whole difference between a title screen and a Continue button. A save that
+ * failed to resume counts as fresh, because that is what the player is about to
+ * be playing.
+ */
+export const resumedFromSave = boot.resumed;
+
+/**
  * Away time accepted but not yet simulated.
  *
  * It is deliberately not applied at boot. A day of catch-up is seconds of solid
@@ -67,6 +76,32 @@ let awayDebtSeconds =
 
 export function awayDebt(): number {
   return awayDebtSeconds;
+}
+
+/**
+ * When this module was evaluated, which is as near as anything gets to when the
+ * player opened the game.
+ *
+ * `awayDebtSeconds` above covers the gap from the save's stamp to this moment.
+ * Everything after it - the boot gate, waiting on assets, a title screen left
+ * open while someone made coffee - was covered by nothing at all, and the first
+ * save after pressing Continue stamps `now` and erases it permanently.
+ */
+const bootedAt = Date.now();
+let gateCredited = false;
+
+/**
+ * Hands the loop the time the player spent in front of the boot gate.
+ *
+ * The two intervals are adjacent rather than overlapping - save to boot, then
+ * boot to Begin - so this adds to the debt rather than replacing it, and the
+ * one settlement on the first frame pays off both. Credited at most once: a
+ * second call would bill the same minutes twice.
+ */
+export function creditTimeAtTheGate(): void {
+  if (gateCredited) return;
+  gateCredited = true;
+  addAwayDebt((Date.now() - bootedAt) / 1000);
 }
 
 /** The loop reports back once it has settled what was owed. */
