@@ -79,10 +79,36 @@ export function startGameLoop({ scene, onAwayProgress }: GameLoopOptions): () =>
     saveGame();
   };
 
-  const loop = (now: number) => {
+  /**
+   * A frame that threw used to end the game.
+   *
+   * The loop re-arms itself at the end of its own callback, so an exception
+   * anywhere in a frame meant it was never re-armed: the world stopped advancing
+   * and stopped being drawn, permanently, with no way back but a reload. It did
+   * not present as an error either. Babylon drives its own render loop, so the
+   * canvas went on painting the last state it was given, and React went on
+   * handling clicks - a frozen game with working menus.
+   *
+   * So the frame is wrapped and the loop is re-armed regardless. A transient
+   * failure now costs one frame instead of the session, and a persistent one
+   * says so instead of looking like a hang.
+   */
+  let frameFailures = 0;
+  const reportFrameFailure = (error: unknown) => {
+    frameFailures += 1;
+    // The first one carries the trace worth having. After that, back off: a
+    // wedged simulation would otherwise write sixty lines a second and bury it.
+    if (frameFailures === 1 || frameFailures % 600 === 0) {
+      console.error(
+        `Evercast frame failed (${frameFailures}x) - the loop is still running.`,
+        error,
+      );
+    }
+  };
+
+  const step = (now: number) => {
     if (document.hidden) {
       previous = now;
-      frame = requestAnimationFrame(loop);
       return;
     }
 
@@ -116,7 +142,15 @@ export function startGameLoop({ scene, onAwayProgress }: GameLoopOptions): () =>
       audio.setScene(sceneMoodFor(next));
       publishAccumulator = 0;
     }
+  };
 
+  const loop = (now: number) => {
+    try {
+      step(now);
+    } catch (error) {
+      reportFrameFailure(error);
+    }
+    // Outside the catch on purpose: this is what makes a bad frame survivable.
     frame = requestAnimationFrame(loop);
   };
 
