@@ -52,7 +52,7 @@ export class EvercastSimulation {
     const contentErrors = validateCatalog(this.catalog);
     if (contentErrors.length > 0) throw new Error(contentErrors.join('\n'));
     this.state = options.initialState ?? createInitialGameState(this.config);
-    this.eventBus = new EventBus<GameEvent>(this.config.maxEventsPerAdvance);
+    this.eventBus = new EventBus<GameEvent>(this.config.maxEventsPerFlush);
     this.eventBus.subscribe((event) => this.captureEvent(event));
     const emit = (event: GameEvent) => this.eventBus.emit(event);
     this.progressionSystem = new ProgressionSystem(this.config, emit);
@@ -85,13 +85,20 @@ export class EvercastSimulation {
     const previousRecording = this.recordPresentationEvents;
     this.recordPresentationEvents = options.presentationEvents ?? true;
     let remaining = seconds;
-    let eventCount = 0;
+    let steps = 0;
+    // One step per world event, so the budget tracks the span being advanced.
+    // A day of offline catch-up is hundreds of thousands of legitimate steps;
+    // only a loop that has stopped consuming time can outrun this.
+    const budget =
+      this.config.maxAdvanceSteps + this.config.maxAdvanceStepsPerSecond * seconds;
 
     try {
       while (remaining > EPSILON) {
-        eventCount += 1;
-        if (eventCount > this.config.maxEventsPerAdvance) {
-          throw new Error(`Simulation safety limit exceeded while advancing ${seconds}s.`);
+        steps += 1;
+        if (steps > budget) {
+          throw new Error(
+            `Simulation safety limit exceeded while advancing ${seconds}s (${steps} steps).`,
+          );
         }
         remaining -= this.loop.step(this.state, remaining);
       }

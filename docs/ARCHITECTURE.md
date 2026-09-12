@@ -74,6 +74,10 @@ The simulation is event-driven rather than frame-driven. `advance(seconds)` cons
 
 The browser layer detects tab visibility. Hidden time is applied through `OfflineProgressor` when the tab becomes visible again, with presentation events suppressed and the normal offline cap applied.
 
+Away time is owed rather than spent up front. `OfflineProgressor.begin` returns an `OfflineCatchUp` the caller advances in slices, and `GameLoop` works it down inside a share of each frame; boot-time and hidden-time debt go through the same path. A day of catch-up from a played save is several hundred thousand world events, so applying it in one pass before the first render presents as a game that will not start - and it is what the loop's step budget exists to survive rather than trip over. Because `step` never consumes past an event, slicing cannot change what happened: state agrees with a single pass exactly, other than float accumulation in elapsed time and in-flight positions.
+
+`src/app/runtime.ts` is imported on the way to the first render, which makes anything that throws there a blank page on every reload rather than a handled error. It resumes a save defensively and reports a failure instead of taking the app down.
+
 ## Encounter system
 
 Each stage is a finite timed-spawn encounter. Multiple authoritative enemies can coexist.
@@ -188,13 +192,13 @@ As new systems arrive, prefer extracting cohesive builders/services rather than 
 
 `SaveCodec` owns versioned schema conversion. Version 7 adds the companions domain; every earlier save loads with the feature simply not started rather than losing anything it had. Browser `localStorage` remains in `src/app`. Existing saves migrate forward rather than silently resetting progression.
 
-The current solver is exact event-driven catch-up. If endgame event frequency eventually makes long catch-up too expensive, `OfflineProgressor` is the seam for an analytical/bulk strategy without changing combat or save formats.
+The current solver is exact event-driven catch-up, metered across frames rather than run in one pass. Endgame event frequency makes a long catch-up expensive in total work, not just per pass, so `OfflineProgressor` remains the seam for an analytical/bulk strategy without changing combat or save formats.
 
 ## Testing gates
 
 `npm run validate` runs unit/integration tests and a production TypeScript/Vite build. GitHub Actions runs the same validation on PRs and `main`.
 
-Coverage includes deterministic advancement, multi-enemy overlap, push/farm behavior, content references, spell compilation, gear, Spell Point economy/pathing, first-clear Essence, save migrations, offline catch-up, prestige reset boundaries, and architecture guards preventing presentation dependencies from entering `src/engine`.
+Coverage includes deterministic advancement, multi-enemy overlap, push/farm behavior, content references, spell compilation, gear, Spell Point economy/pathing, first-clear Essence, save migrations, offline catch-up (including a full day away from a played save, and sliced catch-up agreeing with a single pass), the advance loop's runaway guard, prestige reset boundaries, and architecture guards preventing presentation dependencies from entering `src/engine`.
 
 ## Still intentionally deferred
 

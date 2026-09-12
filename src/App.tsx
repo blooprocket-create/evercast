@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { startGameLoop } from './app/GameLoop';
-import { initialOfflineSummary, runCommand, runCommandRepeated } from './app/runtime';
+import { runCommand, runCommandRepeated } from './app/runtime';
 import type { OfflineSummary } from './engine/offline/OfflineProgressor';
 import { EvercastScene } from './game/EvercastScene';
 import { AppShell } from './ui/shell/AppShell';
@@ -10,7 +10,8 @@ import { useUiSettings } from './ui/state/useUiSettings';
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<EvercastScene | null>(null);
-  const [awayProgress, setAwayProgress] = useState<OfflineSummary | null>(initialOfflineSummary);
+  // Away progress is reported by the game loop once it has worked the debt off.
+  const [awayProgress, setAwayProgress] = useState<OfflineSummary | null>(null);
   const { depthOfField, vfxQuality, damageNumbers } = useUiSettings().display;
 
   // Effect budgets are fixed when the pool is built, so quality is the one

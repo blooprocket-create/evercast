@@ -87,4 +87,45 @@ describe('EvercastSimulation', () => {
     expect(snapshot.mode).toBe('farm');
     expect(snapshot.farmStage).toBeLessThan(snapshot.stage);
   });
+
+  describe('advance guard', () => {
+    it('still stops a loop that has run away', () => {
+      const sim = new EvercastSimulation({
+        config: { maxAdvanceSteps: 8, maxAdvanceStepsPerSecond: 0 },
+      });
+      expect(() => sim.advance(3600)).toThrow(/safety limit exceeded/);
+    });
+
+    /**
+     * The budget has to scale with the span, because the loop takes one step per
+     * world event: a day of catch-up is legitimately hundreds of thousands of
+     * steps, and a flat cap read that as a runaway and threw.
+     */
+    it('grows with the span being advanced, so a long span is not mistaken for one', () => {
+      const perSecond = 4;
+      const span = 3600;
+      const generous = new EvercastSimulation({
+        config: { maxAdvanceSteps: 0, maxAdvanceStepsPerSecond: span * perSecond },
+      });
+      expect(() => generous.advance(span, { presentationEvents: false })).not.toThrow();
+
+      // The same density over the same span, with the budget no longer keeping up.
+      const stingy = new EvercastSimulation({
+        config: { maxAdvanceSteps: 0, maxAdvanceStepsPerSecond: 1 },
+      });
+      expect(() => stingy.advance(span, { presentationEvents: false })).toThrow(
+        /safety limit exceeded/,
+      );
+    });
+
+    it('leaves a single frame guarded by the floor', () => {
+      const sim = new EvercastSimulation({
+        config: { maxAdvanceSteps: 0, maxAdvanceStepsPerSecond: 1 },
+      });
+      // A frame is a fraction of a second, so the rate alone buys nothing: with
+      // no floor even normal live play would trip the guard.
+      expect(() => sim.update(1 / 60)).toThrow(/safety limit exceeded/);
+      expect(() => new EvercastSimulation().update(1 / 60)).not.toThrow();
+    });
+  });
 });
