@@ -56,7 +56,7 @@ export function AttunementsSurface() {
           }
           renderRow={(attunement) => (
             <Row
-              icon="rebirth"
+              icon="gearTree"
               iconLive={
                 !owned.has(attunement.id) &&
                 knowledge.cmp(big(attunement.cost)) >= 0 &&
