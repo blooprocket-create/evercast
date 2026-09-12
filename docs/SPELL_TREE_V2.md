@@ -67,7 +67,8 @@ each penetrate; with Charged, two heavy ones. `route` survives as a derived name
 for the heaviest shape held, because descriptions and VFX need something to call
 it, but combat never reads it.
 
-Two rules carry the weight:
+Four rules carry the weight, and each of them is a thing that could only ever be
+one before:
 
 - **The per-hit index is one counter across the whole cast.** The proc RNG is a
   pure hash of its arguments, so two projectiles presenting the same index to the
@@ -76,11 +77,26 @@ Two rules carry the weight:
   v1 combat and fusion-parity test passes untouched.
 - **Execution and Final Blow read the health of the enemy being hit**, not the
   primary's. With one target those are the same number; with two they were not.
+- **A cast counts as critical if any of its hits was.** Focus is built by
+  non-critical casts, and a Charged cast used to land exactly one hit, so "did
+  the first hit crit" was the same question. Blended, it is not: a cast whose
+  second projectile crits is not a non-crit.
+- **Per-chain force is paid per chain; the stored velocity charge is paid once.**
+  Each projectile gathers its own force through its own penetrations. Terminal
+  Velocity's carryover belongs to the cast, and the rule has always read "the
+  next cast adds the stored amount to its final victim, then clears it" - one
+  release, however many projectiles the cast sends.
 
 `routeBlendScale` (0.75) multiplies base damage once per route held beyond the
 first, so a blend is a sideways move rather than a strictly larger one on a curve
 where each point already costs 27% more than the last. Setting it to 1 removes
-the penalty. Terminal force and the halved interval on a blocked pierce are
+the penalty.
+
+It lives in `routeDamageScale`, with the charge, as the single answer to "what do
+the routes do to base damage". Combat, `wizardPerHit` and the tree's DPS
+projection all call it: companion power is a share of the mage's per-hit damage,
+so anything that scales that damage has to reach them too. That had already gone
+wrong once with `chargedDamage` in two places, and one definition is the fix. Terminal force and the halved interval on a blocked pierce are
 per-chain: the interval halves only when *no* projectile found a continuation.
 
 ## Apexes

@@ -5,7 +5,7 @@ import type { GameEvent } from '../events/GameEvent';
 import type { CompanionCombatant, CompanionAbilityId } from './types';
 import type { EnemyState, RunState } from '../model';
 import { big } from '../numbers';
-import { compileSpell } from '../spell/SpellCompiler';
+import { compileSpell, routeDamageScale } from '../spell/SpellCompiler';
 import { inAttackRange, livingByDistance } from '../combat/SpellCombatState';
 // prettier-ignore
 import { abilityMagnitude, companionDamage, requireCompanion } from './CompanionCatalog';
@@ -53,7 +53,7 @@ export interface CompanionBeatContext {
 export function wizardPerHit(run: RunState, equipment: EquipmentState): Decimal {
   const spell = compileSpell(run.spell);
   const base = big(spell.damage).add(compileGearStats(equipment).baseDamageBonus);
-  return spell.mechanics?.chargedCast ? base.mul(spell.mechanics.chargedDamage) : base;
+  return base.mul(routeDamageScale(spell.mechanics));
 }
 
 /** Whether this companion has anything it could act on from where it stands. */

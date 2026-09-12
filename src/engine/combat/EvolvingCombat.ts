@@ -4,7 +4,7 @@ import { compileGearStats } from '../gear/GearSystem';
 import type { EquipmentState } from '../gear/types';
 import type { EnemyState, RunState } from '../model';
 import { big } from '../numbers';
-import { compileSpell } from '../spell/SpellCompiler';
+import { compileSpell, routeDamageScale } from '../spell/SpellCompiler';
 import type { SpellMechanics } from '../spell/SpellMechanics';
 // prettier-ignore
 import { combatState, ensurePositions, livingByDistance, nearby, positionOf } from './SpellCombatState';
@@ -31,12 +31,9 @@ export class EvolvingCombat {
     if (!primary) return [];
     state.nextCastHaste = false;
     const castId = ++run.stats.casts;
-    const routeCount = Number(m.twinCast) + Number(m.piercingCast) + Number(m.chargedCast);
-    const blend = routeCount > 1 ? Math.pow(m.routeBlendScale, routeCount - 1) : 1;
     const base = big(spell.damage)
       .add(compileGearStats(equipment).baseDamageBonus)
-      .mul(m.chargedCast ? m.chargedDamage : 1)
-      .mul(blend);
+      .mul(routeDamageScale(m));
     // Twin decides how many projectiles leave the staff; Piercing decides how
     // far each one carries. They are separate questions, so a blended build is
     // two projectiles that each penetrate, not a choice between the two.
@@ -73,7 +70,12 @@ export class EvolvingCombat {
       this.emit({ type: 'combat_state', time: run.elapsedSeconds, state: 'velocity', stacks: 1 });
     }
     const primaryHpFraction = Math.max(0, Math.min(1, primary.hp.div(primary.maxHp).toNumber()));
-    let chargedCritical = false;
+    // Did this cast crit at all? A blended Charged build lands several hits, and
+    // any one of them landing critical means the cast is not a non-crit.
+    let castCritical = false;
+    // Stored velocity is one carryover released by one cast, so a second
+    // projectile's terminal hit must not be paid the same charge again.
+    let storedPaid = false;
     // One counter across the whole cast: the proc RNG is a pure hash of it, so
     // two projectiles must never present the same index to the same channel.
     let hitIndex = 0;
@@ -86,7 +88,7 @@ export class EvolvingCombat {
         const enemy = chain[step];
         if (enemy.hp.cmp(0) <= 0) continue;
         const critical = perfect || this.effects.roll(run, spell.critChance, 11, castId, index);
-        if (index === 0) chargedCritical = critical;
+        castCritical ||= critical;
         const hpFraction = Math.max(0, Math.min(1, enemy.hp.div(enemy.maxHp).toNumber()));
         let damage = big(base);
         if (m.chargedCast) {
@@ -104,8 +106,12 @@ export class EvolvingCombat {
           m.piercingCast && step === chain.length - 1 && (kinetic || state.velocityReady);
         if (m.piercingCast && step > 0) damage = damage.mul(m.piercedDamage);
         if (m.driving && !m.kinetic) damage = damage.mul(1 + Math.min(m.forceCap, step * m.forceGain));
-        if (terminal && !(m.terminalVelocity && activeOverdrive))
-          damage = damage.add(base.mul(force)).add(stored);
+        if (terminal && !(m.terminalVelocity && activeOverdrive)) {
+          // Force is gathered per chain, so each projectile pays its own. The
+          // stored charge is not: it belongs to the cast.
+          damage = damage.add(base.mul(force)).add(storedPaid ? 0 : stored);
+          storedPaid = true;
+        }
         if (critical)
           damage = damage.mul(
             (spell.critMultiplier + (m.ascendance ? state.focus * m.ascendanceCritGain : 0)) *
@@ -157,7 +163,7 @@ export class EvolvingCombat {
     }
     if (m.perfect) {
       if (perfect) state.focus = 0;
-      else if (!chargedCritical)
+      else if (!castCritical)
         state.focus = Math.min(
           m.focusMax,
           state.focus + 1 + (m.deathSentence ? this.woundedGain(primaryHpFraction, m) : 0),

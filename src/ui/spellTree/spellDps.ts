@@ -1,6 +1,6 @@
 import type Decimal from 'break_eternity.js';
 import { big } from '../../engine/numbers';
-import { compileSpell } from '../../engine/spell/SpellCompiler';
+import { compileSpell, routeDamageScale } from '../../engine/spell/SpellCompiler';
 import type { CompiledSpell } from '../../engine/spell/types';
 import { buildSpellFromTree } from '../../engine/spellTree/SpellTreeSystem';
 import type { SpellTreeState } from '../../engine/spellTree/types';
@@ -14,13 +14,11 @@ import type { SpellTreeState } from '../../engine/spellTree/types';
  * exact even though the base cast interval ignores momentum and overdrive.
  */
 export function dpsOf(compiled: CompiledSpell, gearDamageBonus: string): Decimal {
-  const m = compiled.mechanics;
-  const charged = m?.chargedCast ? m.chargedDamage : 1;
-  // A second route costs base damage as well as points, so the projection has
-  // to say so - otherwise awakening one reads as a bigger gain than it is.
-  const routes = m ? Number(m.twinCast) + Number(m.piercingCast) + Number(m.chargedCast) : 0;
-  const blend = m && routes > 1 ? Math.pow(m.routeBlendScale, routes - 1) : 1;
-  const perProjectile = big(compiled.damage).add(big(gearDamageBonus)).mul(charged).mul(blend);
+  // Same scale combat and the companions use, so the projection cannot drift
+  // from what awakening the node actually does.
+  const perProjectile = big(compiled.damage)
+    .add(big(gearDamageBonus))
+    .mul(routeDamageScale(compiled.mechanics));
   const critFactor = 1 + compiled.critChance * Math.max(0, compiled.critMultiplier - 1);
   return perProjectile
     .mul(compiled.projectileCount)

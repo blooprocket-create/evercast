@@ -15,6 +15,8 @@ import { damageCompanion, guardReduction, isPassive, nextCompanionBeat, wizardPe
 import { companionDamage, requireCompanion } from './CompanionCatalog';
 import { compileSpell } from '../spell/SpellCompiler';
 import { MAX_COMPANION_STARS } from './types';
+import { createInitialGameState } from '../state';
+import { SPELL_MECHANIC_DEFAULTS } from '../../content/spellTreeTuning';
 
 /** A vanguard, a bruiser, a ranger, an arcanist and a healer. */
 const FULL_PARTY = [
@@ -534,5 +536,39 @@ describe('the frontline standoff', () => {
 
     for (const companion of run.companions) companion.downed = true;
     expect(contactPoint(enemy, DEFAULT_ENGINE_CONFIG.enemyAttackRange).x).toBe(before);
+  });
+});
+
+describe('wizardPerHit', () => {
+  it('carries every route multiplier the mage actually pays', () => {
+    const state = createInitialGameState(DEFAULT_ENGINE_CONFIG);
+    const mechanics = { ...SPELL_MECHANIC_DEFAULTS };
+    state.run.spell = { ...state.run.spell, mechanics };
+    const plain = Number(wizardPerHit(state.run, state.equipment).toString());
+    expect(plain).toBeGreaterThan(0);
+
+    // Charged alone: the multiplier the companions surface already relied on.
+    state.run.spell = { ...state.run.spell, mechanics: { ...mechanics, chargedCast: true } };
+    expect(Number(wizardPerHit(state.run, state.equipment).toString())).toBeCloseTo(
+      plain * mechanics.chargedDamage,
+    );
+
+    // Blended: companions share the mage's per-hit damage, so they pay the
+    // blend too. Missing it made them a third stronger than the interface said.
+    state.run.spell = {
+      ...state.run.spell,
+      mechanics: { ...mechanics, twinCast: true, piercingCast: true },
+    };
+    expect(Number(wizardPerHit(state.run, state.equipment).toString())).toBeCloseTo(
+      plain * mechanics.routeBlendScale,
+    );
+
+    state.run.spell = {
+      ...state.run.spell,
+      mechanics: { ...mechanics, twinCast: true, piercingCast: true, chargedCast: true },
+    };
+    expect(Number(wizardPerHit(state.run, state.equipment).toString())).toBeCloseTo(
+      plain * mechanics.chargedDamage * Math.pow(mechanics.routeBlendScale, 2),
+    );
   });
 });

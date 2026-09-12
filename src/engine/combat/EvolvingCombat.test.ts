@@ -598,3 +598,49 @@ describe('apex capstones', () => {
     expect(Number(sharpHit.damage)).toBeCloseTo(30 * (2 + 3 * 0.25));
   });
 });
+
+describe('blended routes: what the second projectile must not double', () => {
+  const line = [
+    { x: 2.4, z: 0 },
+    { x: 3.6, z: 0 },
+    { x: 4.8, z: 0 },
+  ];
+
+  it('counts a critical from any projectile, not just the first, against Focus', () => {
+    const f = fixture(
+      { chargedCast: true, twinCast: true, perfect: true, routeBlendScale: 1 },
+      line,
+    );
+    // The first hit misses its roll and the second lands one, which is the case
+    // a single-target Charged cast could never produce.
+    vi.spyOn(f.combat.evolving.effects, 'roll').mockImplementation(
+      (_run, _chance, channel, _castId, source) => channel === 11 && source === 1,
+    );
+    const hits = f.cast();
+    expect(hits.map((h) => h.critical)).toEqual([false, true]);
+    // The cast crit, so it is not a non-crit and builds no Focus.
+    expect(f.runtime.focus).toBe(0);
+  });
+
+  it('pays a stored velocity charge to one terminal hit, not to every chain', () => {
+    const f = fixture(
+      {
+        twinCast: true,
+        piercingCast: true,
+        kinetic: true,
+        driving: true,
+        penetrations: 1,
+        routeBlendScale: 1,
+      },
+      line,
+    );
+    f.runtime.velocityStored = '100';
+    f.runtime.velocityReady = true;
+    const hits = f.cast();
+    // Base 10 each; a terminal hit adds its own chain's force (10 x 0.3), and
+    // the 100 stored belongs to the cast, so only the first terminal gets it.
+    expect(hits.map((h) => Number(h.damage))).toEqual([10, 113, 10, 13]);
+    expect(f.runtime.velocityReady).toBe(false);
+    expect(f.runtime.velocityStored).toBe('0');
+  });
+});
