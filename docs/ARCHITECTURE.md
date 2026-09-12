@@ -194,7 +194,9 @@ As new systems arrive, prefer extracting cohesive builders/services rather than 
 
 ## Save / migration
 
-`SaveCodec` owns versioned schema conversion. Version 7 adds the companions domain; every earlier save loads with the feature simply not started rather than losing anything it had. Browser `localStorage` remains in `src/app`. Existing saves migrate forward rather than silently resetting progression.
+`SaveCodec` owns versioned schema conversion across a stated window: `MINIMUM_SAVE_VERSION` (5) to `CURRENT_SAVE_VERSION` (7). Version 7 adds the companions domain; v5 and v6 load with the feature simply not started rather than losing anything they had, and v5 additionally refunds its spell-tree allocations. Browser `localStorage` remains in `src/app`. Saves inside the window migrate forward rather than silently resetting progression.
+
+The v1-v4 migrations were removed once the format settled. They carried a second enemy shape, a pre-encounter run shape and a reconciliation pass for a repeatable-Essence economy the game no longer has - three shapes kept alive only to be converted away from. v5 and v6 stay because the current path already reads them: they cost two conditionals, not a code path. A save below the floor is refused by the codec, reported by `BrowserSaveStore.load`, and the player starts fresh rather than loading a state the codec can no longer describe.
 
 The solver is analytical past its sample window, as the seam always anticipated: exact within `OFFLINE_SAMPLE_SECONDS`, rate-credited beyond it. Combat and the save format are untouched by it - the extrapolation enters through one narrow `creditOfflineYield` call.
 
@@ -202,7 +204,7 @@ The solver is analytical past its sample window, as the seam always anticipated:
 
 `npm run validate` runs unit/integration tests and a production TypeScript/Vite build. GitHub Actions runs the same validation on PRs and `main`.
 
-Coverage includes deterministic advancement, multi-enemy overlap, push/farm behavior, content references, spell compilation, gear, Spell Point economy/pathing, first-clear Essence, save migrations, offline settlement (a day away from a played save inside a bounded budget, exactness within the sample window, rate scaling past it, and no synthesised Essence or stage), the advance loop's runaway guard, save loading that never throws on the way up, prestige reset boundaries, and architecture guards preventing presentation dependencies from entering `src/engine`.
+Coverage includes deterministic advancement, multi-enemy overlap, push/farm behavior, content references, spell compilation, gear, Spell Point economy/pathing, first-clear Essence, save migrations and the version window the codec accepts, offline settlement (a day away from a played save inside a bounded budget, exactness within the sample window, rate scaling past it, and no synthesised Essence or stage), the advance loop's runaway guard, save loading that never throws on the way up, prestige reset boundaries, and architecture guards preventing presentation dependencies from entering `src/engine`.
 
 ## Still intentionally deferred
 
