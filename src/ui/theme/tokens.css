@@ -20,7 +20,13 @@
   --ink: #eee5c9;
   --ink-mid: #c7cdbd;
   --ink-low: #8e9a86;
-  --ink-dim: #657062;
+  /*
+   * Raised from #657062, which measured 3.15:1 on --raised and so failed
+   * WCAG 1.4.3 everywhere it was used - and it was used as body text on
+   * eighteen surfaces. This is the same hue lifted to the smallest value that
+   * clears 4.5:1 on all three surfaces (5.41 / 4.99 / 4.51).
+   */
+  --ink-dim: #80897e;
   --ink-num: #e6cfb4;
 
   /* Meaning. This set is closed: a feature may not add to it. */
@@ -28,7 +34,9 @@
   --essence: #a98cff;
   --hp-you: #78b99d;
   --hp-you-deep: #4e8571;
-  --hp-foe: #c4593c;
+  /* Lifted from #c4593c for the same reason: it is set as text in four places
+   * and measured 3.76:1 on --raised. */
+  --hp-foe: #cb6c52;
   --hp-foe-deep: #8a3220;
   --crit: #ff9a4d;
   --route: #63dcff;
@@ -46,8 +54,33 @@
   --accent-gravehollow: #80619e;
   --accent-ashen-road: #c98a4e;
 
+  /*
+   * The same four accents at a lightness that can carry text.
+   *
+   * The set above is pinned to the renderer's authored Color3 values, and
+   * Gravehollow's measures 3.20:1 on --raised - fine for the borders and
+   * graphics that only owe 3:1 under WCAG 1.4.11, and a failure of 1.4.3
+   * everywhere the UI sets it as a colour. Rather than repaint the world to
+   * suit the menus, text reads --accent-ink and chrome goes on reading
+   * --accent, so the two can differ exactly as much as legibility requires.
+   * Greenfields, Whispering Woods and Ashen Road already clear 4.5:1 and are
+   * unchanged; only Gravehollow is lifted.
+   */
+  --accent-ink-greenfields: #b8cc59;
+  --accent-ink-whispering-woods: #57b875;
+  --accent-ink-gravehollow: #967caf;
+  --accent-ink-ashen-road: #c98a4e;
+
   /* Set per-zone on the shell root; everything downstream reads var(--accent). */
   --accent: var(--accent-greenfields);
+  --accent-ink: var(--accent-ink-greenfields);
+
+  /*
+   * The focus ring. Parchment at 12:1 or better on every surface in this
+   * sheet, so it clears the 3:1 WCAG 2.4.11 asks of a focus indicator against
+   * whatever it lands on - including an accent-coloured button.
+   */
+  --focus: #eee5c9;
 
   /* Translucent fills. Components may not invent these. */
   --veil-0: rgb(255 255 255 / 2%);

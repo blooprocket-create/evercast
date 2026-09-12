@@ -32,6 +32,7 @@ export function WelcomeBack({
         },
       ]}
       primary={{ label: 'Take it all', onClick: onDismiss }}
+      onDismiss={onDismiss}
       hint={`${summary.kills.toLocaleString('en-US')} enemies felled while you were gone.`}
     />
   );

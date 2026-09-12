@@ -27,6 +27,7 @@ export function Premise({ onDismiss }: { onDismiss: () => void }) {
         { label: 'Starlight', value: 'Companions' },
       ]}
       primary={{ label: 'Begin the cast', onClick: onDismiss }}
+      onDismiss={onDismiss}
       hint="Nothing here needs your hands. Spend what it earns and it carries itself further each time."
     />
   );

@@ -153,5 +153,19 @@ export function ShelfVitals() {
 /** The event line, formatted at the source rather than patched here. */
 export function ShelfLog() {
   const lastEvent = useSnapshotSelector((s) => s.lastEvent);
-  return <span>{lastEvent}</span>;
+  /*
+   * The running commentary, and the one place the game narrates itself in
+   * words. Announced politely so a screen reader reads it between whatever the
+   * player is doing rather than interrupting them, which is what makes it
+   * usable at the rate an idle game produces events: `polite` coalesces, and a
+   * player moving through the spell tree is never cut off by a kill.
+   *
+   * It is also the accessible counterpart to the diorama, which carries no
+   * text at all - see the canvas in `AppShell`.
+   */
+  return (
+    <span aria-live="polite" aria-atomic="true">
+      {lastEvent}
+    </span>
+  );
 }

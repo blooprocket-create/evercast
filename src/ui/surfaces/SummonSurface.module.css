@@ -127,8 +127,8 @@
 }
 
 .bannerOn {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--accent-ink);
+  color: var(--accent-ink);
 }
 
 /*

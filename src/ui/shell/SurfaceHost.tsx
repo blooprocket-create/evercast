@@ -4,6 +4,7 @@ import { Button } from '../primitives/Button';
 import type { Badge, GroupedDestinations } from '../nav/destinations';
 import type { RegisteredDestination } from '../nav/registry';
 import { useSnapshotSelector } from '../state/snapshot';
+import { useEscape } from './useEscape';
 import styles from './SurfaceHost.module.css';
 
 interface SurfaceHostProps {
@@ -25,6 +26,10 @@ export function SurfaceHost({
   const essence = useSnapshotSelector((s) => s.essence.display);
   const starlight = useSnapshotSelector((s) => s.starlight.display);
   const Surface = destination.Component;
+  // Back is the only way out of a surface, and it was mouse-only. Every other
+  // overlay in the game closes on Escape; this is the one the player is in most
+  // of the time.
+  useEscape(onClose);
 
   return (
     <section className={styles.host} aria-label={destination.label}>

@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { COMPANION_RARITIES } from '../../engine/companions/types';
 import type { CompanionRarity } from '../../engine/companions/types';
 import type { SummonResultSnapshot } from '../../engine/types';
 import { RARITY_LABEL, rarityStyle, starText } from '../companions/rarity';
 import { Button } from '../primitives/Button';
+import { useDialog } from '../shell/useDialog';
 import styles from './SummonReveal.module.css';
 
 /** How long each card holds before the next one turns. */
@@ -62,17 +63,23 @@ export function SummonReveal({ results, immediate = false, onDone }: SummonRevea
     return () => window.clearTimeout(timer.current);
   }, [done, results, turned]);
 
-  // Escape is the way out of every other overlay in the game.
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') (done ? onDone : setSkipped.bind(null, true))();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [done, onDone]);
+  /**
+   * Escape is the way out of every other overlay in the game - and, since this
+   * one is `aria-modal`, focus has to be in here for that to be reachable at
+   * all. `useDialog` supplies both: it binds Escape on the dialog itself
+   * rather than on the window, so the reveal swallows the key instead of also
+   * closing the surface behind it, and it puts focus on the Skip button on the
+   * way in and back where it came from on the way out.
+   */
+  const dismiss = useCallback(
+    () => (done ? onDone() : setSkipped(true)),
+    [done, onDone],
+  );
+  const dialog = useDialog<HTMLDivElement>(dismiss);
 
   return (
     <div
+      ref={dialog}
       className={styles.scrim}
       style={rarityStyle(best)}
       role="dialog"

@@ -21,7 +21,7 @@
 }
 
 .primary {
-  border-color: var(--accent);
+  border-color: var(--accent-ink);
   background: color-mix(in srgb, var(--accent) 16%, transparent);
   color: var(--ink);
 }

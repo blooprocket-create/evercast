@@ -33,9 +33,9 @@
 }
 
 .active {
-  border-color: var(--accent);
+  border-color: var(--accent-ink);
   background: color-mix(in srgb, var(--accent) 20%, var(--panel));
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .active .name {
@@ -98,8 +98,8 @@
 }
 
 .unspent {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--accent-ink);
+  color: var(--accent-ink);
 }
 
 .unspentValue {
@@ -131,7 +131,7 @@
   font: 600 var(--text-label) / 1 var(--font-ui);
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .title {
@@ -171,7 +171,7 @@
 
 .after {
   font: 600 var(--text-lead) / 1 var(--font-display);
-  color: var(--accent);
+  color: var(--accent-ink);
   font-variant-numeric: tabular-nums;
 }
 
@@ -189,7 +189,7 @@
 }
 
 .met {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .note {

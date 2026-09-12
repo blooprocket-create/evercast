@@ -18,6 +18,9 @@ export function RebirthSurface() {
 
   return (
     <Moment
+      // A destination in the rail rather than something covering it, so the
+      // nav beside it has to stay reachable. See `modal` on MomentProps.
+      modal={false}
       tone="essence"
       icon="rebirth"
       headline="Unmake the spell"

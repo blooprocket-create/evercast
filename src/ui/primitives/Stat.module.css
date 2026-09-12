@@ -20,7 +20,7 @@
 }
 
 .emphasis .label {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .value {
@@ -30,7 +30,7 @@
 }
 
 .emphasis .value {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .detail {

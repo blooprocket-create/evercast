@@ -4,7 +4,7 @@
   font: 600 var(--text-label) / 1 var(--font-ui);
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 .count {
