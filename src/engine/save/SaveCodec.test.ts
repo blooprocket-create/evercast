@@ -59,7 +59,9 @@ describe('SaveCodec', () => {
         );
         // Companions arrive with v7; older saves load with the feature not started.
         const party = loaded.state.companions.party.filter(Boolean).length;
-        expect(party, `v${version}`).toBe(version === 7 ? party : 0);
+        expect(party, `v${version}`).toBe(version >= 7 ? party : 0);
+        // Attunements arrive with v8; older saves load on the original rules.
+        expect(loaded.state.spellTree.attunements, `v${version}`).toEqual([]);
       }
     });
   });

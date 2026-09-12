@@ -8,6 +8,7 @@ import { compileSpell } from '../spell/SpellCompiler';
 import type { SpellMechanics } from '../spell/SpellMechanics';
 import { CombatSystem } from './CombatSystem';
 import { combatState, effectiveCastInterval } from './SpellCombatState';
+import { dominantRoute } from '../spellTree/SpellTreeSystem';
 
 function fixture(
   mechanics: Partial<SpellMechanics> = {},
@@ -19,7 +20,13 @@ function fixture(
 ) {
   const state = createInitialGameState(DEFAULT_ENGINE_CONFIG),
     events: GameEvent[] = [];
+  // `route` is the shorthand these cases were written in, and it still names a
+  // single shape exactly. Expand it to the flags combat actually reads, so a
+  // case can say `route: 'piercing'` or set the flags directly for a blend.
   const m = { ...defaults, ...mechanics };
+  if (mechanics.route === 'twin') m.twinCast = true;
+  if (mechanics.route === 'piercing') m.piercingCast = true;
+  if (mechanics.route === 'charged') m.chargedCast = true;
   state.run.spell = {
     baseDamage: '10',
     castInterval: 1,
@@ -411,5 +418,311 @@ describe('Targeting', () => {
     expect(f.cast().map((h) => h.instanceId)).toEqual([2]);
     f.run.enemies[1].hp = big(0);
     expect(f.cast().map((h) => h.instanceId)).toEqual([1]);
+  });
+});
+
+describe('blended routes', () => {
+  const line = [
+    { x: 2.4, z: 0 },
+    { x: 3.6, z: 0 },
+    { x: 4.8, z: 0 },
+  ];
+
+  it('sends two projectiles that each penetrate', () => {
+    const f = fixture({ twinCast: true, piercingCast: true, routeBlendScale: 1 }, line);
+    const hits = f.cast();
+    // One bolt from the nearest enemy through the one behind it, a second from
+    // the next enemy through the one behind that.
+    expect(hits.map((h) => h.instanceId)).toEqual([1, 2, 2, 3]);
+    expect(hits.map((h) => h.projectileIndex)).toEqual([0, 0, 1, 1]);
+    expect(hits.map((h) => h.source)).toEqual(['direct', 'pierce', 'direct', 'pierce']);
+    // Each chain numbers its own steps; it is not one long run of four.
+    expect(hits.map((h) => h.sequence)).toEqual([0, 1, 0, 1]);
+  });
+
+  it('carries the charge onto both twin projectiles', () => {
+    const f = fixture({ twinCast: true, chargedCast: true, routeBlendScale: 1 }, line);
+    const hits = f.cast();
+    expect(hits.map((h) => Number(h.damage))).toEqual([30, 30]);
+    // Slower as well as heavier: the charged interval still applies.
+    expect(compileSpell(f.run.spell).castInterval).toBeCloseTo(1.7);
+    expect(compileSpell(f.run.spell).projectileCount).toBe(2);
+  });
+
+  it('compounds all three routes', () => {
+    const f = fixture(
+      { twinCast: true, piercingCast: true, chargedCast: true, routeBlendScale: 1 },
+      line,
+    );
+    const hits = f.cast();
+    expect(hits).toHaveLength(4);
+    for (const hit of hits) expect(Number(hit.damage)).toBe(30);
+  });
+
+  it('scales base damage down once per route beyond the first', () => {
+    const one = fixture({ twinCast: true }, line);
+    expect(Number(one.cast()[0].damage)).toBe(10);
+
+    const two = fixture({ twinCast: true, piercingCast: true }, line);
+    expect(Number(two.cast()[0].damage)).toBe(7.5);
+
+    const three = fixture({ twinCast: true, piercingCast: true, chargedCast: true }, line);
+    // 10 x 3 charged, x 0.75 twice.
+    expect(Number(three.cast()[0].damage)).toBe(16.875);
+  });
+
+  it('halves the next interval only when no projectile found a continuation', () => {
+    const alone = [{ x: 2.4, z: 0 }];
+    const blocked = fixture({ twinCast: true, piercingCast: true }, alone);
+    blocked.cast();
+    expect(blocked.runtime.nextCastHaste).toBe(true);
+
+    const through = fixture({ twinCast: true, piercingCast: true }, line);
+    through.cast();
+    expect(through.runtime.nextCastHaste).toBe(false);
+  });
+
+  it('rolls each hit on its own, so two projectiles cannot share a proc result', () => {
+    const f = fixture(
+      { twinCast: true, piercingCast: true, meteor: true, routeBlendScale: 1 },
+      line,
+    );
+    const roll = vi
+      .spyOn(f.combat.evolving.effects, 'roll')
+      .mockImplementation((_run, chance) => chance === 0.15);
+    f.cast();
+    // Four hits, four independent meteor rolls, four queued meteors.
+    const meteorRolls = roll.mock.calls.filter((call) => call[1] === 0.15);
+    expect(meteorRolls).toHaveLength(4);
+    expect(new Set(meteorRolls.map((call) => call[4])).size).toBe(4);
+    expect(f.runtime.meteors).toHaveLength(4);
+  });
+
+  it('names the heaviest shape it holds', () => {
+    expect(dominantRoute({ ...defaults, twinCast: true })).toBe('twin');
+    expect(dominantRoute({ ...defaults, twinCast: true, piercingCast: true })).toBe('piercing');
+    expect(dominantRoute({ ...defaults, twinCast: true, chargedCast: true })).toBe('charged');
+    expect(dominantRoute(defaults)).toBe('base');
+  });
+});
+
+describe('apex capstones', () => {
+  it('Pandemic spreads to several uninfected neighbours at once', () => {
+    const cluster = [
+      { x: 0, z: 0 },
+      { x: 1, z: 0 },
+      { x: 2, z: 0 },
+      { x: 20, z: 0 },
+    ];
+    const one = fixture({ route: 'twin', dot: true, contagion: true }, cluster);
+    vi.spyOn(one.combat.evolving.effects, 'roll').mockReturnValue(true);
+    one.combat.evolving.effects.applyDot(one.run, one.run.enemies[0], '10', one.m, 1, 1);
+    one.advance(1);
+    expect(one.run.enemies.filter((e) => e.statuses?.dot)).toHaveLength(2);
+
+    const many = fixture(
+      { route: 'twin', dot: true, contagion: true, pandemic: true, pandemicTargets: 2 },
+      cluster,
+    );
+    vi.spyOn(many.combat.evolving.effects, 'roll').mockReturnValue(true);
+    many.combat.evolving.effects.applyDot(many.run, many.run.enemies[0], '10', many.m, 1, 1);
+    many.advance(1);
+    // The source plus both neighbours in radius; the distant one is untouched.
+    expect(many.run.enemies.filter((e) => e.statuses?.dot)).toHaveLength(3);
+    expect(many.run.enemies[3].statuses?.dot).toBeUndefined();
+  });
+
+  it('Pandemic still refreshes the nearest when there is nothing new to infect', () => {
+    const f = fixture({ route: 'twin', dot: true, contagion: true, pandemic: true }, [
+      { x: 0, z: 0 },
+      { x: 1, z: 0 },
+    ]);
+    vi.spyOn(f.combat.evolving.effects, 'roll').mockReturnValue(true);
+    for (const enemy of f.run.enemies)
+      f.combat.evolving.effects.applyDot(f.run, enemy, '10', f.m, 1, 1);
+    f.advance(1);
+    expect(f.run.enemies.every((e) => e.statuses?.dot)).toBe(true);
+  });
+
+  it('Singularity collapses the terminal hit into an explosion scaled by the force', () => {
+    const positions = [
+      { x: 2.4, z: 0 },
+      { x: 3.6, z: 0 },
+      { x: 4.8, z: 0 },
+    ];
+    const f = fixture(
+      { route: 'piercing', driving: true, kinetic: true, penetrations: 2, singularity: true },
+      positions,
+    );
+    f.cast();
+    const blasts = f.events.filter((e) => e.type === 'effect_hit' && e.effect === 'explosion');
+    expect(blasts.length).toBeGreaterThan(0);
+    // It fires from the last enemy in the chain, not the first.
+    expect(blasts.every((e) => e.type === 'effect_hit' && e.sourceInstanceId === 3)).toBe(true);
+  });
+
+  it('Singularity has nothing to collapse when the chain found no continuation', () => {
+    const f = fixture({ route: 'piercing', driving: true, kinetic: true, singularity: true }, [
+      { x: 2.4, z: 0 },
+    ]);
+    f.cast();
+    expect(f.events.some((e) => e.type === 'effect_hit' && e.effect === 'explosion')).toBe(false);
+  });
+
+  it('Ascendance keeps Supercharge through a change of target', () => {
+    const f = fixture({ route: 'charged', supercharge: true, ascendance: true });
+    for (let i = 0; i < 3; i++) f.cast();
+    expect(f.runtime.supercharge).toBe(3);
+    f.run.enemies.shift();
+    f.cast();
+    // Without Ascendance this resets to 1; here it carries on building.
+    expect(f.runtime.supercharge).toBe(4);
+  });
+
+  it('Ascendance sharpens a critical hit by the Focus being held', () => {
+    const plain = fixture({ route: 'charged', perfect: true }, [{ x: 2.4, z: 0 }]);
+    const sharp = fixture({ route: 'charged', perfect: true, ascendance: true }, [{ x: 2.4, z: 0 }]);
+    for (const f of [plain, sharp]) {
+      f.cast();
+      f.cast();
+      f.cast();
+    }
+    expect(plain.runtime.focus).toBe(3);
+    expect(sharp.runtime.focus).toBe(3);
+    const plainHit = plain.cast()[0],
+      sharpHit = sharp.cast()[0];
+    expect(plainHit.critical).toBe(true);
+    expect(sharpHit.critical).toBe(true);
+    // critMultiplier 2, plus three points of Focus at +0.25 each.
+    expect(Number(plainHit.damage)).toBeCloseTo(30 * 2);
+    expect(Number(sharpHit.damage)).toBeCloseTo(30 * (2 + 3 * 0.25));
+  });
+});
+
+describe('blended routes: what the second projectile must not double', () => {
+  const line = [
+    { x: 2.4, z: 0 },
+    { x: 3.6, z: 0 },
+    { x: 4.8, z: 0 },
+  ];
+
+  it('counts a critical from any projectile, not just the first, against Focus', () => {
+    const f = fixture(
+      { chargedCast: true, twinCast: true, perfect: true, routeBlendScale: 1 },
+      line,
+    );
+    // The first hit misses its roll and the second lands one, which is the case
+    // a single-target Charged cast could never produce.
+    vi.spyOn(f.combat.evolving.effects, 'roll').mockImplementation(
+      (_run, _chance, channel, _castId, source) => channel === 11 && source === 1,
+    );
+    const hits = f.cast();
+    expect(hits.map((h) => h.critical)).toEqual([false, true]);
+    // The cast crit, so it is not a non-crit and builds no Focus.
+    expect(f.runtime.focus).toBe(0);
+  });
+
+  it('pays a stored velocity charge to one terminal hit, not to every chain', () => {
+    const f = fixture(
+      {
+        twinCast: true,
+        piercingCast: true,
+        kinetic: true,
+        driving: true,
+        penetrations: 1,
+        routeBlendScale: 1,
+      },
+      line,
+    );
+    f.runtime.velocityStored = '100';
+    f.runtime.velocityReady = true;
+    const hits = f.cast();
+    // Base 10 each; a terminal hit adds its own chain's force (10 x 0.3), and
+    // the 100 stored belongs to the cast, so only the first terminal gets it.
+    expect(hits.map((h) => Number(h.damage))).toEqual([10, 113, 10, 13]);
+    expect(f.runtime.velocityReady).toBe(false);
+    expect(f.runtime.velocityStored).toBe('0');
+  });
+});
+
+describe('what the spell does about a death', () => {
+  const pair = [
+    { x: 0, z: 0 },
+    { x: 1, z: 0 },
+    { x: 20, z: 0 },
+  ];
+  /** Kill an enemy outright, the way any damage source eventually would. */
+  const fell = (f: ReturnType<typeof fixture>, index: number) => {
+    f.run.enemies[index].hp = big(0);
+    // So each case reads only what answering the death emitted.
+    f.events.length = 0;
+    return f.combat.evolving.effects.resolveKill(f.run, f.run.enemies[index]);
+  };
+
+  it('bursts the infection out of a body that died carrying it', () => {
+    const f = fixture({ necrosis: true, dot: true, necrosisDamage: 2, necrosisRadius: 3 }, pair);
+    f.combat.evolving.effects.applyDot(f.run, f.run.enemies[0], '10', f.m, 1, 1);
+    expect(fell(f, 0)).toEqual([]);
+
+    // The neighbour took the burst and caught what killed its neighbour.
+    expect(Number(f.run.enemies[1].hp.toString())).toBeLessThan(10000);
+    expect(f.run.enemies[1].statuses?.dot).toBeDefined();
+    // The one across the field is outside the radius.
+    expect(f.run.enemies[2].hp.toString()).toBe('10000');
+    expect(f.run.enemies[2].statuses?.dot).toBeUndefined();
+    expect(f.events.some((e) => e.type === 'effect_hit' && e.effect === 'necrosis')).toBe(true);
+  });
+
+  it('says what the burst killed, which is how a cascade continues', () => {
+    const f = fixture({ necrosis: true, dot: true, necrosisDamage: 2, necrosisRadius: 3 }, pair);
+    f.combat.evolving.effects.applyDot(f.run, f.run.enemies[0], '10', f.m, 1, 1);
+    f.run.enemies[1].hp = big(1);
+    expect(fell(f, 0)).toEqual([2]);
+  });
+
+  it('does nothing for a body that was never infected', () => {
+    const f = fixture({ necrosis: true, dot: true }, pair);
+    expect(fell(f, 0)).toEqual([]);
+    expect(f.run.enemies[1].hp.toString()).toBe('10000');
+    expect(f.events).toHaveLength(0);
+  });
+
+  it('builds Momentum from a kill under Cascade, and tips into Overdrive', () => {
+    const f = fixture({ cascade: true, momentum: true, overdrive: true, momentumCap: 2 }, pair);
+    fell(f, 0);
+    expect(f.runtime.momentum).toBe(1);
+    expect(f.runtime.overdriveUntil).toBe(0);
+    fell(f, 1);
+    expect(f.runtime.momentum).toBe(2);
+    expect(f.runtime.overdriveUntil).toBeGreaterThan(0);
+  });
+
+  it('returns Focus and Supercharge rather than burying them with the target', () => {
+    const f = fixture(
+      { reclamation: true, perfect: true, supercharge: true, reclaimFocus: 2 },
+      pair,
+    );
+    fell(f, 0);
+    expect(f.runtime.focus).toBe(2);
+    expect(f.runtime.supercharge).toBe(1);
+  });
+
+  it('returns nothing a build does not have', () => {
+    // Reclamation without Perfect Strike or Supercharge has no resource to give
+    // back, and must not invent one.
+    const f = fixture({ reclamation: true }, pair);
+    fell(f, 0);
+    expect(f.runtime.focus).toBe(0);
+    expect(f.runtime.supercharge).toBe(0);
+    expect(f.events).toHaveLength(0);
+  });
+
+  it('is inert for a build that has taken no capstone', () => {
+    const f = fixture({ dot: true }, pair);
+    f.combat.evolving.effects.applyDot(f.run, f.run.enemies[0], '10', f.m, 1, 1);
+    expect(fell(f, 0)).toEqual([]);
+    expect(f.run.enemies[1].hp.toString()).toBe('10000');
+    expect(f.runtime.momentum).toBe(0);
+    expect(f.events).toHaveLength(0);
   });
 });

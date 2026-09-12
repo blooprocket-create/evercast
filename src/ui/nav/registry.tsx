@@ -6,6 +6,7 @@ import { CompanionsSurface } from '../surfaces/CompanionsSurface';
 import { PartySurface } from '../surfaces/PartySurface';
 import { SummonSurface } from '../surfaces/SummonSurface';
 import { RebirthSurface } from '../surfaces/RebirthSurface';
+import { AttunementsSurface } from '../surfaces/AttunementsSurface';
 import { SettingsSurface } from '../surfaces/SettingsSurface';
 
 /**
@@ -77,6 +78,18 @@ export const DESTINATIONS: RegisteredDestination[] = [
     archetype: 'dashboard',
     badge: (snapshot) => (snapshot.canSummon ? 'dot' : null),
     Component: SummonSurface,
+  },
+  {
+    id: 'attunements',
+    group: 'power',
+    label: 'Attunements',
+    icon: 'gearTree',
+    archetype: 'detail',
+    // Knowledge only exists after a Rebirth, so the rail stays quiet until the
+    // currency does. An already-attuned save keeps it visible.
+    available: (snapshot) =>
+      snapshot.canRebirth || snapshot.rebirths > 0 || snapshot.ownedAttunementIds.length > 0,
+    Component: AttunementsSurface,
   },
   {
     id: 'rebirth',

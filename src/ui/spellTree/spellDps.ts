@@ -1,6 +1,6 @@
 import type Decimal from 'break_eternity.js';
 import { big } from '../../engine/numbers';
-import { compileSpell } from '../../engine/spell/SpellCompiler';
+import { compileSpell, routeDamageScale } from '../../engine/spell/SpellCompiler';
 import type { CompiledSpell } from '../../engine/spell/types';
 import { buildSpellFromTree } from '../../engine/spellTree/SpellTreeSystem';
 import type { SpellTreeState } from '../../engine/spellTree/types';
@@ -14,9 +14,11 @@ import type { SpellTreeState } from '../../engine/spellTree/types';
  * exact even though the base cast interval ignores momentum and overdrive.
  */
 export function dpsOf(compiled: CompiledSpell, gearDamageBonus: string): Decimal {
-  const charged =
-    compiled.mechanics?.route === 'charged' ? compiled.mechanics.chargedDamage : 1;
-  const perProjectile = big(compiled.damage).add(big(gearDamageBonus)).mul(charged);
+  // Same scale combat and the companions use, so the projection cannot drift
+  // from what awakening the node actually does.
+  const perProjectile = big(compiled.damage)
+    .add(big(gearDamageBonus))
+    .mul(routeDamageScale(compiled.mechanics));
   const critFactor = 1 + compiled.critChance * Math.max(0, compiled.critMultiplier - 1);
   return perProjectile
     .mul(compiled.projectileCount)
@@ -85,6 +87,7 @@ export function projectNode(
     buildSpellFromTree({
       purchasedPoints: state.purchasedPoints,
       activatedNodeIds: [...state.activatedNodeIds, nodeId],
+      attunements: state.attunements,
     }),
   );
   const changes = describeChanges(compiledBefore, compiledAfter);

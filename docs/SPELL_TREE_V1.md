@@ -1,5 +1,10 @@
 # Real Spell Tree v1
 
+> Superseded by [Spell Tree v2](SPELL_TREE_V2.md), which widens the exclusive
+> groups with Attunements, lets the three routes compose, and adds a capstone
+> per route. The combat conventions below still hold. The save section describes
+> the version 6 migration as it was written; the codec is now at version 8.
+
 Evercast remains one spell. Its 67-node graph has a free root, three mutually exclusive routes, nine identities, 36 optional side upgrades, nine mutations, and nine pairwise fusions. A normal complete build can allocate 14 points: one route, two identities, their eight side upgrades and two mutations, and one fusion.
 
 ## Rules and ownership
@@ -8,7 +13,9 @@ Evercast remains one spell. Its 67-node graph has a free root, three mutually ex
 
 `SpellTreeSystem` compiles allocations into `SpellBuild.mechanics`. Combat consumes these named behaviors and tuning values, never node IDs or UI coordinates. `SpellTreeLayout` owns the three route columns and places fusions between their parents. Available, active, missing-prerequisite, insufficient-point and exclusive states have distinct labels; excluded branches use dashed borders. Route navigation keeps all three choices accessible on narrower screens.
 
-Future fusion identities can be normal children requiring the fusion, with a new exclusive group whose `maxSelections` is 1. There are no invented future effects or spendable placeholder nodes.
+Future fusion identities can be normal children requiring the fusion. v2 takes
+that seam: the apexes are children of three fusions each, still with no invented
+future effects and no spendable placeholder nodes.
 
 ## Authoritative combat
 
@@ -30,7 +37,7 @@ Important playtest conventions:
 
 ## Central playtest tuning
 
-All figures below are provisional, in `src/content/spellTreeTuning.ts`. Point price remains `floor(8 × 1.27^purchasedPoints)`; Gold, gear, Essence rewards, waves and Rebirth progression are unchanged. The purchase ceiling still follows the authored non-root node count; migration preserves already purchased points.
+All figures below are provisional, in `src/content/spellTreeTuning.ts`. Point price remains `floor(8 × 1.27^purchasedPoints)`; Gold, gear, Essence rewards, waves and Rebirth progression are unchanged. Migration preserves already purchased points. (v2 replaced the purchase ceiling: it is the largest build the current rules allow, not the authored node count.)
 
 | Mechanic | Default |
 | --- | --- |
@@ -53,7 +60,7 @@ All figures below are provisional, in `src/content/spellTreeTuning.ts`. Point pr
 | Doomfall / Blight | ×3 meteor damage / ×1.5 Weakness strength |
 | Critical Overload | +20% critical multiplier factor per Supercharge stack |
 
-Side upgrades add the same bonus at ranks I and II: radius +0.35, explosion damage +15 percentage points, DoT damage +8 points, DoT/Weakness duration +1.5s, Weakness strength +4 points, penetrations +1, pierced damage +15 points, force gain +15 points, force cap +100 points, Momentum speed +2 points/stack, Momentum duration +1s, crit chance +5 points, crit multiplier +0.3, charged damage multiplier +0.4, charged interval multiplier −0.15, execute damage +20 points, execute threshold +5 points. Overcharge itself adds +0.4 charged damage multiplier.
+Side upgrades add the same bonus at each rank (v2 adds a third): radius +0.35, explosion damage +15 percentage points, DoT damage +8 points, DoT/Weakness duration +1.5s, Weakness strength +4 points, penetrations +1, pierced damage +15 points, force gain +15 points, force cap +100 points, Momentum speed +2 points/stack, Momentum duration +1s, crit chance +5 points, crit multiplier +0.3, charged damage multiplier +0.4, charged interval multiplier −0.15, execute damage +20 points, execute threshold +5 points. Overcharge itself adds +0.4 charged damage multiplier.
 
 ## Saves
 

@@ -140,6 +140,9 @@ export interface SimulationSnapshot {
   spellTreePurchasedPoints: number;
   spellTreeTotalPoints: number;
   spellTreeUnspentPoints: number;
+  /** The largest legal build the current attunements allow - the real ceiling. */
+  spellTreeMaxPoints: number;
+  ownedAttunementIds: string[];
   nextSpellPointCost: QuantitySnapshot;
   activeSpellNodeIds: string[];
   progressToNextEncounter: number;
@@ -170,6 +173,7 @@ export type EngineCommand =
   | { type: 'set_spell_build'; build: import('./spell/types').SpellBuild }
   | { type: 'level_gear'; slot: GearSlot }
   | { type: 'buy_spell_point' }
+  | { type: 'buy_attunement'; attunementId: string }
   | { type: 'activate_spell_node'; nodeId: string }
   | { type: 'respec_spell_tree' }
   | { type: 'rebirth' }

@@ -106,8 +106,8 @@ describe('the real spell tree, laid out in layers', () => {
   const layout = layoutGraph(SPELL_TREE_GRAPH, LAYERED);
 
   it('is the size we think it is', () => {
-    expect(SPELL_TREE_NODES).toHaveLength(67);
-    expect(layout.edges).toHaveLength(75);
+    expect(SPELL_TREE_NODES).toHaveLength(127);
+    expect(layout.edges).toHaveLength(147);
   });
 
   it('places every authored node exactly once', () => {

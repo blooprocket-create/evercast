@@ -1,5 +1,6 @@
 import { big } from '../numbers';
 import type { CompiledSpell, SpellBuild, SpellModifier, SpellTrigger } from './types';
+import type { SpellMechanics } from './SpellMechanics';
 
 export function createDefaultSpellBuild(): SpellBuild {
   return {
@@ -10,6 +11,22 @@ export function createDefaultSpellBuild(): SpellBuild {
     critMultiplier: 2,
     modifiers: [],
   };
+}
+
+/**
+ * Every multiplier the routes put on base damage before a single hit is
+ * resolved: the charge, and the cost of holding more than one shape at once.
+ *
+ * One definition because two drift. `wizardPerHit` and this were computed
+ * separately once before and the charged route made it into only one of them,
+ * so companions quietly hit for less than the interface said.
+ */
+export function routeDamageScale(mechanics: SpellMechanics | undefined): number {
+  if (!mechanics) return 1;
+  const routes =
+    Number(mechanics.twinCast) + Number(mechanics.piercingCast) + Number(mechanics.chargedCast);
+  const blend = routes > 1 ? Math.pow(mechanics.routeBlendScale, routes - 1) : 1;
+  return (mechanics.chargedCast ? mechanics.chargedDamage : 1) * blend;
 }
 
 export function compileSpell(build: SpellBuild): CompiledSpell {
@@ -89,17 +106,20 @@ export function compileSpell(build: SpellBuild): CompiledSpell {
   }
 
   const mechanics = build.mechanics;
-  if (mechanics?.route === 'twin') projectileCount = 2;
-  if (mechanics?.route === 'piercing') {
+  // The routes compose, so these are three independent adjustments rather than
+  // one switch: Piercing and Charged fix the projectile count at one, and Twin
+  // overrides that to two whether or not they are also held.
+  if (mechanics?.piercingCast) {
     projectileCount = 1;
     pierceTargets = mechanics.chain ? 0 : mechanics.penetrations;
     chainTargets = mechanics.chain ? mechanics.penetrations : 0;
     chainDamageMultiplier = mechanics.piercedDamage;
   }
-  if (mechanics?.route === 'charged') {
+  if (mechanics?.chargedCast) {
     projectileCount = 1;
     castInterval *= mechanics.chargedInterval;
   }
+  if (mechanics?.twinCast) projectileCount = 2;
   return {
     damage: damage.toString(),
     mechanics: build.mechanics,

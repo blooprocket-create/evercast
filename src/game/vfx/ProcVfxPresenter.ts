@@ -99,7 +99,8 @@ export class ProcVfxPresenter {
           bursts.add(event.effectId);
           this.combat.burst(
             new Vector3(event.position.x, 0.3, event.position.z),
-            'fire',
+            // A body coming apart is the infection going off, not a detonation.
+            event.effect === 'necrosis' ? 'plague' : 'fire',
             event.empowered ? 2.2 : 1.2,
             event.empowered,
           );

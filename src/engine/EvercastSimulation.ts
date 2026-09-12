@@ -154,6 +154,8 @@ export class EvercastSimulation {
       }
       case 'buy_spell_point':
         return this.spellTreeSystem.buyPoint(this.state);
+      case 'buy_attunement':
+        return this.spellTreeSystem.buyAttunement(this.state, command.attunementId);
       case 'activate_spell_node': {
         const activated = this.spellTreeSystem.activateNode(this.state, command.nodeId);
         if (activated) {

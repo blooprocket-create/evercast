@@ -13,7 +13,12 @@ import { big } from '../../src/engine/numbers';
 import type { GameEvent } from '../../src/engine/events/GameEvent';
 import type { VfxQuality } from '../../src/game/vfx/VfxPool';
 import { SPELL_TREE_NODES, SPELL_TREE_NODE_BY_ID } from '../../src/content/spellTree';
-import { buildSpellFromTree, canActivateSpellNode } from '../../src/engine/spellTree/SpellTreeSystem';
+import {
+  SPELL_TREE_NODE_COUNT,
+  buildSpellFromTree,
+  canActivateSpellNode,
+} from '../../src/engine/spellTree/SpellTreeSystem';
+import { SPELL_ATTUNEMENTS } from '../../src/content/spellTree';
 
 const query = new URLSearchParams(location.search);
 const view = new EvercastScene(
@@ -40,7 +45,7 @@ const snapshot = () =>
     lastEvent: 'Authored spell review',
   });
 const mode = document.querySelector<HTMLSelectElement>('#mode')!;
-for (const node of SPELL_TREE_NODES.filter((n) => ['root', 'route', 'mutation', 'fusion'].includes(n.kind))) {
+for (const node of SPELL_TREE_NODES.filter((n) => ['root', 'route', 'mutation', 'fusion', 'apex'].includes(n.kind))) {
   const option = document.createElement('option');
   option.value = node.id;
   option.textContent = `${node.kind} · ${node.name}`;
@@ -85,7 +90,13 @@ function configure(id: string) {
   if (!node) throw new Error(`Unknown review node: ${id}`);
   mode.value = id;
   clearSpellCombat(state.run);
-  state.spellTree = { purchasedPoints: 20, activatedNodeIds: [] };
+  // Review-only: every attunement granted and points to spare, so any authored
+  // path can be allocated for inspection. Never touches a saved game.
+  state.spellTree = {
+    purchasedPoints: SPELL_TREE_NODE_COUNT,
+    activatedNodeIds: [],
+    attunements: SPELL_ATTUNEMENTS.map((attunement) => attunement.id),
+  };
   const activate = (key: string) => {
     if (key === 'evercast_root' || state.spellTree.activatedNodeIds.includes(key)) return;
     SPELL_TREE_NODE_BY_ID.get(key)!.requiresAll.forEach(activate);

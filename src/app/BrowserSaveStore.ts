@@ -1,6 +1,6 @@
 import type { EngineConfig } from '../engine/config';
 import type { GameState } from '../engine/model';
-import { SaveCodec, type SaveEnvelopeV7 } from '../engine/save/SaveCodec';
+import { SaveCodec, type SaveEnvelopeV8 } from '../engine/save/SaveCodec';
 
 export interface LoadedSave {
   state: GameState;
@@ -46,7 +46,7 @@ export class BrowserSaveStore {
    * the rest picked up next boot instead of lost.
    */
   save(state: GameState, savedAt = new Date()): void {
-    const envelope: SaveEnvelopeV7 = this.codec.encode(state, savedAt);
+    const envelope: SaveEnvelopeV8 = this.codec.encode(state, savedAt);
     this.storage?.setItem(this.key, JSON.stringify(envelope));
   }
 
