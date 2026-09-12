@@ -1,6 +1,6 @@
 import type { GameEvent } from '../../engine/events/GameEvent';
 import type { SimulationSnapshot } from '../../engine/types';
-import { planAudio } from './AudioCuePlan';
+import { planAudio, type VoiceName } from './AudioCuePlan';
 import {
   BEATS_PER_BAR,
   barArpeggio,
@@ -224,6 +224,31 @@ export class AudioEngine {
         detune: cue.detune,
       });
     }
+  }
+
+  /**
+   * Plays one voice on the effects bus, on demand.
+   *
+   * A volume slider that can only prove itself mid-fight is a slider nobody can
+   * set: the settings screen is covering the game while you drag it, so there
+   * is nothing to hear. This takes the same path a combat cue does - same bus,
+   * same mix - so what you audition is what the fight will sound like.
+   *
+   * Deliberately outside the throttle, which exists to keep a wide build from
+   * melting the audio thread. A press that lands within the 45ms an impact is
+   * held off for would be dropped in silence, which from the far side of a
+   * button reads as a broken control - and one voice per press is a rate no
+   * hand can push anywhere near the ceiling anyway.
+   */
+  preview(voice: VoiceName = 'impact'): void {
+    const context = this.context;
+    if (!context || !this.effectsBus || this.mix.muted) return;
+
+    // Scheduled a beat ahead rather than at `currentTime`, which a busy thread
+    // can leave already in the past - a voice starting late begins mid-envelope
+    // and clicks.
+    const at = context.currentTime + 0.02;
+    VOICES[voice]({ context, destination: this.effectsBus, at, gain: 0.6, detune: 0 });
   }
 
   /**

@@ -55,4 +55,25 @@ describe('AudioEngine without a browser', () => {
     expect(engine.running).toBe(false);
     engine.dispose();
   });
+
+  /**
+   * The settings screen calls this on every slider release, so it runs long
+   * before the first gesture has built a context - and it must say so through
+   * `running` rather than by throwing, because that is the flag the screen
+   * reads to tell the player their browser is refusing to play.
+   */
+  it('auditions nothing, and reports it, before there is a context', () => {
+    const engine = new AudioEngine();
+    engine.setMix({ master: 1, music: 1, effects: 1, muted: false });
+
+    expect(() => engine.preview()).not.toThrow();
+    expect(() => engine.preview('bossKill')).not.toThrow();
+    expect(engine.running).toBe(false);
+  });
+
+  it('auditions nothing while muted', () => {
+    const engine = new AudioEngine();
+    engine.setMix({ master: 1, music: 1, effects: 1, muted: true });
+    expect(() => engine.preview()).not.toThrow();
+  });
 });

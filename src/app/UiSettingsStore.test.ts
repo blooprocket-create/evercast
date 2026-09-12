@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { AudioMix } from '../game/audio/AudioEngine';
 import {
   DEFAULT_UI_SETTINGS,
   UI_SETTINGS_KEY,
@@ -47,6 +48,23 @@ describe('sanitizeUiSettings', () => {
     expect(settings.audio.master).toBe(0);
     expect(settings.audio.music).toBe(1);
     expect(settings.audio.effects).toBe(DEFAULT_UI_SETTINGS.audio.effects);
+  });
+});
+
+/**
+ * `AudioSettings` and `AudioMix` are declared separately on purpose - `src/game`
+ * must not import from `src/app` - which means nothing but a test keeps them
+ * honest. That gap is not hypothetical: the audio section shipped with four
+ * sliders months before there was an engine to honour them, and went on
+ * telling players so long after there was. A setting the engine cannot read is
+ * a control that does nothing.
+ */
+describe('audio settings and the engine mix', () => {
+  it('are the same knobs', () => {
+    // Assignability is the compile-time half; `tsc -b` covers this file.
+    const mix: AudioMix = DEFAULT_UI_SETTINGS.audio;
+    // And the runtime half, for a knob added to the settings but not the mix.
+    expect(Object.keys(mix).sort()).toEqual(['effects', 'master', 'music', 'muted']);
   });
 });
 

@@ -10,6 +10,7 @@ export const ICON_NAMES = [
   'gearTree',
   'rebirth',
   'automation',
+  'audio',
   'map',
   'bestiary',
   'story',
