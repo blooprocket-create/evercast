@@ -1,3 +1,4 @@
+import type Decimal from 'break_eternity.js';
 import { createDefaultCatalog, validateCatalog } from '../content/catalog';
 import type { ContentCatalog } from '../content/types';
 import { CombatSystem } from './combat/CombatSystem';
@@ -106,6 +107,29 @@ export class EvercastSimulation {
       if (!this.recordPresentationEvents) clearTelegraphs(this.state.run);
       this.recordPresentationEvents = previousRecording;
     }
+  }
+
+  /**
+   * Adds yield the player is owed for time nobody simulated.
+   *
+   * Offline progress samples a window at full fidelity and credits the rest from
+   * the rate it measured, so this is the one way currency enters the world
+   * without a kill behind it. It is deliberately narrow: Gold and Starlight are
+   * repeatable kill rewards and scale with nothing but the stage the sample ran
+   * at, so a rate holds. Essence and stage are not here on purpose - Essence is
+   * a first-clear reward and the stage is the record of where the run actually
+   * reached, and inventing either would put the save at odds with
+   * `totalFirstClearEssenceEarned`, which treats the highest stage as the
+   * authority on Essence ever earned.
+   */
+  creditOfflineYield(yields: { gold: Decimal; starlight: Decimal; kills: number }): void {
+    if (yields.gold.cmp(0) > 0) {
+      this.state.equipment.gold = this.state.equipment.gold.add(yields.gold);
+    }
+    if (yields.starlight.cmp(0) > 0) {
+      this.state.companions.starlight = this.state.companions.starlight.add(yields.starlight);
+    }
+    if (yields.kills > 0) this.state.run.stats.kills += Math.floor(yields.kills);
   }
 
   execute(command: EngineCommand): boolean {

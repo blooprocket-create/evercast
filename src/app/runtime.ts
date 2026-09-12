@@ -69,9 +69,14 @@ export function awayDebt(): number {
   return awayDebtSeconds;
 }
 
-/** The loop reports what its catch-up still owes, already capped. */
+/** The loop reports back once it has settled what was owed. */
 export function setAwayDebt(seconds: number): void {
   awayDebtSeconds = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
+}
+
+/** Hidden time joins whatever boot already owed, so one path settles both. */
+export function addAwayDebt(seconds: number): void {
+  if (Number.isFinite(seconds) && seconds > 0) awayDebtSeconds += seconds;
 }
 
 export const snapshotStore = new SnapshotStore(simulation.getSnapshot());

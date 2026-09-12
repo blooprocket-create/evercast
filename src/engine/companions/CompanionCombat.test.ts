@@ -3,7 +3,7 @@ import { createDefaultCatalog } from '../../content/catalog';
 import { DEFAULT_ENGINE_CONFIG } from '../config';
 import { EncounterSystem } from '../encounters/EncounterSystem';
 import { EvercastSimulation } from '../EvercastSimulation';
-import { OfflineProgressor } from '../offline/OfflineProgressor';
+import { OFFLINE_SAMPLE_SECONDS, OfflineProgressor } from '../offline/OfflineProgressor';
 import { chooseTarget, threatOf } from '../combat/Threat';
 import { contactPoint } from '../combat/Contact';
 import type { GameEvent } from '../events/GameEvent';
@@ -122,19 +122,45 @@ describe('companion combat determinism', () => {
 
   it('catches up offline exactly as it would have played live', () => {
     // Away progress runs through the same advance() with presentation events
-    // suppressed. If companions behaved differently there, an hour in a
-    // background tab would quietly produce a different game than an hour
+    // suppressed. If companions behaved differently there, a spell in a
+    // background tab would quietly produce a different game than the same spell
     // watched - which is the one thing offline catch-up must never do.
-    const watched = fresh(2718);
-    watched.advance(1800);
-    watched.drainPresentationEvents();
-
+    //
+    // Exactness is the contract up to `OFFLINE_SAMPLE_SECONDS`, which covers a
+    // tab closed over lunch. A longer absence is simulated for that window and
+    // credited for the rest from the rate it measured, because simulating a day
+    // event by event does not fit in a startup - see `OfflineProgressor`.
     const away = fresh(2718);
     away.drainPresentationEvents(); // Setting the party up is not away progress.
-    new OfflineProgressor(DEFAULT_ENGINE_CONFIG.maxOfflineSeconds).apply(away, 1800);
+    const summary = new OfflineProgressor(DEFAULT_ENGINE_CONFIG.maxOfflineSeconds).apply(
+      away,
+      OFFLINE_SAMPLE_SECONDS,
+    );
+    expect(summary.secondsSimulated).toBe(OFFLINE_SAMPLE_SECONDS);
+
+    const watched = fresh(2718);
+    watched.advance(OFFLINE_SAMPLE_SECONDS);
+    watched.drainPresentationEvents();
 
     expect(outcome(away)).toEqual(outcome(watched));
     // And nothing was queued for a renderer that was not watching.
+    expect(away.drainPresentationEvents()).toEqual([]);
+  });
+
+  it('keeps companions fighting through the window a long absence samples', () => {
+    // The estimate is only as good as the window it measures, so the window has
+    // to be a real fight: a party that never swings would set the rate for the
+    // whole day at whatever the mage manages alone.
+    const away = fresh(1234);
+    away.drainPresentationEvents();
+    const summary = new OfflineProgressor(DEFAULT_ENGINE_CONFIG.maxOfflineSeconds).apply(
+      away,
+      DEFAULT_ENGINE_CONFIG.maxOfflineSeconds,
+    );
+
+    expect(summary.secondsSimulated).toBe(OFFLINE_SAMPLE_SECONDS);
+    expect(summary.kills).toBeGreaterThan(0);
+    expect(away.getState().run.companions.length).toBe(FULL_PARTY.length);
     expect(away.drainPresentationEvents()).toEqual([]);
   });
 

@@ -1,18 +1,14 @@
-import {
-  OfflineProgressor,
-  type OfflineCatchUp,
-  type OfflineSummary,
-} from '../engine/offline/OfflineProgressor';
+import { OfflineProgressor, type OfflineSummary } from '../engine/offline/OfflineProgressor';
 import type { EvercastScene } from '../game/EvercastScene';
 import { sceneMoodFor } from '../game/audio/AudioEngine';
 // prettier-ignore
-import { audio, awayDebt, saveGame, setAwayDebt, simulation, snapshotStore } from './runtime';
+import { addAwayDebt, audio, awayDebt, saveGame, setAwayDebt, simulation, snapshotStore } from './runtime';
 
 /**
  * Owns the browser-side cadences so they are named and separable rather than
  * tangled inside a component effect:
  *
- *   every frame   simulation tick, away-time catch-up and scene sync
+ *   every frame   simulation tick and scene sync
  *   10 Hz         publish a snapshot to the interface
  *   10 s          autosave
  *
@@ -23,28 +19,6 @@ const UI_PUBLISH_SECONDS = 0.1;
 const AUTOSAVE_MS = 10_000;
 /** A long frame (tab throttling, a stall) must not advance the world in one jump. */
 const MAX_FRAME_SECONDS = 0.25;
-/**
- * How much of a frame away-time catch-up may take. A day of it is seconds of
- * solid simulation, so it is metered rather than run to completion: the world
- * stays on screen and playable while it works, which is the whole point of
- * paying the debt here instead of before the first paint.
- *
- * It is a share of the frame rather than a fixed slice, because a fixed few
- * milliseconds of a long frame is a tiny duty cycle - the weaker the device, the
- * longer a day would take to settle. The cap is what keeps the frame answerable
- * once the share itself grows large.
- */
-const CATCH_UP_FRAME_SHARE = 0.5;
-const CATCH_UP_MIN_BUDGET_MS = 8;
-/** A backstop against a pathological frame (the first one, or one after a stall). */
-const CATCH_UP_MAX_BUDGET_MS = 100;
-/**
- * The slice has to be small enough that the budget above is what binds, not the
- * slice: the clock is only read between slices, so one slice costing more than a
- * whole budget collapses catch-up to a single slice per frame however much room
- * the frame had. A second of world time is a handful of events.
- */
-const CATCH_UP_SLICE_SECONDS = 1;
 
 export interface GameLoopOptions {
   scene: EvercastScene;
@@ -58,43 +32,28 @@ export function startGameLoop({ scene, onAwayProgress }: GameLoopOptions): () =>
   let frame = 0;
   let hiddenAt = document.hidden ? Date.now() : null;
 
-  /**
-   * The debt itself lives in the runtime, so a loop rebuilt mid catch-up picks up
-   * where the last one left off and every save carries what is still owed. This
-   * is only the worker that pays it down.
-   */
-  let catchUp: OfflineCatchUp | null = null;
-  const owe = (seconds: number) => {
-    if (seconds <= 0) return;
-    if (catchUp) catchUp.extend(seconds);
-    else catchUp = backgroundProgressor.begin(simulation, seconds);
-    // Report it back already capped, so the stamp on the next save is honest.
-    setAwayDebt(catchUp.remainingSeconds);
-  };
-  owe(awayDebt());
-
   const saveTimer = window.setInterval(saveGame, AUTOSAVE_MS);
   const onBeforeUnload = () => saveGame();
 
-  /** Works the away-time debt down within this frame's share, if any is owed. */
-  const drainCatchUp = (frameMs: number) => {
-    if (!catchUp || catchUp.done) return;
+  /**
+   * Settles an absence in one call. Offline progress costs what its sample costs
+   * rather than what the absence was worth, so this is a fixed price however long
+   * the player was gone - which is what lets it happen in one go, with no window
+   * in between for live time or a player command to get into the result.
+   */
+  const settleAway = (seconds: number) => {
+    if (seconds <= 0) return;
+    const summary = backgroundProgressor.apply(simulation, seconds);
+    setAwayDebt(0);
 
-    const budgetMs = Math.min(
-      CATCH_UP_MAX_BUDGET_MS,
-      Math.max(CATCH_UP_MIN_BUDGET_MS, frameMs * CATCH_UP_FRAME_SHARE),
-    );
-    const deadline = performance.now() + budgetMs;
-    catchUp.advanceWhile(CATCH_UP_SLICE_SECONDS, () => performance.now() < deadline);
-    setAwayDebt(catchUp.remainingSeconds);
-
-    if (!catchUp.done) return;
-
-    const summary = catchUp.summary();
-    catchUp = null;
     // Whatever happened while away is already in the summary; replaying it as
     // sound would be a wall of hits for a fight nobody watched.
     simulation.drainPresentationEvents();
+    const next = simulation.getSnapshot();
+    audio.setScene(sceneMoodFor(next));
+    scene.sync(next, 0, []);
+    snapshotStore.publish(next);
+    publishAccumulator = 0;
     saveGame();
     if (summary.secondsApplied > 0) onAwayProgress(summary);
   };
@@ -114,9 +73,9 @@ export function startGameLoop({ scene, onAwayProgress }: GameLoopOptions): () =>
 
     const elapsedSeconds = Math.max(0, (Date.now() - hiddenAt) / 1000);
     hiddenAt = null;
-    // Hidden time joins the same debt the boot catch-up uses, so a long spell in
-    // a background tab cannot lock the frame it comes back on either.
-    owe(elapsedSeconds);
+    // Handed to the loop rather than settled here, so a tab that was hidden at
+    // boot settles one absence and shows one summary instead of two.
+    addAwayDebt(elapsedSeconds);
     saveGame();
   };
 
@@ -127,11 +86,23 @@ export function startGameLoop({ scene, onAwayProgress }: GameLoopOptions): () =>
       return;
     }
 
+    // Time owed from before this session is settled on the first frame rather
+    // than on the way to it. `runtime` is imported before the first render, so
+    // anything that throws there is a blank page rather than a handled error -
+    // and here a failure costs the away progress, not the game.
+    const owed = awayDebt();
+    if (owed > 0) {
+      try {
+        settleAway(owed);
+      } catch (error) {
+        console.error('Evercast away progress could not be applied.', error);
+        setAwayDebt(0);
+      }
+    }
+
     const frameMs = now - previous;
     const delta = Math.min(frameMs / 1000, MAX_FRAME_SECONDS);
     previous = now;
-    // Catch up first, so live time is always the most recent thing simulated.
-    drainCatchUp(frameMs);
     simulation.update(delta);
 
     const next = simulation.getSnapshot();
