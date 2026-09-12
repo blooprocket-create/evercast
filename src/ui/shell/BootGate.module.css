@@ -23,17 +23,16 @@
   padding: max(var(--space-5), var(--safe-top)) max(var(--space-5), var(--safe-right))
     max(var(--space-5), var(--safe-bottom)) max(var(--space-5), var(--safe-left));
   /*
-   * The vignette, which only becomes visible once the curtain goes. It is static
+   * The vignette, which only becomes visible once the curtain goes. Static
    * rather than animated: against the opaque curtain it is invisible anyway, so
    * fading it in would be a second transition saying nothing.
    *
-   * The inner pool is what keeps the wordmark and the button legible over a
-   * bright, additive sigil; the outer one closes the corners down so the frame
-   * reads as a frame rather than as a leak.
+   * It closes the corners down so the frame reads as a frame rather than as a
+   * leak. Keeping the type legible is not its job - it is sized to the viewport,
+   * and on a phone that is nowhere near the size of the text. That belongs to
+   * the pool on `.plate`, which is sized to the words it has to protect.
    */
-  background:
-    radial-gradient(closest-side at 50% 50%, var(--scrim), transparent),
-    radial-gradient(farthest-corner at 50% 50%, transparent 55%, var(--bg));
+  background: radial-gradient(farthest-corner at 50% 50%, transparent 55%, var(--bg));
   pointer-events: auto;
   z-index: 7;
 }
@@ -58,13 +57,42 @@
 
 .plate {
   /* Load-bearing: the curtain is positioned, and a static grid item would paint
-     underneath it. */
+     underneath it. `isolation` gives the plate a stacking context of its own, so
+     the pool below can sit behind the words without falling behind the curtain
+     as well. */
   position: relative;
+  isolation: isolate;
   display: grid;
   justify-items: center;
   text-align: center;
   gap: var(--space-4);
   width: min(420px, 100%);
+}
+
+/*
+ * The pool the type sits in, and the reason it is here rather than on `.gate`:
+ * it has to be the size of the words, not the size of the screen. The first
+ * build put a `closest-side` gradient on the gate, which on a phone is half the
+ * viewport across and already fading by the time it reaches the text - so the
+ * subtitle and the hint were reading over bare ring geometry.
+ *
+ * Opaque at the core rather than merely dark. The sigil behind it is additive
+ * and crosses the bloom threshold, so anything translucent gets added to rather
+ * than covering, and the text keeps competing with whatever spoke is passing.
+ */
+.plate::before {
+  content: '';
+  position: absolute;
+  inset: calc(var(--space-7) * -1) calc(var(--space-6) * -1);
+  z-index: -1;
+  background: radial-gradient(
+    ellipse at 50% 50%,
+    var(--bg) 0%,
+    var(--bg) 38%,
+    var(--scrim) 62%,
+    transparent 80%
+  );
+  pointer-events: none;
 }
 
 /*
@@ -92,6 +120,7 @@
   margin: 0;
   font-size: var(--text-lead);
   color: var(--ink-mid);
+  text-shadow: 0 1px 3px var(--wordmark-shadow);
 }
 
 .action {
@@ -99,11 +128,17 @@
   margin-top: var(--space-3);
 }
 
+/*
+ * A step up from `--ink-dim`, which is the dimmest ink in the sheet and sits
+ * here at the busiest point of the composition - the bottom of the plate, where
+ * the inner ring passes. Elsewhere dim is right; over a lit sigil it disappears.
+ */
 .note {
   margin: 0;
   min-height: var(--space-4);
   font-size: var(--text-small);
-  color: var(--ink-dim);
+  color: var(--ink-low);
+  text-shadow: 0 1px 3px var(--wordmark-shadow);
 }
 
 /*
