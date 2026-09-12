@@ -239,3 +239,62 @@ describe('the complete pre-expansion build', () => {
     ]);
   });
 });
+
+describe('a blended two-route build', () => {
+  /** Twin and Piercing held at once, which only Schism allows. */
+  function blended() {
+    const initial = createInitialGameState(DEFAULT_ENGINE_CONFIG);
+    initial.equipment.pieces.robe.level = 1000;
+    const sim = new EvercastSimulation({ initialState: initial });
+    sim.getState().spellTree.purchasedPoints = 60;
+    sim.getState().spellTree.attunements = ['third_identity', 'second_route'];
+    for (const id of [
+      'twin_cast',
+      'piercing_cast',
+      'explosive',
+      'meteor_shower',
+      'damage_over_time',
+      'contagion',
+      'plaguefall',
+      'deep_pierce',
+      'chain_lightning',
+      'driving_force',
+      'kinetic_collapse',
+      'terminal_voltage',
+    ])
+      expect(sim.execute({ type: 'activate_spell_node', nodeId: id }), id).toBe(true);
+    sim.advance(2);
+    for (const enemy of sim.getState().run.enemies) {
+      enemy.hp = big(10000);
+      enemy.maxHp = big(10000);
+    }
+    return sim;
+  }
+
+  it('holds both routes at once and reports the heavier one', () => {
+    const mechanics = blended().getState().run.spell.mechanics!;
+    expect(mechanics.twinCast).toBe(true);
+    expect(mechanics.piercingCast).toBe(true);
+    expect(mechanics.chargedCast).toBe(false);
+    expect(mechanics.route).toBe('piercing');
+  });
+
+  it('agrees across chunked, offline and save-resumed simulation', () => {
+    const encoded = JSON.stringify(codec.encode(blended().getState()));
+    const whole = new EvercastSimulation({ initialState: codec.decode(JSON.parse(encoded)).state });
+    const chunks = new EvercastSimulation({ initialState: codec.decode(JSON.parse(encoded)).state });
+    const offline = new EvercastSimulation({ initialState: codec.decode(JSON.parse(encoded)).state });
+    whole.advance(20);
+    for (let i = 0; i < 160; i++) chunks.advance(0.125);
+    new OfflineProgressor(100).apply(offline, 20);
+    expect(normalized(chunks)).toEqual(normalized(whole));
+    expect(normalized(offline)).toEqual(normalized(whole));
+
+    const restored = new EvercastSimulation({
+      initialState: codec.decode(JSON.parse(JSON.stringify(codec.encode(chunks.getState())))).state,
+    });
+    restored.advance(5);
+    whole.advance(5);
+    expect(normalized(restored)).toEqual(normalized(whole));
+  });
+});

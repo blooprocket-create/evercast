@@ -131,7 +131,7 @@ node(
   'route',
   [SPELL_TREE_ROOT_ID],
   'Two independent projectiles. They target different enemies when possible, or both strike one enemy.',
-  [set('route', 'twin')],
+  [enable('twinCast')],
   'root_route',
 );
 node(
@@ -141,7 +141,7 @@ node(
   'route',
   [SPELL_TREE_ROOT_ID],
   'One projectile penetrates an enemy directly behind its victim. With no continuation, the next cast interval is halved.',
-  [set('route', 'piercing')],
+  [enable('piercingCast')],
   'root_route',
 );
 node(
@@ -151,7 +151,7 @@ node(
   'route',
   [SPELL_TREE_ROOT_ID],
   'One slower, much heavier projectile. Playtest: ×3 damage, ×1.7 cast interval.',
-  [set('route', 'charged')],
+  [enable('chargedCast')],
   'root_route',
 );
 type Side = { id: string; name: string; key: Exclude<keyof typeof S, 'criticalMassChance'> };

@@ -3,6 +3,7 @@ import type { GameState } from '../model';
 import { big } from '../numbers';
 import { createDefaultSpellBuild } from '../spell/SpellCompiler';
 import type { SpellBuild, SpellModifier } from '../spell/types';
+import type { SpellMechanics } from '../spell/SpellMechanics';
 import {
   SPELL_POINT_BASE_COST,
   SPELL_POINT_COST_GROWTH,
@@ -168,7 +169,20 @@ export function buildSpellFromTree(state: SpellTreeState): SpellBuild {
       target[effect.key] =
         effect.operation === 'add' ? Number(target[effect.key]) + Number(effect.value) : effect.value;
     }
+  build.mechanics.route = dominantRoute(build.mechanics);
   return build;
+}
+
+/**
+ * One name for a build that may hold several routes. Combat reads the flags;
+ * this is for descriptions and VFX, which need something to call it. Heaviest
+ * shape wins, so a blend is announced by the part that changes the cast most.
+ */
+export function dominantRoute(mechanics: SpellMechanics): SpellMechanics['route'] {
+  if (mechanics.chargedCast) return 'charged';
+  if (mechanics.piercingCast) return 'piercing';
+  if (mechanics.twinCast) return 'twin';
+  return 'base';
 }
 
 export class SpellTreeSystem {

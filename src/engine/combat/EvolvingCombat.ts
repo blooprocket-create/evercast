@@ -10,7 +10,7 @@ import type { SpellMechanics } from '../spell/SpellMechanics';
 import { combatState, ensurePositions, livingByDistance, nearby, positionOf } from './SpellCombatState';
 import { TimedSpellEffects } from './TimedSpellEffects';
 
-/** Resolves the three authored routes. All targets and proc results are engine facts. */
+/** Resolves the three authored routes, in any combination. All targets and proc results are engine facts. */
 export class EvolvingCombat {
   readonly effects: TimedSpellEffects;
   constructor(
@@ -31,17 +31,21 @@ export class EvolvingCombat {
     if (!primary) return [];
     state.nextCastHaste = false;
     const castId = ++run.stats.casts;
+    const routeCount = Number(m.twinCast) + Number(m.piercingCast) + Number(m.chargedCast);
+    const blend = routeCount > 1 ? Math.pow(m.routeBlendScale, routeCount - 1) : 1;
     const base = big(spell.damage)
       .add(compileGearStats(equipment).baseDamageBonus)
-      .mul(m.route === 'charged' ? m.chargedDamage : 1);
-    const targets =
-      m.route === 'twin'
-        ? [primary, living[1] ?? primary]
-        : m.route === 'piercing'
-          ? this.penetrationTargets(run, primary, m)
-          : [primary];
-    const hops = targets.length - 1;
-    if (m.route === 'piercing' && hops === 0) state.nextCastHaste = true;
+      .mul(m.chargedCast ? m.chargedDamage : 1)
+      .mul(blend);
+    // Twin decides how many projectiles leave the staff; Piercing decides how
+    // far each one carries. They are separate questions, so a blended build is
+    // two projectiles that each penetrate, not a choice between the two.
+    const anchors = m.twinCast ? [primary, living[1] ?? primary] : [primary];
+    const chains = anchors.map((anchor) =>
+      m.piercingCast ? this.penetrationTargets(run, anchor, m) : [anchor],
+    );
+    const longestHops = Math.max(...chains.map((chain) => chain.length - 1));
+    if (m.piercingCast && chains.every((chain) => chain.length === 1)) state.nextCastHaste = true;
     if (state.superchargeTargetId !== primary.instanceId) {
       state.supercharge = 0;
       state.superchargeTargetId = primary.instanceId;
@@ -49,12 +53,12 @@ export class EvolvingCombat {
     const stacks = m.supercharge ? state.supercharge : 0;
     const perfect = m.perfect && state.focus >= m.focusMax;
     const activeOverdrive = state.overdriveUntil > run.elapsedSeconds;
-    const powerScale = m.route === 'charged' ? Math.min(2.5, 1.35 + stacks * 0.15) : 1;
+    const powerScale = m.chargedCast ? Math.min(2.5, 1.35 + stacks * 0.15) : 1;
     this.emit({
       type: 'spell_cast',
       time: run.elapsedSeconds,
       castId,
-      projectiles: m.route === 'twin' ? 2 : 1,
+      projectiles: anchors.length,
       route: m.route,
       powerScale,
       overdrive: activeOverdrive,
@@ -62,68 +66,78 @@ export class EvolvingCombat {
     });
     const stored = state.velocityReady ? big(state.velocityStored) : big(0);
     const kinetic = m.kinetic && (!m.chain || m.terminalVoltage);
-    const force = Math.min(m.forceCap, hops * m.forceGain);
     if (m.terminalVelocity && activeOverdrive) {
       state.velocityStored = big(state.velocityStored)
-        .add(base.mul(Math.min(m.forceCap, Math.max(1, hops) * m.forceGain)))
+        .add(base.mul(Math.min(m.forceCap, Math.max(1, longestHops) * m.forceGain)))
         .toString();
       this.emit({ type: 'combat_state', time: run.elapsedSeconds, state: 'velocity', stacks: 1 });
     }
-    const hpFraction = Math.max(0, Math.min(1, primary.hp.div(primary.maxHp).toNumber()));
+    const primaryHpFraction = Math.max(0, Math.min(1, primary.hp.div(primary.maxHp).toNumber()));
     let chargedCritical = false;
-    for (let index = 0; index < targets.length; index++) {
-      const enemy = targets[index];
-      if (enemy.hp.cmp(0) <= 0) continue;
-      const critical = perfect || this.effects.roll(run, spell.critChance, 11, castId, index);
-      if (index === 0) chargedCritical = critical;
-      let damage = big(base);
-      if (m.route === 'charged') {
-        damage = damage.mul(1 + stacks * m.superchargeGain);
-        if (m.execution && hpFraction <= m.executeThreshold) damage = damage.mul(1 + m.executeDamage);
-        if (m.finalBlow)
+    // One counter across the whole cast: the proc RNG is a pure hash of it, so
+    // two projectiles must never present the same index to the same channel.
+    let hitIndex = 0;
+    for (let projectile = 0; projectile < chains.length; projectile++) {
+      const chain = chains[projectile];
+      const hops = chain.length - 1;
+      const force = Math.min(m.forceCap, hops * m.forceGain);
+      for (let step = 0; step < chain.length; step++) {
+        const index = hitIndex++;
+        const enemy = chain[step];
+        if (enemy.hp.cmp(0) <= 0) continue;
+        const critical = perfect || this.effects.roll(run, spell.critChance, 11, castId, index);
+        if (index === 0) chargedCritical = critical;
+        const hpFraction = Math.max(0, Math.min(1, enemy.hp.div(enemy.maxHp).toNumber()));
+        let damage = big(base);
+        if (m.chargedCast) {
+          damage = damage.mul(1 + stacks * m.superchargeGain);
+          if (m.execution && hpFraction <= m.executeThreshold)
+            damage = damage.mul(1 + m.executeDamage);
+          if (m.finalBlow)
+            damage = damage.mul(
+              1 +
+                m.finalBlowPower * Math.pow(1 - hpFraction, m.finalBlowExponent) +
+                (hpFraction <= m.criticalThreshold ? m.finalBlowLowBonus : 0),
+            );
+        }
+        const terminal =
+          m.piercingCast && step === chain.length - 1 && (kinetic || state.velocityReady);
+        if (m.piercingCast && step > 0) damage = damage.mul(m.piercedDamage);
+        if (m.driving && !m.kinetic) damage = damage.mul(1 + Math.min(m.forceCap, step * m.forceGain));
+        if (terminal && !(m.terminalVelocity && activeOverdrive))
+          damage = damage.add(base.mul(force)).add(stored);
+        if (critical)
           damage = damage.mul(
-            1 +
-              m.finalBlowPower * Math.pow(1 - hpFraction, m.finalBlowExponent) +
-              (hpFraction <= m.criticalThreshold ? m.finalBlowLowBonus : 0),
+            spell.critMultiplier * (m.criticalOverload ? 1 + stacks * m.overloadCritGain : 1),
           );
+        const actual = this.effects.damage(run, enemy, damage.toString());
+        run.stats.projectileHits++;
+        if (critical) run.stats.criticalHits++;
+        this.emit({
+          type: 'projectile_hit',
+          time: run.elapsedSeconds,
+          castId,
+          projectileIndex: projectile,
+          instanceId: enemy.instanceId,
+          damage: actual,
+          critical,
+          source: m.piercingCast && step > 0 ? (m.chain ? 'chain' : 'pierce') : 'direct',
+          sourceInstanceId: m.piercingCast && step > 0 ? chain[step - 1].instanceId : undefined,
+          sequence: m.piercingCast ? step : 0,
+          powerScale,
+          terminal,
+        });
+        if (m.dot) this.effects.applyDot(run, enemy, base.toString(), m, castId, enemy.instanceId);
+        if (m.weakness) this.effects.applyWeakness(run, enemy, m, enemy.instanceId);
+        if (m.ruin && this.effects.roll(run, m.ruinChance, 21, castId, index))
+          this.effects.applyRuin(run, enemy, m, enemy.instanceId);
+        if (m.explosive)
+          this.effects.explosion(run, positionOf(enemy), enemy.instanceId, base.toString(), m, castId);
+        if (m.meteor && this.effects.roll(run, m.meteorChance, 22, castId, index))
+          this.effects.queueMeteor(run, enemy, base.toString(), m, castId);
+        if (m.momentum && step > 0 && m.piercingCast && (!m.chain || m.stormdrive))
+          this.gainMomentum(run, m);
       }
-      const terminal =
-        m.route === 'piercing' && index === targets.length - 1 && (kinetic || state.velocityReady);
-      if (m.route === 'piercing' && index > 0) damage = damage.mul(m.piercedDamage);
-      if (m.driving && !m.kinetic) damage = damage.mul(1 + Math.min(m.forceCap, index * m.forceGain));
-      if (terminal && !(m.terminalVelocity && activeOverdrive))
-        damage = damage.add(base.mul(force)).add(stored);
-      if (critical)
-        damage = damage.mul(
-          spell.critMultiplier * (m.criticalOverload ? 1 + stacks * m.overloadCritGain : 1),
-        );
-      const actual = this.effects.damage(run, enemy, damage.toString());
-      run.stats.projectileHits++;
-      if (critical) run.stats.criticalHits++;
-      this.emit({
-        type: 'projectile_hit',
-        time: run.elapsedSeconds,
-        castId,
-        projectileIndex: m.route === 'twin' ? index : 0,
-        instanceId: enemy.instanceId,
-        damage: actual,
-        critical,
-        source: m.route === 'piercing' && index > 0 ? (m.chain ? 'chain' : 'pierce') : 'direct',
-        sourceInstanceId: m.route === 'piercing' && index > 0 ? targets[index - 1].instanceId : undefined,
-        sequence: m.route === 'piercing' ? index : 0,
-        powerScale,
-        terminal,
-      });
-      if (m.dot) this.effects.applyDot(run, enemy, base.toString(), m, castId, enemy.instanceId);
-      if (m.weakness) this.effects.applyWeakness(run, enemy, m, enemy.instanceId);
-      if (m.ruin && this.effects.roll(run, m.ruinChance, 21, castId, index))
-        this.effects.applyRuin(run, enemy, m, enemy.instanceId);
-      if (m.explosive)
-        this.effects.explosion(run, positionOf(enemy), enemy.instanceId, base.toString(), m, castId);
-      if (m.meteor && this.effects.roll(run, m.meteorChance, 22, castId, index))
-        this.effects.queueMeteor(run, enemy, base.toString(), m, castId);
-      if (m.momentum && index > 0 && m.route === 'piercing' && (!m.chain || m.stormdrive))
-        this.gainMomentum(run, m);
     }
     if (state.velocityReady) {
       state.velocityStored = '0';
@@ -134,7 +148,7 @@ export class EvolvingCombat {
       else if (!chargedCritical)
         state.focus = Math.min(
           m.focusMax,
-          state.focus + 1 + (m.deathSentence ? this.woundedGain(hpFraction, m) : 0),
+          state.focus + 1 + (m.deathSentence ? this.woundedGain(primaryHpFraction, m) : 0),
         );
       this.emit({ type: 'combat_state', time: run.elapsedSeconds, state: 'focus', stacks: state.focus });
     }
@@ -144,7 +158,7 @@ export class EvolvingCombat {
           ? 0
           : Math.min(
               m.superchargeCap,
-              state.supercharge + 1 + (m.obliteration ? this.woundedGain(hpFraction, m) : 0),
+              state.supercharge + 1 + (m.obliteration ? this.woundedGain(primaryHpFraction, m) : 0),
             );
       this.emit({
         type: 'combat_state',

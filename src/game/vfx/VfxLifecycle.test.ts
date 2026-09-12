@@ -38,6 +38,7 @@ describe('VFX resource ownership', () => {
       mechanics: {
         ...SPELL_MECHANIC_DEFAULTS,
         route: 'twin',
+        twinCast: true,
         explosive: true,
         dot: true,
         contagion: true,

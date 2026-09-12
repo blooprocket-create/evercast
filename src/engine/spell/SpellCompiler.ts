@@ -89,17 +89,20 @@ export function compileSpell(build: SpellBuild): CompiledSpell {
   }
 
   const mechanics = build.mechanics;
-  if (mechanics?.route === 'twin') projectileCount = 2;
-  if (mechanics?.route === 'piercing') {
+  // The routes compose, so these are three independent adjustments rather than
+  // one switch: Piercing and Charged fix the projectile count at one, and Twin
+  // overrides that to two whether or not they are also held.
+  if (mechanics?.piercingCast) {
     projectileCount = 1;
     pierceTargets = mechanics.chain ? 0 : mechanics.penetrations;
     chainTargets = mechanics.chain ? mechanics.penetrations : 0;
     chainDamageMultiplier = mechanics.piercedDamage;
   }
-  if (mechanics?.route === 'charged') {
+  if (mechanics?.chargedCast) {
     projectileCount = 1;
     castInterval *= mechanics.chargedInterval;
   }
+  if (mechanics?.twinCast) projectileCount = 2;
   return {
     damage: damage.toString(),
     mechanics: build.mechanics,

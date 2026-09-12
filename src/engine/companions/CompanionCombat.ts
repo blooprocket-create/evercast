@@ -53,7 +53,7 @@ export interface CompanionBeatContext {
 export function wizardPerHit(run: RunState, equipment: EquipmentState): Decimal {
   const spell = compileSpell(run.spell);
   const base = big(spell.damage).add(compileGearStats(equipment).baseDamageBonus);
-  return spell.mechanics?.route === 'charged' ? base.mul(spell.mechanics.chargedDamage) : base;
+  return spell.mechanics?.chargedCast ? base.mul(spell.mechanics.chargedDamage) : base;
 }
 
 /** Whether this companion has anything it could act on from where it stands. */

@@ -1,6 +1,22 @@
 /** Compiled behavior, independent of authored node IDs and UI layout. */
 export interface SpellMechanics {
+  /**
+   * The dominant shape, derived from the flags below. Presentation and
+   * descriptions read it; combat never does, because a blended build has more
+   * than one shape and a single string cannot say so.
+   */
   route: 'base' | 'twin' | 'piercing' | 'charged';
+  /**
+   * The three routes, held independently. They compose because they act on
+   * different axes: Twin is how many projectiles, Piercing is how many targets
+   * each one reaches, Charged is how hard and how slow. The Schism attunement
+   * is what lets more than one be true at once.
+   */
+  twinCast: boolean;
+  piercingCast: boolean;
+  chargedCast: boolean;
+  /** Base damage multiplier per route held *beyond the first*. 1 disables it. */
+  routeBlendScale: number;
   explosive: boolean;
   meteor: boolean;
   dot: boolean;

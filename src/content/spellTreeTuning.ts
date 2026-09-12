@@ -3,6 +3,13 @@ import type { SpellMechanics } from '../engine/spell/SpellMechanics';
  * two Weakness stacks, five Momentum stacks, and half the next interval on a miss. */
 export const SPELL_MECHANIC_DEFAULTS: Readonly<SpellMechanics> = {
   route: 'base',
+  twinCast: false,
+  piercingCast: false,
+  chargedCast: false,
+  // Holding two routes already costs twice the points, on a curve where each
+  // point costs 27% more than the last. This keeps a blend a sideways move
+  // rather than a strictly larger one; 1 removes the penalty entirely.
+  routeBlendScale: 0.75,
   explosive: false,
   meteor: false,
   dot: false,

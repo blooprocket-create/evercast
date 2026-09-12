@@ -14,9 +14,13 @@ import type { SpellTreeState } from '../../engine/spellTree/types';
  * exact even though the base cast interval ignores momentum and overdrive.
  */
 export function dpsOf(compiled: CompiledSpell, gearDamageBonus: string): Decimal {
-  const charged =
-    compiled.mechanics?.route === 'charged' ? compiled.mechanics.chargedDamage : 1;
-  const perProjectile = big(compiled.damage).add(big(gearDamageBonus)).mul(charged);
+  const m = compiled.mechanics;
+  const charged = m?.chargedCast ? m.chargedDamage : 1;
+  // A second route costs base damage as well as points, so the projection has
+  // to say so - otherwise awakening one reads as a bigger gain than it is.
+  const routes = m ? Number(m.twinCast) + Number(m.piercingCast) + Number(m.chargedCast) : 0;
+  const blend = m && routes > 1 ? Math.pow(m.routeBlendScale, routes - 1) : 1;
+  const perProjectile = big(compiled.damage).add(big(gearDamageBonus)).mul(charged).mul(blend);
   const critFactor = 1 + compiled.critChance * Math.max(0, compiled.critMultiplier - 1);
   return perProjectile
     .mul(compiled.projectileCount)

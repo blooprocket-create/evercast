@@ -445,7 +445,7 @@ describe('companion damage', () => {
 
     state.run.spell = {
       ...state.run.spell,
-      mechanics: { ...spell.mechanics, route: 'charged', chargedDamage: 3 },
+      mechanics: { ...spell.mechanics, route: 'charged', chargedCast: true, chargedDamage: 3 },
     };
     const snapshot = simulation.getSnapshot();
     const shown = snapshot.party.find((member) => member?.definitionId === FULL_PARTY[0]);

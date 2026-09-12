@@ -8,6 +8,7 @@ import { compileSpell } from '../spell/SpellCompiler';
 import type { SpellMechanics } from '../spell/SpellMechanics';
 import { CombatSystem } from './CombatSystem';
 import { combatState, effectiveCastInterval } from './SpellCombatState';
+import { dominantRoute } from '../spellTree/SpellTreeSystem';
 
 function fixture(
   mechanics: Partial<SpellMechanics> = {},
@@ -19,7 +20,13 @@ function fixture(
 ) {
   const state = createInitialGameState(DEFAULT_ENGINE_CONFIG),
     events: GameEvent[] = [];
+  // `route` is the shorthand these cases were written in, and it still names a
+  // single shape exactly. Expand it to the flags combat actually reads, so a
+  // case can say `route: 'piercing'` or set the flags directly for a blend.
   const m = { ...defaults, ...mechanics };
+  if (mechanics.route === 'twin') m.twinCast = true;
+  if (mechanics.route === 'piercing') m.piercingCast = true;
+  if (mechanics.route === 'charged') m.chargedCast = true;
   state.run.spell = {
     baseDamage: '10',
     castInterval: 1,
@@ -411,5 +418,90 @@ describe('Targeting', () => {
     expect(f.cast().map((h) => h.instanceId)).toEqual([2]);
     f.run.enemies[1].hp = big(0);
     expect(f.cast().map((h) => h.instanceId)).toEqual([1]);
+  });
+});
+
+describe('blended routes', () => {
+  const line = [
+    { x: 2.4, z: 0 },
+    { x: 3.6, z: 0 },
+    { x: 4.8, z: 0 },
+  ];
+
+  it('sends two projectiles that each penetrate', () => {
+    const f = fixture({ twinCast: true, piercingCast: true, routeBlendScale: 1 }, line);
+    const hits = f.cast();
+    // One bolt from the nearest enemy through the one behind it, a second from
+    // the next enemy through the one behind that.
+    expect(hits.map((h) => h.instanceId)).toEqual([1, 2, 2, 3]);
+    expect(hits.map((h) => h.projectileIndex)).toEqual([0, 0, 1, 1]);
+    expect(hits.map((h) => h.source)).toEqual(['direct', 'pierce', 'direct', 'pierce']);
+    // Each chain numbers its own steps; it is not one long run of four.
+    expect(hits.map((h) => h.sequence)).toEqual([0, 1, 0, 1]);
+  });
+
+  it('carries the charge onto both twin projectiles', () => {
+    const f = fixture({ twinCast: true, chargedCast: true, routeBlendScale: 1 }, line);
+    const hits = f.cast();
+    expect(hits.map((h) => Number(h.damage))).toEqual([30, 30]);
+    // Slower as well as heavier: the charged interval still applies.
+    expect(compileSpell(f.run.spell).castInterval).toBeCloseTo(1.7);
+    expect(compileSpell(f.run.spell).projectileCount).toBe(2);
+  });
+
+  it('compounds all three routes', () => {
+    const f = fixture(
+      { twinCast: true, piercingCast: true, chargedCast: true, routeBlendScale: 1 },
+      line,
+    );
+    const hits = f.cast();
+    expect(hits).toHaveLength(4);
+    for (const hit of hits) expect(Number(hit.damage)).toBe(30);
+  });
+
+  it('scales base damage down once per route beyond the first', () => {
+    const one = fixture({ twinCast: true }, line);
+    expect(Number(one.cast()[0].damage)).toBe(10);
+
+    const two = fixture({ twinCast: true, piercingCast: true }, line);
+    expect(Number(two.cast()[0].damage)).toBe(7.5);
+
+    const three = fixture({ twinCast: true, piercingCast: true, chargedCast: true }, line);
+    // 10 x 3 charged, x 0.75 twice.
+    expect(Number(three.cast()[0].damage)).toBe(16.875);
+  });
+
+  it('halves the next interval only when no projectile found a continuation', () => {
+    const alone = [{ x: 2.4, z: 0 }];
+    const blocked = fixture({ twinCast: true, piercingCast: true }, alone);
+    blocked.cast();
+    expect(blocked.runtime.nextCastHaste).toBe(true);
+
+    const through = fixture({ twinCast: true, piercingCast: true }, line);
+    through.cast();
+    expect(through.runtime.nextCastHaste).toBe(false);
+  });
+
+  it('rolls each hit on its own, so two projectiles cannot share a proc result', () => {
+    const f = fixture(
+      { twinCast: true, piercingCast: true, meteor: true, routeBlendScale: 1 },
+      line,
+    );
+    const roll = vi
+      .spyOn(f.combat.evolving.effects, 'roll')
+      .mockImplementation((_run, chance) => chance === 0.15);
+    f.cast();
+    // Four hits, four independent meteor rolls, four queued meteors.
+    const meteorRolls = roll.mock.calls.filter((call) => call[1] === 0.15);
+    expect(meteorRolls).toHaveLength(4);
+    expect(new Set(meteorRolls.map((call) => call[4])).size).toBe(4);
+    expect(f.runtime.meteors).toHaveLength(4);
+  });
+
+  it('names the heaviest shape it holds', () => {
+    expect(dominantRoute({ ...defaults, twinCast: true })).toBe('twin');
+    expect(dominantRoute({ ...defaults, twinCast: true, piercingCast: true })).toBe('piercing');
+    expect(dominantRoute({ ...defaults, twinCast: true, chargedCast: true })).toBe('charged');
+    expect(dominantRoute(defaults)).toBe('base');
   });
 });
