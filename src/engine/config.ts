@@ -4,7 +4,16 @@ export interface EngineConfig {
   bossCadence: number;
   zoneLength: number;
   autoRetryFarmKills: number;
-  maxEventsPerAdvance: number;
+  /** Cap on one synchronous emit cascade, so a listener feedback loop is caught. */
+  maxEventsPerFlush: number;
+  /**
+   * The runaway guard on `advance`, as a step budget. The loop takes one step
+   * per world event, so the budget has to scale with the span being advanced: a
+   * flat cap cannot tell a legitimate day of offline catch-up from a loop that
+   * has stopped consuming time, and a day of catch-up is the larger number.
+   */
+  maxAdvanceSteps: number;
+  maxAdvanceStepsPerSecond: number;
   maxOfflineSeconds: number;
   rebirthUnlockStage: number;
   baseMageHealth: number;
@@ -42,7 +51,13 @@ export const DEFAULT_ENGINE_CONFIG: EngineConfig = {
   bossCadence: 10,
   zoneLength: 25,
   autoRetryFarmKills: 5,
-  maxEventsPerAdvance: 250_000,
+  maxEventsPerFlush: 250_000,
+  // Measured density runs about 4 steps per simulated second early on and 7 to 8
+  // by the mid stages, so 200 leaves well over an order of magnitude of headroom
+  // for endgame. The floor covers a single frame, and a loop that has stopped
+  // consuming time still trips it in under a couple of seconds.
+  maxAdvanceSteps: 50_000,
+  maxAdvanceStepsPerSecond: 200,
   maxOfflineSeconds: 60 * 60 * 24,
   rebirthUnlockStage: 50,
   baseMageHealth: 25,

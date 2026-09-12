@@ -74,6 +74,14 @@ The simulation is event-driven rather than frame-driven. `advance(seconds)` cons
 
 The browser layer detects tab visibility. Hidden time is applied through `OfflineProgressor` when the tab becomes visible again, with presentation events suppressed and the normal offline cap applied.
 
+Long absences are settled analytically rather than simulated end to end. `OfflineProgressor` simulates the first `OFFLINE_SAMPLE_SECONDS` (ten minutes) of an absence at full fidelity, then credits the remainder from the per-second rate that window measured. So an absence up to the sample is exact - a tab closed over lunch loses nothing - and a longer one costs the same bounded work whether the player was gone a day or a week.
+
+Only the repeatable kill rewards are extrapolated, through `EvercastSimulation.creditOfflineYield`: Gold and Starlight. Essence and the stage are deliberately left to the simulated window alone. Essence is a first-clear reward and `totalFirstClearEssenceEarned` treats the highest stage as the authority on how much has ever been earned, so synthesising either would put a save at odds with its own economy. The practical cost is that a long absence no longer pushes the frontier as far as exact catch-up would have; measured, a day away walls out and farms after a stage or two regardless.
+
+This replaced exact event-by-event catch-up, which did not fit in a startup. The loop takes one step per world event, so a day away from a played save is several hundred thousand steps: applied in one pass before the first render it blew the advance step budget and came up as a blank page, and spread across frames it left the world visibly fast-forwarding for a minute while the interface was live - which in turn let a returning player spend their first credited Gold and have the rest of the absence run on the stronger build. Settling in one bounded call removes all three.
+
+`src/app/runtime.ts` is imported on the way to the first render, which makes anything that throws there a blank page on every reload rather than a handled error. It resumes a save defensively, reaches for `localStorage` behind a guard (touching it throws outright in a sandboxed iframe or on an opaque origin) and runs without storage rather than not running. Away time owed at boot is settled by `GameLoop` on its first frame for the same reason, and a save made before that lands stamps itself back by what is still owed, so leaving in between defers the absence rather than banking it.
+
 ## Encounter system
 
 Each stage is a finite timed-spawn encounter. Multiple authoritative enemies can coexist.
@@ -188,13 +196,13 @@ As new systems arrive, prefer extracting cohesive builders/services rather than 
 
 `SaveCodec` owns versioned schema conversion. Version 7 adds the companions domain; every earlier save loads with the feature simply not started rather than losing anything it had. Browser `localStorage` remains in `src/app`. Existing saves migrate forward rather than silently resetting progression.
 
-The current solver is exact event-driven catch-up. If endgame event frequency eventually makes long catch-up too expensive, `OfflineProgressor` is the seam for an analytical/bulk strategy without changing combat or save formats.
+The solver is analytical past its sample window, as the seam always anticipated: exact within `OFFLINE_SAMPLE_SECONDS`, rate-credited beyond it. Combat and the save format are untouched by it - the extrapolation enters through one narrow `creditOfflineYield` call.
 
 ## Testing gates
 
 `npm run validate` runs unit/integration tests and a production TypeScript/Vite build. GitHub Actions runs the same validation on PRs and `main`.
 
-Coverage includes deterministic advancement, multi-enemy overlap, push/farm behavior, content references, spell compilation, gear, Spell Point economy/pathing, first-clear Essence, save migrations, offline catch-up, prestige reset boundaries, and architecture guards preventing presentation dependencies from entering `src/engine`.
+Coverage includes deterministic advancement, multi-enemy overlap, push/farm behavior, content references, spell compilation, gear, Spell Point economy/pathing, first-clear Essence, save migrations, offline settlement (a day away from a played save inside a bounded budget, exactness within the sample window, rate scaling past it, and no synthesised Essence or stage), the advance loop's runaway guard, save loading that never throws on the way up, prestige reset boundaries, and architecture guards preventing presentation dependencies from entering `src/engine`.
 
 ## Still intentionally deferred
 
@@ -205,7 +213,6 @@ Coverage includes deterministic advancement, multi-enemy overlap, push/farm beha
 - final enemy/zone tuning,
 - story content,
 - further batching and platform tuning of endgame VFX,
-- analytical endgame offline simulation,
 - analytics/cloud saves/accounts.
 
 The architecture exposes seams for all of them without pretending their designs are already settled.

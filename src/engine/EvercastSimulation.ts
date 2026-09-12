@@ -1,3 +1,4 @@
+import type Decimal from 'break_eternity.js';
 import { createDefaultCatalog, validateCatalog } from '../content/catalog';
 import type { ContentCatalog } from '../content/types';
 import { CombatSystem } from './combat/CombatSystem';
@@ -52,7 +53,7 @@ export class EvercastSimulation {
     const contentErrors = validateCatalog(this.catalog);
     if (contentErrors.length > 0) throw new Error(contentErrors.join('\n'));
     this.state = options.initialState ?? createInitialGameState(this.config);
-    this.eventBus = new EventBus<GameEvent>(this.config.maxEventsPerAdvance);
+    this.eventBus = new EventBus<GameEvent>(this.config.maxEventsPerFlush);
     this.eventBus.subscribe((event) => this.captureEvent(event));
     const emit = (event: GameEvent) => this.eventBus.emit(event);
     this.progressionSystem = new ProgressionSystem(this.config, emit);
@@ -85,13 +86,20 @@ export class EvercastSimulation {
     const previousRecording = this.recordPresentationEvents;
     this.recordPresentationEvents = options.presentationEvents ?? true;
     let remaining = seconds;
-    let eventCount = 0;
+    let steps = 0;
+    // One step per world event, so the budget tracks the span being advanced.
+    // A day of offline catch-up is hundreds of thousands of legitimate steps;
+    // only a loop that has stopped consuming time can outrun this.
+    const budget =
+      this.config.maxAdvanceSteps + this.config.maxAdvanceStepsPerSecond * seconds;
 
     try {
       while (remaining > EPSILON) {
-        eventCount += 1;
-        if (eventCount > this.config.maxEventsPerAdvance) {
-          throw new Error(`Simulation safety limit exceeded while advancing ${seconds}s.`);
+        steps += 1;
+        if (steps > budget) {
+          throw new Error(
+            `Simulation safety limit exceeded while advancing ${seconds}s (${steps} steps).`,
+          );
         }
         remaining -= this.loop.step(this.state, remaining);
       }
@@ -99,6 +107,29 @@ export class EvercastSimulation {
       if (!this.recordPresentationEvents) clearTelegraphs(this.state.run);
       this.recordPresentationEvents = previousRecording;
     }
+  }
+
+  /**
+   * Adds yield the player is owed for time nobody simulated.
+   *
+   * Offline progress samples a window at full fidelity and credits the rest from
+   * the rate it measured, so this is the one way currency enters the world
+   * without a kill behind it. It is deliberately narrow: Gold and Starlight are
+   * repeatable kill rewards and scale with nothing but the stage the sample ran
+   * at, so a rate holds. Essence and stage are not here on purpose - Essence is
+   * a first-clear reward and the stage is the record of where the run actually
+   * reached, and inventing either would put the save at odds with
+   * `totalFirstClearEssenceEarned`, which treats the highest stage as the
+   * authority on Essence ever earned.
+   */
+  creditOfflineYield(yields: { gold: Decimal; starlight: Decimal; kills: number }): void {
+    if (yields.gold.cmp(0) > 0) {
+      this.state.equipment.gold = this.state.equipment.gold.add(yields.gold);
+    }
+    if (yields.starlight.cmp(0) > 0) {
+      this.state.companions.starlight = this.state.companions.starlight.add(yields.starlight);
+    }
+    if (yields.kills > 0) this.state.run.stats.kills += Math.floor(yields.kills);
   }
 
   execute(command: EngineCommand): boolean {

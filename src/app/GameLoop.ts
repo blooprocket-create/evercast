@@ -1,7 +1,8 @@
 import { OfflineProgressor, type OfflineSummary } from '../engine/offline/OfflineProgressor';
 import type { EvercastScene } from '../game/EvercastScene';
 import { sceneMoodFor } from '../game/audio/AudioEngine';
-import { audio, saveGame, simulation, snapshotStore } from './runtime';
+// prettier-ignore
+import { addAwayDebt, audio, awayDebt, saveGame, setAwayDebt, simulation, snapshotStore } from './runtime';
 
 /**
  * Owns the browser-side cadences so they are named and separable rather than
@@ -34,6 +35,29 @@ export function startGameLoop({ scene, onAwayProgress }: GameLoopOptions): () =>
   const saveTimer = window.setInterval(saveGame, AUTOSAVE_MS);
   const onBeforeUnload = () => saveGame();
 
+  /**
+   * Settles an absence in one call. Offline progress costs what its sample costs
+   * rather than what the absence was worth, so this is a fixed price however long
+   * the player was gone - which is what lets it happen in one go, with no window
+   * in between for live time or a player command to get into the result.
+   */
+  const settleAway = (seconds: number) => {
+    if (seconds <= 0) return;
+    const summary = backgroundProgressor.apply(simulation, seconds);
+    setAwayDebt(0);
+
+    // Whatever happened while away is already in the summary; replaying it as
+    // sound would be a wall of hits for a fight nobody watched.
+    simulation.drainPresentationEvents();
+    const next = simulation.getSnapshot();
+    audio.setScene(sceneMoodFor(next));
+    scene.sync(next, 0, []);
+    snapshotStore.publish(next);
+    publishAccumulator = 0;
+    saveGame();
+    if (summary.secondsApplied > 0) onAwayProgress(summary);
+  };
+
   const onVisibilityChange = () => {
     if (document.hidden) {
       hiddenAt = Date.now();
@@ -49,16 +73,9 @@ export function startGameLoop({ scene, onAwayProgress }: GameLoopOptions): () =>
 
     const elapsedSeconds = Math.max(0, (Date.now() - hiddenAt) / 1000);
     hiddenAt = null;
-    onAwayProgress(backgroundProgressor.apply(simulation, elapsedSeconds));
-
-    // Whatever happened while away is already in the summary; replaying it as
-    // sound would be a wall of hits for a fight nobody watched.
-    simulation.drainPresentationEvents();
-    const next = simulation.getSnapshot();
-    audio.setScene(sceneMoodFor(next));
-    scene.sync(next, 0, []);
-    snapshotStore.publish(next);
-    publishAccumulator = 0;
+    // Handed to the loop rather than settled here, so a tab that was hidden at
+    // boot settles one absence and shows one summary instead of two.
+    addAwayDebt(elapsedSeconds);
     saveGame();
   };
 
@@ -69,7 +86,22 @@ export function startGameLoop({ scene, onAwayProgress }: GameLoopOptions): () =>
       return;
     }
 
-    const delta = Math.min((now - previous) / 1000, MAX_FRAME_SECONDS);
+    // Time owed from before this session is settled on the first frame rather
+    // than on the way to it. `runtime` is imported before the first render, so
+    // anything that throws there is a blank page rather than a handled error -
+    // and here a failure costs the away progress, not the game.
+    const owed = awayDebt();
+    if (owed > 0) {
+      try {
+        settleAway(owed);
+      } catch (error) {
+        console.error('Evercast away progress could not be applied.', error);
+        setAwayDebt(0);
+      }
+    }
+
+    const frameMs = now - previous;
+    const delta = Math.min(frameMs / 1000, MAX_FRAME_SECONDS);
     previous = now;
     simulation.update(delta);
 
