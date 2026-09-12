@@ -114,7 +114,7 @@ describe('the purchase ceiling', () => {
     expect(BASE_CEILING).toBeLessThan(SPELL_TREE_NODES.length - 1);
   });
 
-  it('widens with each attunement, and opens the whole graph at the last one', () => {
+  it('widens with each attunement, up to everything but the capstone not taken', () => {
     // The apex tier only appears with the third identity: it needs all three
     // fusions of a route, and two identities can only ever produce one.
     expect(maxAllocatableSpellPoints(['third_identity'])).toBe(35);
@@ -125,7 +125,14 @@ describe('the purchase ceiling', () => {
       'second_route',
       'third_route',
     ]);
-    expect(everything).toBe(SPELL_TREE_NODES.length - 1);
+    expect(everything).toBe(105);
+    // Short of the node count, and deliberately: each route ends in one of two
+    // capstones, so the tree never collapses into taking all of it.
+    const apexBranch = SPELL_TREE_NODES.filter(
+      (node) => node.kind === 'apex' || node.id.match(/^(necrosis|cascade|reclaim)_/),
+    ).length;
+    expect(everything).toBeLessThan(SPELL_TREE_NODES.length - 1);
+    expect(apexBranch).toBeGreaterThan(0);
   });
 
   it('reports a ceiling a real allocation can actually reach', () => {
@@ -237,7 +244,10 @@ describe('side upgrade ranks', () => {
 describe('the apex tier', () => {
   it('needs all three fusions of its route, so Broadened Study gates it', () => {
     const apexes = SPELL_TREE_NODES.filter((node) => node.kind === 'apex');
-    expect(apexes).toHaveLength(3);
+    // Two per route: one that answers a hit, one that answers a death.
+    expect(apexes).toHaveLength(6);
+    for (const region of ['twin', 'piercing', 'charged'])
+      expect(apexes.filter((node) => node.region === region)).toHaveLength(2);
     for (const apex of apexes) {
       expect(apex.requiresAll).toHaveLength(3);
       for (const id of apex.requiresAll)

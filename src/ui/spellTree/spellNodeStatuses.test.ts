@@ -3,6 +3,7 @@ import { SPELL_ATTUNEMENTS, SPELL_TREE_NODES } from '../../content/spellTree';
 import {
   SPELL_TREE_NODE_COUNT,
   canActivateSpellNode,
+  maxAllocatableSpellPoints,
   spellNodeStatus,
 } from '../../engine/spellTree/SpellTreeSystem';
 import type { SpellTreeState } from '../../engine/spellTree/types';
@@ -119,12 +120,17 @@ describe('spellNodeStatuses', () => {
     expect(map.get(orphan!.id)).toBe('exclusive');
   });
 
-  it('stops locking anything once every attunement is owned', () => {
-    // Each group's cap then equals the number of choices in it, so exclusivity
-    // is spent as a mechanic and the whole graph is reachable in one build.
+  it('keeps only the capstone a choice once every attunement is owned', () => {
+    // The route and identity caps rise to the number of choices in them, so
+    // those forks are spent. The apex fork is not: no attunement widens it.
     const state = reachableState(83, SPELL_TREE_NODE_COUNT, SPELL_TREE_NODE_COUNT, ALL_ATTUNEMENTS);
-    expect(state.activatedNodeIds).toHaveLength(SPELL_TREE_NODE_COUNT);
-    for (const status of spellNodeStatuses(state).values()) expect(status).toBe('active');
+    expect(state.activatedNodeIds).toHaveLength(maxAllocatableSpellPoints(ALL_ATTUNEMENTS));
+    const statuses = spellNodeStatuses(state);
+    // Whatever is left is shut for good, not merely unaffordable or unmet.
+    for (const status of statuses.values()) expect(['active', 'exclusive']).toContain(status);
+    const apexes = SPELL_TREE_NODES.filter((node) => node.kind === 'apex');
+    expect(apexes.filter((node) => statuses.get(node.id) === 'active')).toHaveLength(3);
+    expect(apexes.filter((node) => statuses.get(node.id) === 'exclusive')).toHaveLength(3);
   });
 });
 

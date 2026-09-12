@@ -74,15 +74,17 @@ into later. See the Companions section of [the architecture guide](docs/ARCHITEC
 
 ## Spell tree
 
-One spell, 106 nodes: three routes, nine identities with three-rank side paths,
-nine mutations, nine pairwise fusions and a capstone per route.
+One spell, 127 nodes: three routes, nine identities with three-rank side paths,
+nine mutations, nine pairwise fusions and two capstones per route - one that
+answers a hit, one that answers a death.
 
 The fork is sharp but not permanent. Attunements, bought with the Knowledge that
 Rebirth pays out, widen the exclusive groups: take all three identities of a
 route, then hold two routes at once, then all three. The routes compose rather
 than exclude - Twin is how many projectiles, Piercing how many targets each one
 reaches, Charged how hard and how slow - so a blended build is two heavy bolts
-that each penetrate. A legal build grows from 18 points to all 105.
+that each penetrate. A legal build grows from 18 points to 105 - everything but
+the capstone you did not take, which stays a choice however much you unlock.
 
 See [the v2 guide](docs/SPELL_TREE_V2.md) for the rules, tuning, blended-route
 conventions and save migration, and [v1](docs/SPELL_TREE_V1.md) for the original

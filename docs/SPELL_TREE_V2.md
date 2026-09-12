@@ -136,14 +136,17 @@ to put its stranded point without waiting on a rebirth.
 | Singularity radius / damage | 2.2 units, 60% of delivered force; +0.4 / +0.25 per rank |
 | Ascendance crit gain | +0.25 multiplier per point of Focus; +0.15 per rank |
 | Supercharge capacity rank | +1 |
+| Necrosis burst | 2.4-unit radius, x4 the victim's remaining tick; +0.4 / +1.5 per rank |
+| Cascade | 1 Momentum stack per kill; +1 per rank, and +1 Momentum ceiling per rank |
+| Reclamation | 1 Focus and 1 Supercharge per kill; +1 each per rank |
 
 Two rank-III values want a playtest look in particular: `charge_speed_3` drives
 `chargedInterval` to 1.25, and `penetration_3` adds a fourth pierce.
 
 ## Shape of the graph
 
-106 nodes: root, 3 routes, 9 identities, 54 side ranks, 9 mutations, 9 fusions,
-3 apexes and their 18 side ranks. Layout is still derived entirely from
+127 nodes: root, 3 routes, 9 identities, 54 side ranks, 9 mutations, 9 fusions,
+6 apexes and their 36 side ranks. Layout is still derived entirely from
 `requiresAll`, `region` and `kind`; `apex` needed a size and a label and nothing
 else.
 
@@ -154,9 +157,10 @@ else.
 | Broadened Study | 35 | 106 |
 | Schism | 36 | 110 |
 | Both | 70 | 214 |
-| Confluence | 105 (every node) | 322 |
+| Confluence | 105 | 322 |
 
-Stage figures fall out of the two existing curves — points at
+105 rather than all 126 allocatable nodes, because each route ends in one
+capstone and leaves the other shut. Stage figures fall out of the two existing curves — points at
 `floor(8 × 1.27^purchased)`, first-clear Essence at
 `floor(2 × 1.08^(stage-1))` with a ×4 boss cadence — and are why no cost tuning
 was changed.

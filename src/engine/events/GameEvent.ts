@@ -46,7 +46,7 @@ export type GameEvent =
       instanceId: number;
       sourceInstanceId: number;
       damage: string;
-      effect: 'explosion' | 'meteor' | 'dot';
+      effect: 'explosion' | 'meteor' | 'dot' | 'necrosis';
       position: CombatPosition;
       empowered?: boolean;
     }

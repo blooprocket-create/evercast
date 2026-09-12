@@ -188,13 +188,27 @@ export class EncounterLoop {
     });
   }
 
+  /**
+   * Where a corpse becomes an engine fact, whoever made it - so it is also
+   * where the spell gets to answer the death, before the body is cleared away.
+   */
   private collectDeadEnemies(state: GameState, candidateIds: readonly number[]): void {
     const run = state.run;
     const candidates = new Set(candidateIds);
-    for (const enemy of [...run.enemies]) {
-      if (enemy.hp.cmp(0) > 0 || (!candidates.has(enemy.instanceId) && candidateIds.length > 0)) continue;
-      this.systems.progression.handleEnemyKilled(state, enemy);
-      run.enemies = run.enemies.filter((entry) => entry.instanceId !== enemy.instanceId);
+    const everyCorpse = candidateIds.length === 0;
+    // A death the spell answers can kill again, and a fresh victim standing
+    // earlier in the list than the body that took it has already been passed
+    // over. So sweep until a pass collects nothing; each pass that collects
+    // removes an enemy, which is what ends it.
+    for (let collected = true; collected; ) {
+      collected = false;
+      for (const enemy of [...run.enemies]) {
+        if (enemy.hp.cmp(0) > 0 || (!everyCorpse && !candidates.has(enemy.instanceId))) continue;
+        this.systems.progression.handleEnemyKilled(state, enemy);
+        for (const id of this.systems.combat.evolving.effects.resolveKill(run, enemy)) candidates.add(id);
+        run.enemies = run.enemies.filter((entry) => entry.instanceId !== enemy.instanceId);
+        collected = true;
+      }
     }
   }
 }

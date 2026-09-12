@@ -100,6 +100,8 @@ The stage clears only after the full enemy budget has spawned and no living enem
 
 `CombatSystem` resolves casts, deterministic critical hits, direct hits, pierce, chain, splash, repeats, enemy attacks, control, leech and triggered effects. Player casts win exact timer ties.
 
+A death is answered in one place. `TimedSpellEffects.resolveKill` owns what the spell does about a kill and `EncounterLoop.collectDeadEnemies` is the only caller, because that is where a corpse becomes an engine fact whoever made it - the spell, an infection ticking out, or a companion. It runs before the body is cleared away, and a kill it causes in turn is swept into the same step rather than left for a later one.
+
 The engine event stream is the presentation contract. `projectile_hit` includes effect provenance (`direct`, `pierce`, `chain`, `splash`, or `repeat`), source target when relevant, and sequence information. Babylon should animate those facts rather than infer combat from build stats.
 
 ## Progression economies
@@ -117,7 +119,7 @@ Boss first-clears currently award more Essence. Exact curves remain prototype tu
 
 The authored tree has three routes, identity groups, three-rank side upgrades, mutations, pairwise fusions requiring both parents, and a capstone per route requiring all three of its fusions. Allocations compile into SpellBuild.mechanics. EvolvingCombat and TimedSpellEffects own cast/timed behavior; stable enemy positions and temporary spell resources remain authoritative engine state. UI geometry stays separate.
 
-Exclusivity is progression, not a fixed rule: `spellTreeExclusiveGroups` reads the player's Attunements, and the purchase ceiling is derived from the largest build those rules allow rather than from the node count. The three routes compose - Twin is how many projectiles, Piercing how many targets each reaches, Charged how hard and how slow - so `route` is a derived name that combat never reads.
+Exclusivity is progression, not a fixed rule: `spellTreeExclusiveGroups` reads the player's Attunements, and the purchase ceiling is derived from the largest build those rules allow rather than from the node count. One fork is permanent - each route ends in one of two capstones, so the tree never collapses into taking all of it. The three routes compose - Twin is how many projectiles, Piercing how many targets each reaches, Charged how hard and how slow - so `route` is a derived name that combat never reads.
 
 See [Spell Tree v2](SPELL_TREE_V2.md) for the rules, tuning, blended-route conventions and version 8 migration, and [Real Spell Tree v1](SPELL_TREE_V1.md) for the original graph and the combat conventions it established.
 

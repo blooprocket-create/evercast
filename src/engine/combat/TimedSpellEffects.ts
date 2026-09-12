@@ -156,6 +156,87 @@ export class TimedSpellEffects {
         center,
       );
   }
+  gainMomentum(run: RunState, m: SpellMechanics, stacks = 1): void {
+    const state = combatState(run);
+    if (state.overdriveUntil > run.elapsedSeconds) return;
+    state.momentum = Math.min(m.momentumCap, state.momentum + stacks);
+    state.momentumUntil = run.elapsedSeconds + m.momentumDuration;
+    this.emit({
+      type: 'combat_state',
+      time: run.elapsedSeconds,
+      state: 'momentum',
+      stacks: state.momentum,
+      expiresAt: state.momentumUntil,
+    });
+    if (m.overdrive && state.momentum >= m.momentumCap) {
+      state.overdriveUntil = run.elapsedSeconds + m.overdriveDuration;
+      this.emit({
+        type: 'combat_state',
+        time: run.elapsedSeconds,
+        state: 'overdrive',
+        stacks: state.momentum,
+        expiresAt: state.overdriveUntil,
+      });
+    }
+  }
+  /**
+   * What the spell does about a death, and the one place that answers it.
+   *
+   * Called from `EncounterLoop.collectDeadEnemies`, which is where a corpse
+   * becomes an engine fact no matter who made it - the spell, a companion, or
+   * an infection ticking out - so a kill is a kill. It runs before the body is
+   * cleared away, because the burst needs the position it died at, and it reads
+   * the build as it stands rather than a snapshot: this is the spell answering
+   * now, not a proc resolving late.
+   *
+   * Returns whatever it killed in turn. The caller feeds those back in, so a
+   * burst that kills bursts again; that terminates because an enemy is only
+   * ever collected once.
+   */
+  resolveKill(run: RunState, victim: EnemyState): number[] {
+    const m = run.spell.mechanics;
+    if (!m) return [];
+    const killed: number[] = [];
+
+    const dot = victim.statuses?.dot;
+    if (m.necrosis && dot) {
+      const state = combatState(run);
+      const id = ++state.procSerial;
+      const at = positionOf(victim);
+      const burst = big(dot.damage).mul(m.necrosisDamage).toString();
+      for (const target of nearby(run, at, m.necrosisRadius, new Set([victim.instanceId]))) {
+        this.effectHit(run, target, burst, 'necrosis', victim.instanceId, dot.castId, id, at);
+        // The infection outlives its host: it spreads with whatever strength
+        // the original carried, not the build's current tuning.
+        this.applyDot(run, target, dot.baseDamage, dot.mechanics, dot.castId, victim.instanceId, true);
+        if (target.hp.cmp(0) <= 0) killed.push(target.instanceId);
+      }
+    }
+
+    if (m.cascade) this.gainMomentum(run, m, Math.max(1, Math.floor(m.cascadeStacks)));
+
+    if (m.reclamation) {
+      const state = combatState(run);
+      if (m.perfect) {
+        state.focus = Math.min(m.focusMax, state.focus + Math.max(0, Math.floor(m.reclaimFocus)));
+        this.emit({ type: 'combat_state', time: run.elapsedSeconds, state: 'focus', stacks: state.focus });
+      }
+      if (m.supercharge) {
+        state.supercharge = Math.min(
+          m.superchargeCap,
+          state.supercharge + Math.max(0, Math.floor(m.reclaimCharge)),
+        );
+        this.emit({
+          type: 'combat_state',
+          time: run.elapsedSeconds,
+          state: 'supercharge',
+          stacks: state.supercharge,
+        });
+      }
+    }
+
+    return killed;
+  }
   nextDelay(run: RunState): number {
     const s = combatState(run);
     let next = Infinity;
@@ -266,7 +347,7 @@ export class TimedSpellEffects {
     run: RunState,
     target: EnemyState,
     amount: string,
-    effect: 'explosion' | 'meteor' | 'dot',
+    effect: 'explosion' | 'meteor' | 'dot' | 'necrosis',
     source: number,
     castId: number,
     effectId: number,

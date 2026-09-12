@@ -37,6 +37,9 @@ export const SPELL_MECHANIC_DEFAULTS: Readonly<SpellMechanics> = {
   pandemic: false,
   singularity: false,
   ascendance: false,
+  necrosis: false,
+  cascade: false,
+  reclamation: false,
   blastRadius: 1.65,
   explosionDamage: 0.35,
   meteorChance: 0.15,
@@ -83,6 +86,11 @@ export const SPELL_MECHANIC_DEFAULTS: Readonly<SpellMechanics> = {
   singularityRadius: 2.2,
   singularityDamage: 0.6,
   ascendanceCritGain: 0.25,
+  necrosisRadius: 2.4,
+  necrosisDamage: 4,
+  cascadeStacks: 1,
+  reclaimFocus: 1,
+  reclaimCharge: 1,
 };
 export const SPELL_SIDE_TUNING = {
   blastRadius: 0.35,
@@ -110,4 +118,10 @@ export const SPELL_SIDE_TUNING = {
   singularityDamage: 0.25,
   superchargeCap: 1,
   ascendanceCritGain: 0.15,
+  necrosisRadius: 0.4,
+  necrosisDamage: 1.5,
+  cascadeStacks: 1,
+  momentumCap: 1,
+  reclaimFocus: 1,
+  reclaimCharge: 1,
 } as const;

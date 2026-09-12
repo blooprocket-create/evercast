@@ -644,3 +644,85 @@ describe('blended routes: what the second projectile must not double', () => {
     expect(f.runtime.velocityStored).toBe('0');
   });
 });
+
+describe('what the spell does about a death', () => {
+  const pair = [
+    { x: 0, z: 0 },
+    { x: 1, z: 0 },
+    { x: 20, z: 0 },
+  ];
+  /** Kill an enemy outright, the way any damage source eventually would. */
+  const fell = (f: ReturnType<typeof fixture>, index: number) => {
+    f.run.enemies[index].hp = big(0);
+    // So each case reads only what answering the death emitted.
+    f.events.length = 0;
+    return f.combat.evolving.effects.resolveKill(f.run, f.run.enemies[index]);
+  };
+
+  it('bursts the infection out of a body that died carrying it', () => {
+    const f = fixture({ necrosis: true, dot: true, necrosisDamage: 2, necrosisRadius: 3 }, pair);
+    f.combat.evolving.effects.applyDot(f.run, f.run.enemies[0], '10', f.m, 1, 1);
+    expect(fell(f, 0)).toEqual([]);
+
+    // The neighbour took the burst and caught what killed its neighbour.
+    expect(Number(f.run.enemies[1].hp.toString())).toBeLessThan(10000);
+    expect(f.run.enemies[1].statuses?.dot).toBeDefined();
+    // The one across the field is outside the radius.
+    expect(f.run.enemies[2].hp.toString()).toBe('10000');
+    expect(f.run.enemies[2].statuses?.dot).toBeUndefined();
+    expect(f.events.some((e) => e.type === 'effect_hit' && e.effect === 'necrosis')).toBe(true);
+  });
+
+  it('says what the burst killed, which is how a cascade continues', () => {
+    const f = fixture({ necrosis: true, dot: true, necrosisDamage: 2, necrosisRadius: 3 }, pair);
+    f.combat.evolving.effects.applyDot(f.run, f.run.enemies[0], '10', f.m, 1, 1);
+    f.run.enemies[1].hp = big(1);
+    expect(fell(f, 0)).toEqual([2]);
+  });
+
+  it('does nothing for a body that was never infected', () => {
+    const f = fixture({ necrosis: true, dot: true }, pair);
+    expect(fell(f, 0)).toEqual([]);
+    expect(f.run.enemies[1].hp.toString()).toBe('10000');
+    expect(f.events).toHaveLength(0);
+  });
+
+  it('builds Momentum from a kill under Cascade, and tips into Overdrive', () => {
+    const f = fixture({ cascade: true, momentum: true, overdrive: true, momentumCap: 2 }, pair);
+    fell(f, 0);
+    expect(f.runtime.momentum).toBe(1);
+    expect(f.runtime.overdriveUntil).toBe(0);
+    fell(f, 1);
+    expect(f.runtime.momentum).toBe(2);
+    expect(f.runtime.overdriveUntil).toBeGreaterThan(0);
+  });
+
+  it('returns Focus and Supercharge rather than burying them with the target', () => {
+    const f = fixture(
+      { reclamation: true, perfect: true, supercharge: true, reclaimFocus: 2 },
+      pair,
+    );
+    fell(f, 0);
+    expect(f.runtime.focus).toBe(2);
+    expect(f.runtime.supercharge).toBe(1);
+  });
+
+  it('returns nothing a build does not have', () => {
+    // Reclamation without Perfect Strike or Supercharge has no resource to give
+    // back, and must not invent one.
+    const f = fixture({ reclamation: true }, pair);
+    fell(f, 0);
+    expect(f.runtime.focus).toBe(0);
+    expect(f.runtime.supercharge).toBe(0);
+    expect(f.events).toHaveLength(0);
+  });
+
+  it('is inert for a build that has taken no capstone', () => {
+    const f = fixture({ dot: true }, pair);
+    f.combat.evolving.effects.applyDot(f.run, f.run.enemies[0], '10', f.m, 1, 1);
+    expect(fell(f, 0)).toEqual([]);
+    expect(f.run.enemies[1].hp.toString()).toBe('10000');
+    expect(f.runtime.momentum).toBe(0);
+    expect(f.events).toHaveLength(0);
+  });
+});

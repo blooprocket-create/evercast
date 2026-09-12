@@ -80,11 +80,16 @@ export function spellTreeExclusiveGroups(
   const identities = has('third_identity') ? 3 : 2;
   return [
     { id: 'root_route', maxSelections: routes, name: 'Evercast route' },
-    ...(['twin', 'piercing', 'charged'] as const).map((route) => ({
-      id: `${route}_identity`,
-      maxSelections: identities,
-      name: `${route} identities`,
-    })),
+    ...(['twin', 'piercing', 'charged'] as const).flatMap((route) => [
+      {
+        id: `${route}_identity`,
+        maxSelections: identities,
+        name: `${route} identities`,
+      },
+      // No attunement widens this one. A route ends in one capstone or the
+      // other, so the spell keeps an identity even with everything unlocked.
+      { id: `${route}_apex`, maxSelections: 1, name: `${route} apex` },
+    ]),
   ];
 }
 const set = <K extends keyof SpellMechanics>(key: K, value: SpellMechanics[K]) =>
@@ -476,9 +481,48 @@ const apexes: [
       { id: 'supercharge_cap', name: 'Charge Capacity', key: 'superchargeCap' },
     ],
   ],
+  // The second capstone on each route answers a death rather than a hit. One
+  // apex per route: these are the alternative to the three above, not an
+  // addition to them.
+  [
+    'necrosis',
+    'Necrosis',
+    'twin',
+    ['plaguefall', 'doomfall', 'blight'],
+    'An infected enemy that dies bursts. The remaining infection detonates around the body and takes hold in whatever it catches.',
+    'necrosis',
+    [
+      { id: 'necrosis_radius', name: 'Burst Radius', key: 'necrosisRadius' },
+      { id: 'necrosis_damage', name: 'Burst Damage', key: 'necrosisDamage' },
+    ],
+  ],
+  [
+    'cascade',
+    'Cascade',
+    'piercing',
+    ['terminal_voltage', 'stormdrive', 'terminal_velocity'],
+    'Every kill is a breakthrough. A death builds Momentum and can trigger Overdrive, whatever struck the final blow.',
+    'cascade',
+    [
+      { id: 'cascade_surge', name: 'Breakthrough', key: 'cascadeStacks' },
+      { id: 'cascade_hold', name: 'Momentum Ceiling', key: 'momentumCap' },
+    ],
+  ],
+  [
+    'reclamation',
+    'Reclamation',
+    'charged',
+    ['critical_overload', 'death_sentence', 'obliteration'],
+    'The charge is not spent on a corpse. A kill returns Focus and Supercharge so they carry to the next target.',
+    'reclamation',
+    [
+      { id: 'reclaim_focus', name: 'Reclaimed Focus', key: 'reclaimFocus' },
+      { id: 'reclaim_charge', name: 'Reclaimed Charge', key: 'reclaimCharge' },
+    ],
+  ],
 ];
 for (const [id, name, route, requires, description, flag, sides] of apexes) {
-  node(id, name, route, 'apex', [...requires], description, [enable(flag)]);
+  node(id, name, route, 'apex', [...requires], description, [enable(flag)], `${route}_apex`);
   sidePaths(route, id, sides);
 }
 

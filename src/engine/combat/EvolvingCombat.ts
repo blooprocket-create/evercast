@@ -143,7 +143,7 @@ export class EvolvingCombat {
         if (m.meteor && this.effects.roll(run, m.meteorChance, 22, castId, index))
           this.effects.queueMeteor(run, enemy, base.toString(), m, castId);
         if (m.momentum && step > 0 && m.piercingCast && (!m.chain || m.stormdrive))
-          this.gainMomentum(run, m);
+          this.effects.gainMomentum(run, m);
         // Singularity: the force the terminal hit just delivered collapses. No
         // force gathered, nothing to collapse - so it pays for long chains.
         if (terminal && m.singularity && force > 0)
@@ -211,29 +211,6 @@ export class EvolvingCombat {
       previous = next;
     }
     return targets;
-  }
-  private gainMomentum(run: RunState, m: SpellMechanics): void {
-    const state = combatState(run);
-    if (state.overdriveUntil > run.elapsedSeconds) return;
-    state.momentum = Math.min(m.momentumCap, state.momentum + 1);
-    state.momentumUntil = run.elapsedSeconds + m.momentumDuration;
-    this.emit({
-      type: 'combat_state',
-      time: run.elapsedSeconds,
-      state: 'momentum',
-      stacks: state.momentum,
-      expiresAt: state.momentumUntil,
-    });
-    if (m.overdrive && state.momentum >= m.momentumCap) {
-      state.overdriveUntil = run.elapsedSeconds + m.overdriveDuration;
-      this.emit({
-        type: 'combat_state',
-        time: run.elapsedSeconds,
-        state: 'overdrive',
-        stacks: state.momentum,
-        expiresAt: state.overdriveUntil,
-      });
-    }
   }
   private woundedGain(hpFraction: number, m: SpellMechanics): number {
     return Number(hpFraction <= m.woundedThreshold) + Number(hpFraction <= m.criticalThreshold);
