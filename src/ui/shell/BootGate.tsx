@@ -28,10 +28,16 @@ interface BootGateProps {
   phase: BootPhase;
   /** A save was picked up, so this is a welcome back rather than a hello. */
   resumed: boolean;
+  /**
+   * The scene has a frame of the title void on screen, so the curtain can lift
+   * and let the sigil through. False whenever there is no renderer at all, which
+   * is why a machine with no WebGL simply gets the gate as it has always been.
+   */
+  lit: boolean;
   onBegin: () => void;
 }
 
-export function BootGate({ phase, resumed, onBegin }: BootGateProps) {
+export function BootGate({ phase, resumed, lit, onBegin }: BootGateProps) {
   const action = useRef<HTMLButtonElement>(null);
   const preparing = phase === 'preparing';
 
@@ -46,8 +52,17 @@ export function BootGate({ phase, resumed, onBegin }: BootGateProps) {
 
   if (phase === 'playing') return null;
 
+  // Never while preparing: the curtain cannot lift before the gate is ready,
+  // whatever the scene reports.
+  const showing = lit && !preparing;
+
   return (
-    <div className={styles.gate} role="dialog" aria-modal="true" aria-label="Evercast">
+    <div
+      className={showing ? `${styles.gate} ${styles.lit}` : styles.gate}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Evercast"
+    >
       <div className={styles.plate}>
         <h1 className={styles.wordmark}>EVERCAST</h1>
         <p className={styles.premise}>

@@ -15,6 +15,7 @@ export default function App() {
   const [awayProgress, setAwayProgress] = useState<OfflineSummary | null>(null);
   const [assetsSettled, setAssetsSettled] = useState(false);
   const [begun, setBegun] = useState(false);
+  const [titleLit, setTitleLit] = useState(false);
   const { depthOfField, vfxQuality, damageNumbers } = useUiSettings().display;
   const phase = bootPhase({ assetsSettled, begun });
 
@@ -69,6 +70,38 @@ export default function App() {
   }, []);
 
   /**
+   * The title sigil, raised once the world is ready and struck the moment the
+   * player begins.
+   *
+   * Declared above the game loop deliberately: React runs every changed effect's
+   * cleanup before any create, so `hideTitle()` returns the camera to the game
+   * pose before `startGameLoop` ever calls `sync()` against it. That ordering is
+   * load-bearing, and putting the effects in this order is what makes it legible
+   * rather than incidental.
+   *
+   * Nothing here is required for the game to run. No scene, a chunk that never
+   * arrived, a machine with no WebGL - the effect simply never fires, `titleLit`
+   * stays false, and the gate is exactly the gate that shipped before it.
+   */
+  useEffect(() => {
+    if (!scene || phase !== 'ready') return;
+    let live = true;
+    void scene
+      .showTitle()
+      .then(() => {
+        if (live) setTitleLit(true);
+      })
+      // A title that cannot be raised is a dark gate, which is a working gate.
+      .catch(() => {});
+
+    return () => {
+      live = false;
+      setTitleLit(false);
+      scene.hideTitle();
+    };
+  }, [scene, phase]);
+
+  /**
    * Nothing ticks until the player is looking at it - but the clock does not
    * stop for the gate, so the wait in front of it is credited as away time
    * before the loop starts and settles the lot on its first frame. Without that
@@ -118,6 +151,7 @@ export default function App() {
         canvasRef={canvasRef}
         bootPhase={phase}
         resumedFromSave={resumedFromSave}
+        titleLit={titleLit}
         onBegin={beginPlaying}
         awayProgress={awayProgress}
         onDismissAwayProgress={() => setAwayProgress(null)}
