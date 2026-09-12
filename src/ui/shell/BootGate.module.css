@@ -83,14 +83,43 @@
 .plate::before {
   content: '';
   position: absolute;
-  inset: calc(var(--space-7) * -1) calc(var(--space-6) * -1);
+  /*
+   * Generous, because the falloff has to have somewhere to happen. A tight box
+   * makes a steep ramp, and a steep ramp over an additive glow is an edge.
+   */
+  inset: calc(var(--space-7) * -2) calc(var(--space-7) * -1);
   z-index: -1;
+  /*
+   * Five stops down to nothing at the boundary, not three stops down to nothing
+   * at 80%.
+   *
+   * The first version stepped from `--bg` at full opacity to `--scrim` at 0.72
+   * and then to clear inside eighteen percent of the radius, and finished well
+   * short of its own box. Both halves of that show: the alpha step draws a
+   * contour, and the early finish draws a second one, and against additive
+   * light they read as a hard elliptical cut straight across the spokes - which
+   * is exactly what turned up on a phone.
+   *
+   * One colour, falling monotonically, ending where the box does. Nothing for a
+   * contour to form on.
+   *
+   * `closest-side` is the load-bearing word. A radial gradient defaults to
+   * `farthest-corner`, which reaches its last stop at the corners - so along the
+   * top and bottom edges it is still a third opaque when the element's box runs
+   * out, and the box clips it dead. That is a straight horizontal line across
+   * the sigil, which is exactly what a phone showed after the stops above were
+   * already smooth: the ramp was never the whole problem, the size keyword was.
+   * `closest-side` puts the last stop on the edge midpoints instead, so the
+   * gradient is already transparent everywhere the box ends.
+   */
   background: radial-gradient(
-    ellipse at 50% 50%,
+    ellipse closest-side at 50% 50%,
     var(--bg) 0%,
-    var(--bg) 38%,
-    var(--scrim) 62%,
-    transparent 80%
+    color-mix(in srgb, var(--bg) 92%, transparent) 30%,
+    color-mix(in srgb, var(--bg) 68%, transparent) 48%,
+    color-mix(in srgb, var(--bg) 38%, transparent) 66%,
+    color-mix(in srgb, var(--bg) 14%, transparent) 84%,
+    transparent 100%
   );
   pointer-events: none;
 }
