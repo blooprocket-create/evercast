@@ -59,10 +59,10 @@ Owns browser lifecycle, save loading, autosave, visibility/background handling, 
 - `RunState`: frontier, current encounter, push/farm mode, Arcane Essence, spell build, combat timers, the live party and run stats.
 - `MetaState`: Rebirth count, Knowledge, lifetime/highest-stage records, permanent unlock/story flags.
 - `EquipmentState`: Gold and the eight persistent gear pieces.
-- `SpellTreeState`: purchased Spell Points and activated spell-tree nodes.
+- `SpellTreeState`: purchased Spell Points, activated spell-tree nodes, and the Attunements that set the tree's rules.
 - `CompanionsState`: Starlight, the owned roster, the party, and the draw/pity counters.
 
-The current placeholder Rebirth replaces `RunState` while equipment and spell-tree state survive. That is intentionally provisional until prestige is designed; it must not become canon by accident.
+Rebirth replaces `RunState` while equipment and spell-tree state survive. Knowledge now has a sink - it buys Attunements, which are permanent tree rules - so the first rebirth opens the tree rather than merely costing a frontier. The reset boundary itself is still provisional and must not become canon by accident.
 
 ## Numbers
 
@@ -108,15 +108,18 @@ Gold and Arcane Essence intentionally serve different loops:
 
 - **Gold** is repeatable. Every kill grants Gold and farming/AFK time can accumulate it. Gold levels gear.
 - **Arcane Essence** is finite frontier progression. It is granted only on a stage's first-ever frontier clear and purchases Spell Points. Farming/replaying already-cleared stages grants no Essence.
+- **Knowledge** is prestige progression. Rebirth grants it and Attunements spend it, so it buys the tree's rules rather than its allocations and is never refunded.
 - **Starlight** is repeatable and buys summons. It is deliberately a third wallet rather than a second use for one of the others: draws out of Gold would cannibalise gear, and draws out of Essence would break the rule above. It grows far more slowly than Gold per kill, with a boss multiplier and a first-clear bonus.
 
 Boss first-clears currently award more Essence. Exact curves remain prototype tuning.
 
 ## Spell tree
 
-The authored v1 tree has three exclusive routes, choose-two identity groups, optional side upgrades, mutations and pairwise fusions requiring both parents. Allocations compile into SpellBuild.mechanics. EvolvingCombat and TimedSpellEffects own cast/timed behavior; stable enemy positions and temporary spell resources remain authoritative engine state. UI geometry stays separate.
+The authored tree has three routes, identity groups, three-rank side upgrades, mutations, pairwise fusions requiring both parents, and a capstone per route requiring all three of its fusions. Allocations compile into SpellBuild.mechanics. EvolvingCombat and TimedSpellEffects own cast/timed behavior; stable enemy positions and temporary spell resources remain authoritative engine state. UI geometry stays separate.
 
-See [Real Spell Tree v1](SPELL_TREE_V1.md) for the graph rules, provisional tuning, event timing and version 6 migration. Future fusion identity splits are supported through the same exclusive-group schema, without invented nodes.
+Exclusivity is progression, not a fixed rule: `spellTreeExclusiveGroups` reads the player's Attunements, and the purchase ceiling is derived from the largest build those rules allow rather than from the node count. The three routes compose - Twin is how many projectiles, Piercing how many targets each reaches, Charged how hard and how slow - so `route` is a derived name that combat never reads.
+
+See [Spell Tree v2](SPELL_TREE_V2.md) for the rules, tuning, blended-route conventions and version 8 migration, and [Real Spell Tree v1](SPELL_TREE_V1.md) for the original graph and the combat conventions it established.
 
 ## Companions
 
@@ -194,7 +197,7 @@ As new systems arrive, prefer extracting cohesive builders/services rather than 
 
 ## Save / migration
 
-`SaveCodec` owns versioned schema conversion across a stated window: `MINIMUM_SAVE_VERSION` (5) to `CURRENT_SAVE_VERSION` (7). Version 7 adds the companions domain; v5 and v6 load with the feature simply not started rather than losing anything they had, and v5 additionally refunds its spell-tree allocations. Browser `localStorage` remains in `src/app`. Saves inside the window migrate forward rather than silently resetting progression.
+`SaveCodec` owns versioned schema conversion across a stated window: `MINIMUM_SAVE_VERSION` (5) to `CURRENT_SAVE_VERSION` (8). Version 8 adds Attunements and version 7 the companions domain; older saves inside the window load with the feature simply not started rather than losing anything they had, and v5 additionally refunds its spell-tree allocations. Attunements deserialize before allocations, because they decide the group caps those allocations are validated against. Browser `localStorage` remains in `src/app`. Saves inside the window migrate forward rather than silently resetting progression.
 
 The v1-v4 migrations were removed once the format settled. They carried a second enemy shape, a pre-encounter run shape and a reconciliation pass for a repeatable-Essence economy the game no longer has - three shapes kept alive only to be converted away from. v5 and v6 stay because the current path already reads them: they cost two conditionals, not a code path. A save below the floor is refused by the codec, reported by `BrowserSaveStore.load`, and the player starts fresh rather than loading a state the codec can no longer describe.
 
@@ -208,7 +211,7 @@ Coverage includes deterministic advancement, multi-enemy overlap, push/farm beha
 
 ## Still intentionally deferred
 
-- final spell-tree balance and future fusion identities,
+- final spell-tree balance,
 - bounded/diminishing control rules,
 - final prestige behavior,
 - gear-tree point sources and authored gear trees,
