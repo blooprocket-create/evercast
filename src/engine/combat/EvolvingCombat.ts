@@ -46,10 +46,10 @@ export class EvolvingCombat {
     );
     const longestHops = Math.max(...chains.map((chain) => chain.length - 1));
     if (m.piercingCast && chains.every((chain) => chain.length === 1)) state.nextCastHaste = true;
-    if (state.superchargeTargetId !== primary.instanceId) {
-      state.supercharge = 0;
-      state.superchargeTargetId = primary.instanceId;
-    }
+    // Ascendance is exactly this: the charge no longer lapses when the spell
+    // moves on to whatever is closest now.
+    if (!m.ascendance && state.superchargeTargetId !== primary.instanceId) state.supercharge = 0;
+    state.superchargeTargetId = primary.instanceId;
     const stacks = m.supercharge ? state.supercharge : 0;
     const perfect = m.perfect && state.focus >= m.focusMax;
     const activeOverdrive = state.overdriveUntil > run.elapsedSeconds;
@@ -108,7 +108,8 @@ export class EvolvingCombat {
           damage = damage.add(base.mul(force)).add(stored);
         if (critical)
           damage = damage.mul(
-            spell.critMultiplier * (m.criticalOverload ? 1 + stacks * m.overloadCritGain : 1),
+            (spell.critMultiplier + (m.ascendance ? state.focus * m.ascendanceCritGain : 0)) *
+              (m.criticalOverload ? 1 + stacks * m.overloadCritGain : 1),
           );
         const actual = this.effects.damage(run, enemy, damage.toString());
         run.stats.projectileHits++;
@@ -137,6 +138,17 @@ export class EvolvingCombat {
           this.effects.queueMeteor(run, enemy, base.toString(), m, castId);
         if (m.momentum && step > 0 && m.piercingCast && (!m.chain || m.stormdrive))
           this.gainMomentum(run, m);
+        // Singularity: the force the terminal hit just delivered collapses. No
+        // force gathered, nothing to collapse - so it pays for long chains.
+        if (terminal && m.singularity && force > 0)
+          this.effects.explosion(
+            run,
+            positionOf(enemy),
+            enemy.instanceId,
+            base.mul(force).toString(),
+            { ...m, blastRadius: m.singularityRadius, explosionDamage: m.singularityDamage },
+            castId,
+          );
       }
     }
     if (state.velocityReady) {

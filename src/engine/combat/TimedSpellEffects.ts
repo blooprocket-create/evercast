@@ -241,8 +241,17 @@ export class TimedSpellEffects {
         const m = dot.mechanics;
         if (m.contagion && this.roll(run, m.contagionChance, 31, dot.castId, enemy.instanceId)) {
           const candidates = nearby(run, positionOf(enemy), m.contagionRadius, new Set([enemy.instanceId]));
-          const target = candidates.find((e) => !e.statuses?.dot) ?? candidates[0];
-          if (target) {
+          const uninfected = candidates.filter((e) => !e.statuses?.dot);
+          // Contagion normally prefers one uninfected neighbour and otherwise
+          // refreshes the nearest. Pandemic takes several at once, and still
+          // falls back to a refresh when there is nothing new to infect.
+          const spread = m.pandemic
+            ? uninfected.length > 0
+              ? uninfected.slice(0, Math.max(1, Math.floor(m.pandemicTargets)))
+              : candidates.slice(0, 1)
+            : [uninfected[0] ?? candidates[0]];
+          for (const target of spread) {
+            if (!target) continue;
             this.applyDot(run, target, dot.baseDamage, m, dot.castId, enemy.instanceId, true);
             if (m.blight) this.applyWeakness(run, target, m, enemy.instanceId, ruined);
             if (m.plaguefall) this.queueMeteor(run, target, dot.baseDamage, m, dot.castId, true);

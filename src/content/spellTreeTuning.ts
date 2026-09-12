@@ -34,6 +34,9 @@ export const SPELL_MECHANIC_DEFAULTS: Readonly<SpellMechanics> = {
   criticalOverload: false,
   deathSentence: false,
   obliteration: false,
+  pandemic: false,
+  singularity: false,
+  ascendance: false,
   blastRadius: 1.65,
   explosionDamage: 0.35,
   meteorChance: 0.15,
@@ -76,6 +79,10 @@ export const SPELL_MECHANIC_DEFAULTS: Readonly<SpellMechanics> = {
   overloadCritGain: 0.2,
   woundedThreshold: 0.5,
   criticalThreshold: 0.2,
+  pandemicTargets: 2,
+  singularityRadius: 2.2,
+  singularityDamage: 0.6,
+  ascendanceCritGain: 0.25,
 };
 export const SPELL_SIDE_TUNING = {
   blastRadius: 0.35,
@@ -97,4 +104,10 @@ export const SPELL_SIDE_TUNING = {
   executeDamage: 0.2,
   executeThreshold: 0.05,
   criticalMassChance: 0.1,
+  contagionRadius: 0.5,
+  pandemicTargets: 1,
+  singularityRadius: 0.4,
+  singularityDamage: 0.25,
+  superchargeCap: 1,
+  ascendanceCritGain: 0.15,
 } as const;

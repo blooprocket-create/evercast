@@ -168,6 +168,12 @@ function identity(
   flag: BooleanKey,
 ) {
   node(id, name, route, 'identity', [`${route}_cast`], description, effects, `${route}_identity`);
+  sidePaths(route, id, sides);
+  node(mutation, mutationName, route, 'mutation', [id], mutationDescription, [enable(flag)]);
+}
+
+/** The optional rank ladder hanging off an identity or an apex. */
+function sidePaths(route: Exclude<SpellTreeRegion, 'core'>, parent: string, sides: Side[]) {
   for (const side of sides)
     for (let rank = 1; rank <= SPELL_SIDE_RANKS; rank++) {
       const upgradeId = `${side.id}_${rank}`;
@@ -176,7 +182,7 @@ function identity(
         `${side.name} ${RANK_NUMERALS[rank - 1]}`,
         route,
         'minor',
-        [rank === 1 ? id : `${side.id}_${rank - 1}`],
+        [rank === 1 ? parent : `${side.id}_${rank - 1}`],
         `Optional investment: ${side.name}. Playtest bonus ${S[side.key]}.`,
       );
       if (side.key === 'critChance' || side.key === 'critMultiplier')
@@ -188,7 +194,6 @@ function identity(
           { key: side.key, value: S[side.key], operation: 'add' } as MechanicUpgrade,
         ];
     }
-  node(mutation, mutationName, route, 'mutation', [id], mutationDescription, [enable(flag)]);
 }
 identity(
   'twin',
@@ -419,6 +424,64 @@ const fusions: [string, string, SpellTreeRegion, string, string, string, Boolean
 ];
 for (const [id, name, route, a, b, description, flag] of fusions)
   node(id, name, route, 'fusion', [a, b], description, [enable(flag)]);
+
+/**
+ * One capstone per route, each requiring all three of that route's fusions -
+ * so an apex is only reachable once Broadened Study has opened the third
+ * identity. They reuse the existing infection, explosion and resource systems
+ * rather than introducing new timed work.
+ */
+const apexes: [
+  string,
+  string,
+  Exclude<SpellTreeRegion, 'core'>,
+  [string, string, string],
+  string,
+  BooleanKey,
+  Side[],
+][] = [
+  [
+    'pandemic',
+    'Pandemic',
+    'twin',
+    ['plaguefall', 'doomfall', 'blight'],
+    'Contagion stops choosing. Every tick that spreads takes several uninfected neighbours at once, each carrying whatever the infection already carries.',
+    'pandemic',
+    [
+      { id: 'pandemic_reach', name: 'Pandemic Reach', key: 'pandemicTargets' },
+      { id: 'contagion_radius', name: 'Contagion Radius', key: 'contagionRadius' },
+    ],
+  ],
+  [
+    'singularity',
+    'Singularity',
+    'piercing',
+    ['terminal_voltage', 'stormdrive', 'terminal_velocity'],
+    'All that gathered force has to go somewhere. The terminal hit collapses into an explosion scaled by the force it just delivered.',
+    'singularity',
+    [
+      { id: 'singularity_radius', name: 'Collapse Radius', key: 'singularityRadius' },
+      { id: 'singularity_damage', name: 'Collapse Damage', key: 'singularityDamage' },
+    ],
+  ],
+  [
+    'ascendance',
+    'Ascendance',
+    'charged',
+    ['critical_overload', 'death_sentence', 'obliteration'],
+    'The charge never lapses: Supercharge survives a change of target, and held Focus sharpens every critical hit.',
+    'ascendance',
+    [
+      { id: 'ascendance_gain', name: 'Ascendant Focus', key: 'ascendanceCritGain' },
+      { id: 'supercharge_cap', name: 'Charge Capacity', key: 'superchargeCap' },
+    ],
+  ],
+];
+for (const [id, name, route, requires, description, flag, sides] of apexes) {
+  node(id, name, route, 'apex', [...requires], description, [enable(flag)]);
+  sidePaths(route, id, sides);
+}
+
 export const SPELL_TREE_NODES: readonly SpellTreeNodeDefinition[] = nodes;
 export const SPELL_TREE_NODE_BY_ID = new Map(nodes.map((n) => [n.id, n]));
 export function adjacentNodeIds(id: string): string[] {

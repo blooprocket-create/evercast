@@ -115,9 +115,11 @@ describe('the purchase ceiling', () => {
   });
 
   it('widens with each attunement, and opens the whole graph at the last one', () => {
-    expect(maxAllocatableSpellPoints(['third_identity'])).toBe(28);
+    // The apex tier only appears with the third identity: it needs all three
+    // fusions of a route, and two identities can only ever produce one.
+    expect(maxAllocatableSpellPoints(['third_identity'])).toBe(35);
     expect(maxAllocatableSpellPoints(['second_route'])).toBe(36);
-    expect(maxAllocatableSpellPoints(['third_identity', 'second_route'])).toBe(56);
+    expect(maxAllocatableSpellPoints(['third_identity', 'second_route'])).toBe(70);
     const everything = maxAllocatableSpellPoints([
       'third_identity',
       'second_route',
@@ -229,5 +231,59 @@ describe('side upgrade ranks', () => {
     awaken(sim, 'blast_radius_3');
     // 1.65 base plus three ranks of +0.35.
     expect(sim.getState().run.spell.mechanics?.blastRadius).toBeCloseTo(2.7);
+  });
+});
+
+describe('the apex tier', () => {
+  it('needs all three fusions of its route, so Broadened Study gates it', () => {
+    const apexes = SPELL_TREE_NODES.filter((node) => node.kind === 'apex');
+    expect(apexes).toHaveLength(3);
+    for (const apex of apexes) {
+      expect(apex.requiresAll).toHaveLength(3);
+      for (const id of apex.requiresAll)
+        expect(SPELL_TREE_NODE_BY_ID.get(id)?.kind, `${apex.id} requires ${id}`).toBe('fusion');
+    }
+
+    // Two identities can only ever produce one fusion, so no apex is reachable
+    // on the base rules however many points are bought - the third identity is
+    // locked out, and the lock carries all the way down to the capstone.
+    const sim = funded();
+    awaken(sim, 'twin_cast');
+    awaken(sim, 'explosive');
+    awaken(sim, 'damage_over_time');
+    awaken(sim, 'meteor_shower');
+    awaken(sim, 'contagion');
+    awaken(sim, 'plaguefall');
+    expect(spellNodeStatus(sim.getState().spellTree, 'pandemic')).toBe('exclusive');
+    expect(blockingAttunement(sim.getState().spellTree, 'pandemic')).toBe('third_identity');
+  });
+
+  it('awakens once its route is complete, and carries its own rank ladder', () => {
+    const sim = new EvercastSimulation();
+    sim.getState().meta.knowledge = big(10);
+    expect(sim.execute({ type: 'buy_attunement', attunementId: 'third_identity' })).toBe(true);
+    sim.getState().run.essence = big('1e30');
+    while (sim.execute({ type: 'buy_spell_point' }));
+
+    for (const id of [
+      'twin_cast',
+      'explosive',
+      'damage_over_time',
+      'debuff',
+      'meteor_shower',
+      'contagion',
+      'ruin',
+      'plaguefall',
+      'doomfall',
+      'blight',
+    ])
+      awaken(sim, id);
+
+    awaken(sim, 'pandemic');
+    expect(sim.getState().run.spell.mechanics?.pandemic).toBe(true);
+    awaken(sim, 'pandemic_reach_1');
+    awaken(sim, 'pandemic_reach_2');
+    // Base 2 neighbours, plus one per rank.
+    expect(sim.getState().run.spell.mechanics?.pandemicTargets).toBe(4);
   });
 });

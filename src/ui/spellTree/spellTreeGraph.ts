@@ -22,6 +22,8 @@ const SIZE: Record<SpellTreeNodeKind, { width: number; height: number }> = {
   minor: { width: 26, height: 26 },
   mutation: { width: 44, height: 44 },
   fusion: { width: 48, height: 48 },
+  // The outermost ring, and the largest thing on it after the root.
+  apex: { width: 54, height: 54 },
 };
 
 /** Kinds worth naming on the canvas; the rest are read in the inspector. */
@@ -31,6 +33,7 @@ export const LABELLED_KINDS = new Set<SpellTreeNodeKind>([
   'identity',
   'mutation',
   'fusion',
+  'apex',
 ]);
 
 export const SPELL_TREE_GRAPH: GraphNodeInput[] = SPELL_TREE_NODES.map((node) => ({

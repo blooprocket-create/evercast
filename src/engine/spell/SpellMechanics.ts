@@ -41,6 +41,10 @@ export interface SpellMechanics {
   criticalOverload: boolean;
   deathSentence: boolean;
   obliteration: boolean;
+  /** Apex capstones. Each needs all three fusions of its route. */
+  pandemic: boolean;
+  singularity: boolean;
+  ascendance: boolean;
   blastRadius: number;
   explosionDamage: number;
   meteorChance: number;
@@ -83,6 +87,12 @@ export interface SpellMechanics {
   overloadCritGain: number;
   woundedThreshold: number;
   criticalThreshold: number;
+  /** How many uninfected neighbours one Contagion tick can take under Pandemic. */
+  pandemicTargets: number;
+  singularityRadius: number;
+  singularityDamage: number;
+  /** Critical multiplier added per point of held Focus under Ascendance. */
+  ascendanceCritGain: number;
 }
 export type MechanicUpgrade = {
   [K in keyof SpellMechanics]: { key: K; value: SpellMechanics[K]; operation?: 'add' | 'set' };

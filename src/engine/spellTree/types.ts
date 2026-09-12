@@ -3,7 +3,14 @@ import type { MechanicUpgrade } from '../spell/SpellMechanics';
 
 export type SpellTreeRegion = 'core' | 'twin' | 'piercing' | 'charged';
 
-export type SpellTreeNodeKind = 'root' | 'route' | 'identity' | 'minor' | 'mutation' | 'fusion';
+export type SpellTreeNodeKind =
+  | 'root'
+  | 'route'
+  | 'identity'
+  | 'minor'
+  | 'mutation'
+  | 'fusion'
+  | 'apex';
 
 export interface SpellTreeNodeDefinition {
   id: string;

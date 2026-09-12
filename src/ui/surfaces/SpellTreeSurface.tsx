@@ -28,6 +28,7 @@ const KIND_LABEL: Record<string, string> = {
   minor: 'Upgrade',
   mutation: 'Mutation',
   fusion: 'Fusion',
+  apex: 'Apex',
 };
 
 const STATUS_NOTE: Record<string, string> = {

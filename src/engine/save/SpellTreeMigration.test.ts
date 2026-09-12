@@ -298,3 +298,49 @@ describe('a blended two-route build', () => {
     expect(normalized(restored)).toEqual(normalized(whole));
   });
 });
+
+describe('the apex capstones', () => {
+  /** A complete route: three identities, three mutations, three fusions, apex. */
+  function buildApex(apexId: string) {
+    const initial = createInitialGameState(DEFAULT_ENGINE_CONFIG);
+    initial.equipment.pieces.robe.level = 1000;
+    const sim = new EvercastSimulation({ initialState: initial });
+    sim.getState().spellTree.purchasedPoints = 60;
+    sim.getState().spellTree.attunements = ['third_identity'];
+    const activate = (id: string) => {
+      if (id === 'evercast_root' || sim.getState().spellTree.activatedNodeIds.includes(id)) return;
+      SPELL_TREE_NODE_BY_ID.get(id)!.requiresAll.forEach(activate);
+      expect(sim.execute({ type: 'activate_spell_node', nodeId: id }), id).toBe(true);
+    };
+    activate(apexId);
+    sim.advance(2);
+    for (const enemy of sim.getState().run.enemies) {
+      enemy.hp = big(10000);
+      enemy.maxHp = big(10000);
+    }
+    return sim;
+  }
+
+  for (const apex of SPELL_TREE_NODES.filter((node) => node.kind === 'apex'))
+    it(`${apex.name}: chunked, offline and save-resumed simulation agree`, () => {
+      const source = buildApex(apex.id);
+      expect(source.getState().run.spell.mechanics?.[apex.mechanics![0].key]).toBe(true);
+
+      const encoded = JSON.stringify(codec.encode(source.getState()));
+      const whole = new EvercastSimulation({ initialState: codec.decode(JSON.parse(encoded)).state });
+      const chunks = new EvercastSimulation({ initialState: codec.decode(JSON.parse(encoded)).state });
+      const offline = new EvercastSimulation({ initialState: codec.decode(JSON.parse(encoded)).state });
+      whole.advance(20);
+      for (let i = 0; i < 160; i++) chunks.advance(0.125);
+      new OfflineProgressor(100).apply(offline, 20);
+      expect(normalized(chunks)).toEqual(normalized(whole));
+      expect(normalized(offline)).toEqual(normalized(whole));
+
+      const restored = new EvercastSimulation({
+        initialState: codec.decode(JSON.parse(JSON.stringify(codec.encode(chunks.getState())))).state,
+      });
+      restored.advance(5);
+      whole.advance(5);
+      expect(normalized(restored)).toEqual(normalized(whole));
+    });
+});

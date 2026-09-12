@@ -45,7 +45,7 @@ const snapshot = () =>
     lastEvent: 'Authored spell review',
   });
 const mode = document.querySelector<HTMLSelectElement>('#mode')!;
-for (const node of SPELL_TREE_NODES.filter((n) => ['root', 'route', 'mutation', 'fusion'].includes(n.kind))) {
+for (const node of SPELL_TREE_NODES.filter((n) => ['root', 'route', 'mutation', 'fusion', 'apex'].includes(n.kind))) {
   const option = document.createElement('option');
   option.value = node.id;
   option.textContent = `${node.kind} · ${node.name}`;

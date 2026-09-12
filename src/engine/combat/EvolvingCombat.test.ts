@@ -505,3 +505,96 @@ describe('blended routes', () => {
     expect(dominantRoute(defaults)).toBe('base');
   });
 });
+
+describe('apex capstones', () => {
+  it('Pandemic spreads to several uninfected neighbours at once', () => {
+    const cluster = [
+      { x: 0, z: 0 },
+      { x: 1, z: 0 },
+      { x: 2, z: 0 },
+      { x: 20, z: 0 },
+    ];
+    const one = fixture({ route: 'twin', dot: true, contagion: true }, cluster);
+    vi.spyOn(one.combat.evolving.effects, 'roll').mockReturnValue(true);
+    one.combat.evolving.effects.applyDot(one.run, one.run.enemies[0], '10', one.m, 1, 1);
+    one.advance(1);
+    expect(one.run.enemies.filter((e) => e.statuses?.dot)).toHaveLength(2);
+
+    const many = fixture(
+      { route: 'twin', dot: true, contagion: true, pandemic: true, pandemicTargets: 2 },
+      cluster,
+    );
+    vi.spyOn(many.combat.evolving.effects, 'roll').mockReturnValue(true);
+    many.combat.evolving.effects.applyDot(many.run, many.run.enemies[0], '10', many.m, 1, 1);
+    many.advance(1);
+    // The source plus both neighbours in radius; the distant one is untouched.
+    expect(many.run.enemies.filter((e) => e.statuses?.dot)).toHaveLength(3);
+    expect(many.run.enemies[3].statuses?.dot).toBeUndefined();
+  });
+
+  it('Pandemic still refreshes the nearest when there is nothing new to infect', () => {
+    const f = fixture({ route: 'twin', dot: true, contagion: true, pandemic: true }, [
+      { x: 0, z: 0 },
+      { x: 1, z: 0 },
+    ]);
+    vi.spyOn(f.combat.evolving.effects, 'roll').mockReturnValue(true);
+    for (const enemy of f.run.enemies)
+      f.combat.evolving.effects.applyDot(f.run, enemy, '10', f.m, 1, 1);
+    f.advance(1);
+    expect(f.run.enemies.every((e) => e.statuses?.dot)).toBe(true);
+  });
+
+  it('Singularity collapses the terminal hit into an explosion scaled by the force', () => {
+    const positions = [
+      { x: 2.4, z: 0 },
+      { x: 3.6, z: 0 },
+      { x: 4.8, z: 0 },
+    ];
+    const f = fixture(
+      { route: 'piercing', driving: true, kinetic: true, penetrations: 2, singularity: true },
+      positions,
+    );
+    f.cast();
+    const blasts = f.events.filter((e) => e.type === 'effect_hit' && e.effect === 'explosion');
+    expect(blasts.length).toBeGreaterThan(0);
+    // It fires from the last enemy in the chain, not the first.
+    expect(blasts.every((e) => e.type === 'effect_hit' && e.sourceInstanceId === 3)).toBe(true);
+  });
+
+  it('Singularity has nothing to collapse when the chain found no continuation', () => {
+    const f = fixture({ route: 'piercing', driving: true, kinetic: true, singularity: true }, [
+      { x: 2.4, z: 0 },
+    ]);
+    f.cast();
+    expect(f.events.some((e) => e.type === 'effect_hit' && e.effect === 'explosion')).toBe(false);
+  });
+
+  it('Ascendance keeps Supercharge through a change of target', () => {
+    const f = fixture({ route: 'charged', supercharge: true, ascendance: true });
+    for (let i = 0; i < 3; i++) f.cast();
+    expect(f.runtime.supercharge).toBe(3);
+    f.run.enemies.shift();
+    f.cast();
+    // Without Ascendance this resets to 1; here it carries on building.
+    expect(f.runtime.supercharge).toBe(4);
+  });
+
+  it('Ascendance sharpens a critical hit by the Focus being held', () => {
+    const plain = fixture({ route: 'charged', perfect: true }, [{ x: 2.4, z: 0 }]);
+    const sharp = fixture({ route: 'charged', perfect: true, ascendance: true }, [{ x: 2.4, z: 0 }]);
+    for (const f of [plain, sharp]) {
+      f.cast();
+      f.cast();
+      f.cast();
+    }
+    expect(plain.runtime.focus).toBe(3);
+    expect(sharp.runtime.focus).toBe(3);
+    const plainHit = plain.cast()[0],
+      sharpHit = sharp.cast()[0];
+    expect(plainHit.critical).toBe(true);
+    expect(sharpHit.critical).toBe(true);
+    // critMultiplier 2, plus three points of Focus at +0.25 each.
+    expect(Number(plainHit.damage)).toBeCloseTo(30 * 2);
+    expect(Number(sharpHit.damage)).toBeCloseTo(30 * (2 + 3 * 0.25));
+  });
+});
