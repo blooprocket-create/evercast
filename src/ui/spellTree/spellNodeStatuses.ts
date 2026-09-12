@@ -1,4 +1,4 @@
-import { SPELL_TREE_EXCLUSIVE_GROUPS, SPELL_TREE_NODES, SPELL_TREE_ROOT_ID } from '../../content/spellTree';
+import { SPELL_TREE_NODES, SPELL_TREE_ROOT_ID, spellTreeExclusiveGroups } from '../../content/spellTree';
 import type { SpellTreeNodeDefinition } from '../../engine/spellTree/types';
 import { type SpellNodeStatus, unspentSpellPoints } from '../../engine/spellTree/SpellTreeSystem';
 import type { SpellTreeState } from '../../engine/spellTree/types';
@@ -46,11 +46,13 @@ const TOPOLOGICAL: readonly SpellTreeNodeDefinition[] = (() => {
   return order;
 })();
 
-const GROUP_BY_ID = new Map(SPELL_TREE_EXCLUSIVE_GROUPS.map((group) => [group.id, group]));
-
 export function spellNodeStatuses(state: SpellTreeState): ReadonlyMap<string, SpellNodeStatus> {
   const activated = new Set(state.activatedNodeIds);
   const isActive = (id: string) => id === SPELL_TREE_ROOT_ID || activated.has(id);
+
+  // Group caps move with the player's attunements, so this can no longer be
+  // hoisted to module scope the way a constant rule could.
+  const groupById = new Map(spellTreeExclusiveGroups(state.attunements).map((g) => [g.id, g]));
 
   const groupUsage = new Map<string, number>();
   for (const id of state.activatedNodeIds) {
@@ -59,7 +61,7 @@ export function spellNodeStatuses(state: SpellTreeState): ReadonlyMap<string, Sp
   }
   const groupIsFull = (node: SpellTreeNodeDefinition): boolean => {
     if (!node.exclusiveGroup) return false;
-    const group = GROUP_BY_ID.get(node.exclusiveGroup);
+    const group = groupById.get(node.exclusiveGroup);
     return group !== undefined && (groupUsage.get(group.id) ?? 0) >= group.maxSelections;
   };
 
@@ -97,5 +99,5 @@ export function spellNodeStatuses(state: SpellTreeState): ReadonlyMap<string, Sp
  * is the exact failure this rewrite exists to remove.
  */
 export function spellTreeStateKey(state: SpellTreeState): string {
-  return `${state.purchasedPoints}:${state.activatedNodeIds.join(',')}`;
+  return `${state.purchasedPoints}:${state.activatedNodeIds.join(',')}:${state.attunements.join(',')}`;
 }

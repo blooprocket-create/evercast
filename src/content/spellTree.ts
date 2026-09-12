@@ -6,6 +6,9 @@ export const SPELL_TREE_ROOT_ID = 'evercast_root';
 export const SPELL_TREE_STARTER_POINTS = 1;
 export const SPELL_POINT_BASE_COST = 8;
 export const SPELL_POINT_COST_GROWTH = 1.27;
+/** Ranks per optional side path. Each rank repeats its `SPELL_SIDE_TUNING` bonus. */
+export const SPELL_SIDE_RANKS = 3;
+const RANK_NUMERALS = ['I', 'II', 'III'] as const;
 export function spellPointCost(purchasedPoints: number): number {
   return Math.max(
     1,
@@ -14,14 +17,76 @@ export function spellPointCost(purchasedPoints: number): number {
     ),
   );
 }
-export const SPELL_TREE_EXCLUSIVE_GROUPS = [
-  { id: 'root_route', maxSelections: 1, name: 'Evercast route' },
-  ...(['twin', 'piercing', 'charged'] as const).map((route) => ({
-    id: `${route}_identity`,
-    maxSelections: 2,
-    name: `${route} identities`,
-  })),
+/**
+ * Permanent rule unlocks bought with Knowledge. They do not add nodes; they
+ * raise the `maxSelections` of the groups below, which is what actually decides
+ * how much of the authored graph a single build can reach. Costs are playtest
+ * figures, sized against `RebirthSystem.previewKnowledgeGain`.
+ */
+export interface SpellAttunementDefinition {
+  id: string;
+  name: string;
+  description: string;
+  /** Knowledge. */
+  cost: number;
+  requires: readonly string[];
+}
+
+export const SPELL_ATTUNEMENTS: readonly SpellAttunementDefinition[] = [
+  {
+    id: 'third_identity',
+    name: 'Broadened Study',
+    description:
+      'Take all three identities of a route instead of two. Opens the third subtree and the two fusions that needed it.',
+    cost: 1,
+    requires: [],
+  },
+  {
+    id: 'second_route',
+    name: 'Schism',
+    description:
+      'The Evercast holds a second shape. Awaken two routes at once; their projectile count, penetration and charge compound.',
+    cost: 6,
+    requires: [],
+  },
+  {
+    id: 'third_route',
+    name: 'Confluence',
+    description: 'Hold all three shapes of the Evercast at once.',
+    cost: 25,
+    requires: ['second_route'],
+  },
 ];
+
+export const SPELL_ATTUNEMENT_BY_ID = new Map(SPELL_ATTUNEMENTS.map((a) => [a.id, a]));
+
+export interface SpellTreeExclusiveGroup {
+  id: string;
+  maxSelections: number;
+  name: string;
+}
+
+/**
+ * The route fork and the identity forks, widened by whatever the player has
+ * attuned. This is a function rather than a constant because the unlocks move
+ * `maxSelections` — the whole point of the expansion is that exclusivity is
+ * progression, not a fixed rule.
+ */
+export function spellTreeExclusiveGroups(
+  attunements: readonly string[] = [],
+): SpellTreeExclusiveGroup[] {
+  const has = (id: string) => attunements.includes(id);
+  const routes = has('third_route') ? 3 : has('second_route') ? 2 : 1;
+  const identities = has('third_identity') ? 3 : 2;
+  return [
+    { id: 'root_route', maxSelections: routes, name: 'Evercast route' },
+    ...(['twin', 'piercing', 'charged'] as const).map((route) => ({
+      id: `${route}_identity`,
+      maxSelections: identities,
+      name: `${route} identities`,
+    })),
+  ];
+}
 const set = <K extends keyof SpellMechanics>(key: K, value: SpellMechanics[K]) =>
   ({ key, value, operation: 'set' }) as MechanicUpgrade;
 type BooleanKey = {
@@ -104,14 +169,14 @@ function identity(
 ) {
   node(id, name, route, 'identity', [`${route}_cast`], description, effects, `${route}_identity`);
   for (const side of sides)
-    for (let rank = 1; rank <= 2; rank++) {
+    for (let rank = 1; rank <= SPELL_SIDE_RANKS; rank++) {
       const upgradeId = `${side.id}_${rank}`;
       node(
         upgradeId,
-        `${side.name} ${rank === 1 ? 'I' : 'II'}`,
+        `${side.name} ${RANK_NUMERALS[rank - 1]}`,
         route,
         'minor',
-        [rank === 1 ? id : `${side.id}_1`],
+        [rank === 1 ? id : `${side.id}_${rank - 1}`],
         `Optional investment: ${side.name}. Playtest bonus ${S[side.key]}.`,
       );
       if (side.key === 'critChance' || side.key === 'critMultiplier')

@@ -1,11 +1,12 @@
 import { useMemo, useRef, useState } from 'react';
 import {
+  SPELL_ATTUNEMENT_BY_ID,
   SPELL_TREE_NODES,
   SPELL_TREE_NODE_BY_ID,
   SPELL_TREE_ROOT_ID,
 } from '../../content/spellTree';
 import { big, formatBig } from '../../engine/numbers';
-import { MAX_SPELL_TREE_POINTS } from '../../engine/spellTree/SpellTreeSystem';
+import { blockingAttunement } from '../../engine/spellTree/SpellTreeSystem';
 import type { SpellTreeState } from '../../engine/spellTree/types';
 import { Graph, type EdgeTone } from '../archetypes/Graph';
 import { NumberCell } from '../format/NumberCell';
@@ -48,6 +49,7 @@ export function SpellTreeSurface() {
   const state: SpellTreeState = {
     purchasedPoints: snapshot.spellTreePurchasedPoints,
     activatedNodeIds: snapshot.activeSpellNodeIds,
+    attunements: snapshot.ownedAttunementIds,
   };
 
   // The array is new on every snapshot build, so memoize on a value-stable key.
@@ -90,8 +92,15 @@ export function SpellTreeSurface() {
   };
 
   const affordablePoint =
-    snapshot.spellTreeTotalPoints < MAX_SPELL_TREE_POINTS &&
+    snapshot.spellTreeTotalPoints < snapshot.spellTreeMaxPoints &&
     big(snapshot.essence.raw).cmp(big(snapshot.nextSpellPointCost.raw)) >= 0;
+
+  // Which unlock would widen whatever is blocking the selected node, so the
+  // inspector can name it instead of telling the player to respec in vain.
+  const blocker = useMemo(
+    () => (status === 'exclusive' ? blockingAttunement(state, selected.id) : null),
+    [key, selected.id, status],
+  );
 
   return (
     <Graph
@@ -237,9 +246,16 @@ export function SpellTreeSurface() {
             </Button>
           )}
 
+          {blocker && (
+            <p className={styles.note}>
+              Respec swaps which one you hold. To hold both, attune{' '}
+              <strong>{SPELL_ATTUNEMENT_BY_ID.get(blocker)?.name ?? blocker}</strong>.
+            </p>
+          )}
+
           <p className={styles.note}>
             <NumberCell value={String(snapshot.spellTreeTotalPoints)} inline /> of{' '}
-            {MAX_SPELL_TREE_POINTS} points awakened.
+            {snapshot.spellTreeMaxPoints} points awakened.
             {selected.exclusiveGroup
               ? ' Choices in this group lock the others until you respec.'
               : ''}

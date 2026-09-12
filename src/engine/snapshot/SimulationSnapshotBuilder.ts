@@ -8,7 +8,11 @@ import type { GameState } from '../model';
 import { big, quantity } from '../numbers';
 import { compileSpell } from '../spell/SpellCompiler';
 import { spellPointCost } from '../spellTree/SpellTreeCatalog';
-import { totalSpellPoints, unspentSpellPoints } from '../spellTree/SpellTreeSystem';
+import {
+  maxAllocatableSpellPoints,
+  totalSpellPoints,
+  unspentSpellPoints,
+} from '../spellTree/SpellTreeSystem';
 import type { LastSummonSnapshot, SimulationSnapshot } from '../types';
 import { buildCompanionSnapshots } from './CompanionSnapshotBuilder';
 import { wizardPerHit } from '../companions/CompanionCombat';
@@ -113,6 +117,8 @@ export function buildSimulationSnapshot({
     spellTreeTotalPoints: totalSpellPoints(state.spellTree),
     spellTreeUnspentPoints: unspentSpellPoints(state.spellTree),
     nextSpellPointCost: quantity(big(spellPointCost(state.spellTree.purchasedPoints))),
+    spellTreeMaxPoints: maxAllocatableSpellPoints(state.spellTree.attunements),
+    ownedAttunementIds: [...state.spellTree.attunements],
     activeSpellNodeIds: [...state.spellTree.activatedNodeIds],
     progressToNextEncounter:
       run.phase === 'travel' ? Math.min(1, run.travelElapsed / config.travelSeconds) : 1,

@@ -43,6 +43,8 @@ export function describeGameEvent(event: GameEvent): string {
       return `${event.name} evolved at gear level ${event.level}.`;
     case 'spell_point_purchased':
       return `Evercast absorbs ${n(event.cost)} Essence. +1 Spell Point.`;
+    case 'attunement_purchased':
+      return `${event.attunementName} attuned for ${n(event.cost)} Knowledge.`;
     case 'spell_node_activated':
       return `${event.nodeName} awakened.`;
     case 'spell_tree_respecced':

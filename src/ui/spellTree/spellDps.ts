@@ -85,6 +85,7 @@ export function projectNode(
     buildSpellFromTree({
       purchasedPoints: state.purchasedPoints,
       activatedNodeIds: [...state.activatedNodeIds, nodeId],
+      attunements: state.attunements,
     }),
   );
   const changes = describeChanges(compiledBefore, compiledAfter);

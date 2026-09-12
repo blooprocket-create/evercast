@@ -8,6 +8,7 @@ import type { CompanionCombatant, CompanionsState, OwnedCompanion } from '../com
 import type { EnemyState, GameState } from '../model';
 import { big } from '../numbers';
 import { SPELL_TREE_NODE_BY_ID } from '../spellTree/SpellTreeCatalog';
+import { SPELL_ATTUNEMENTS, SPELL_ATTUNEMENT_BY_ID } from '../../content/spellTree';
 import {
   buildSpellFromTree,
   canActivateSpellNode,
@@ -17,7 +18,7 @@ import { clearSpellCombat, ensurePositions } from '../combat/SpellCombatState';
 import type { SpellTreeState } from '../spellTree/types';
 import { createInitialGameState } from '../state';
 
-export const CURRENT_SAVE_VERSION = 7;
+export const CURRENT_SAVE_VERSION = 8;
 
 /**
  * The oldest save still brought forward.
@@ -79,6 +80,8 @@ interface SerializedEquipment {
 interface SerializedSpellTree {
   purchasedPoints: number;
   activatedNodeIds: string[];
+  /** Added in v8. Older saves decode to none, which is the pre-expansion rule set. */
+  attunements?: string[];
 }
 
 interface LegacySaveEnvelopeV6 {
@@ -92,8 +95,20 @@ interface LegacySaveEnvelopeV6 {
   };
 }
 
-export interface SaveEnvelopeV7 {
+interface LegacySaveEnvelopeV7 {
   version: 7;
+  savedAt?: string;
+  state: {
+    run: SerializedRun;
+    meta: SerializedMeta;
+    equipment: SerializedEquipment;
+    spellTree: SerializedSpellTree;
+    companions: SerializedCompanions;
+  };
+}
+
+export interface SaveEnvelopeV8 {
+  version: 8;
   savedAt: string;
   state: {
     run: SerializedRun;
@@ -107,7 +122,7 @@ export interface SaveEnvelopeV7 {
 export class SaveCodec {
   constructor(private readonly config: EngineConfig) {}
 
-  encode(state: GameState, savedAt = new Date()): SaveEnvelopeV7 {
+  encode(state: GameState, savedAt = new Date()): SaveEnvelopeV8 {
     return {
       version: CURRENT_SAVE_VERSION,
       savedAt: savedAt.toISOString(),
@@ -140,6 +155,7 @@ export class SaveCodec {
         spellTree: {
           purchasedPoints: state.spellTree.purchasedPoints,
           activatedNodeIds: [...state.spellTree.activatedNodeIds],
+          attunements: [...state.spellTree.attunements],
         },
         companions: {
           starlight: state.companions.starlight.toString(),
@@ -167,7 +183,7 @@ export class SaveCodec {
       throw new Error(`Unsupported Evercast save version: ${String(version)}`);
     }
 
-    const envelope = raw as SaveEnvelopeV7 | LegacySaveEnvelopeV6;
+    const envelope = raw as SaveEnvelopeV8 | LegacySaveEnvelopeV7 | LegacySaveEnvelopeV6;
     const state: GameState = {
       run: deserializeRun(envelope.state.run),
       meta: deserializeMeta(envelope.state.meta),
@@ -176,8 +192,8 @@ export class SaveCodec {
       // v5 and v6 predate companions: those saves arrive with the feature
       // simply not started, rather than losing anything they had.
       companions:
-        version === 7
-          ? deserializeCompanions((envelope as SaveEnvelopeV7).state.companions)
+        version >= 7
+          ? deserializeCompanions((envelope as SaveEnvelopeV8).state.companions)
           : createInitialCompanionsState(),
     };
     state.run.spell = buildSpellFromTree(state.spellTree);
@@ -324,7 +340,26 @@ function deserializeSpellTree(serialized: SerializedSpellTree | undefined, legac
   const savedPurchased = Number.isFinite(serialized.purchasedPoints)
     ? Math.max(0, Math.floor(serialized.purchasedPoints))
     : 0;
-  const state: SpellTreeState = { purchasedPoints: savedPurchased, activatedNodeIds: [] };
+  // Attunements are read before allocations on purpose: they decide the group
+  // caps the allocation rebuild below is validated against. An attunement whose
+  // own prerequisite is missing is dropped, so a hand-edited save cannot widen
+  // the tree by naming `third_route` alone.
+  const attunements = (Array.isArray(serialized.attunements) ? serialized.attunements : []).filter(
+    (id): id is string => typeof id === 'string' && SPELL_ATTUNEMENT_BY_ID.has(id),
+  );
+  const granted: string[] = [];
+  for (const attunement of SPELL_ATTUNEMENTS)
+    if (
+      attunements.includes(attunement.id) &&
+      attunement.requires.every((required) => granted.includes(required))
+    )
+      granted.push(attunement.id);
+
+  const state: SpellTreeState = {
+    purchasedPoints: savedPurchased,
+    activatedNodeIds: [],
+    attunements: granted,
+  };
   if (legacy) return state;
   // Rebuild in dependency order, enforcing point budgets and every exclusivity group.
   let pending = activatedNodeIds;
