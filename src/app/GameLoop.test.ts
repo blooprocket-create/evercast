@@ -122,6 +122,36 @@ describe('startGameLoop', () => {
     failure.mockRestore();
   });
 
+  /**
+   * The backoff is per run of failures. Counted cumulatively, a second incident
+   * would arrive with the counter already past one and be swallowed until the
+   * six hundredth failure - losing the first trace of the incident that matters.
+   */
+  it('reports a later incident too, rather than backing off forever', () => {
+    const failure = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let explode = true;
+    const scene = sceneThat(() => {
+      if (explode) throw new Error('this incident');
+    });
+    const stop = startGameLoop({ scene, onAwayProgress: () => {} });
+
+    clock.tick(16);
+    expect(failure).toHaveBeenCalledTimes(1);
+
+    // Recover for a while, then fail again: a new incident, so a new report.
+    explode = false;
+    for (let frame = 2; frame <= 10; frame += 1) clock.tick(frame * 16);
+    expect(failure).toHaveBeenCalledTimes(1);
+
+    explode = true;
+    clock.tick(11 * 16);
+    expect(failure).toHaveBeenCalledTimes(2);
+    expect(String(failure.mock.calls[1]?.[0])).toContain('(1x in a row)');
+
+    stop();
+    failure.mockRestore();
+  });
+
   it('stops for good when torn down', () => {
     const scene = sceneThat(() => {});
     const stop = startGameLoop({ scene, onAwayProgress: () => {} });

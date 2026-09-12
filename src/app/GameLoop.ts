@@ -93,14 +93,20 @@ export function startGameLoop({ scene, onAwayProgress }: GameLoopOptions): () =>
    * failure now costs one frame instead of the session, and a persistent one
    * says so instead of looking like a hang.
    */
-  let frameFailures = 0;
+  /**
+   * Consecutive failures, not failures ever. The backoff has to be per run of
+   * them: counted cumulatively, a later unrelated failure arrives with the
+   * counter already past one and is swallowed until the six hundredth, which
+   * loses the first trace of the incident that actually matters.
+   */
+  let failureStreak = 0;
   const reportFrameFailure = (error: unknown) => {
-    frameFailures += 1;
-    // The first one carries the trace worth having. After that, back off: a
+    failureStreak += 1;
+    // The first of a run carries the trace worth having. After that, back off: a
     // wedged simulation would otherwise write sixty lines a second and bury it.
-    if (frameFailures === 1 || frameFailures % 600 === 0) {
+    if (failureStreak === 1 || failureStreak % 600 === 0) {
       console.error(
-        `Evercast frame failed (${frameFailures}x) - the loop is still running.`,
+        `Evercast frame failed (${failureStreak}x in a row) - the loop is still running.`,
         error,
       );
     }
@@ -147,6 +153,8 @@ export function startGameLoop({ scene, onAwayProgress }: GameLoopOptions): () =>
   const loop = (now: number) => {
     try {
       step(now);
+      // A frame got through, so the next failure is a new incident and reports.
+      failureStreak = 0;
     } catch (error) {
       reportFrameFailure(error);
     }
