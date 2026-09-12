@@ -34,6 +34,7 @@ import { SpellVfxPresenter } from './vfx/SpellVfxPresenter';
 import { castDuration } from './vfx/CombatVfxPlan';
 import { BossTracker } from './BossTracker';
 import { CombatFeel } from './render/CombatFeel';
+import { watchContextLoss } from './render/ContextLoss';
 
 /** Roughly head height above an enemy's feet. */
 const HEALTH_BAR_OFFSET = new Vector3(0, 1.55, 0);
@@ -72,6 +73,7 @@ export class EvercastScene {
   private readonly mage: ActorVisual;
   private readonly actors: ActorAssets;
   private readonly world: WorldGenerator;
+  private readonly stopWatchingContext: () => void;
   private readonly shadows: ShadowGenerator;
   private readonly enemyMeshes = new Map<number, ActorVisual>();
   private readonly retiring: { id: number; actor: ActorVisual; remaining: number }[] = [];
@@ -94,6 +96,10 @@ export class EvercastScene {
 
   constructor(canvas: HTMLCanvasElement, quality: VfxQuality = 'medium') {
     this.engine = new Engine(canvas, true, { preserveDrawingBuffer: false, stencil: true });
+    // A browser reclaims GPU resources from a backgrounded tab, so a long
+    // absence can end with the context already gone. Babylon restores what it
+    // can; this is only so that it is not silent when it happens.
+    this.stopWatchingContext = watchContextLoss(this.engine);
     this.scene = new Scene(this.engine);
     this.scene.clearColor = new Color4(0.025, 0.035, 0.06, 1);
 
@@ -424,6 +430,7 @@ export class EvercastScene {
   }
 
   dispose(): void {
+    this.stopWatchingContext();
     this.feel.dispose();
     this.bosses.clear();
     window.removeEventListener('resize', this.scheduleResize);
