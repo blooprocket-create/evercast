@@ -21,7 +21,19 @@ const AUTOSAVE_MS = 10_000;
 const MAX_FRAME_SECONDS = 0.25;
 
 export interface GameLoopOptions {
-  scene: EvercastScene;
+  /**
+   * Null when the renderer could not be built - a chunk that failed to arrive,
+   * a machine with no usable WebGL context.
+   *
+   * The loop runs anyway, and that is the whole point of the field being
+   * nullable. A game with no picture is not a game with no progress: the
+   * simulation is the authority, the HUD and every surface read from snapshots
+   * rather than from the scene, and what actually costs the player something is
+   * the autosave and the visibility handling that only exist in here. Refusing
+   * to start without a scene would have produced exactly the failure the comment
+   * below was written about - a frozen world with working menus.
+   */
+  scene: EvercastScene | null;
   onAwayProgress: (summary: OfflineSummary) => void;
 }
 
@@ -51,7 +63,7 @@ export function startGameLoop({ scene, onAwayProgress }: GameLoopOptions): () =>
     simulation.drainPresentationEvents();
     const next = simulation.getSnapshot();
     audio.setScene(sceneMoodFor(next));
-    scene.sync(next, 0, []);
+    scene?.sync(next, 0, []);
     snapshotStore.publish(next);
     publishAccumulator = 0;
     saveGame();
@@ -139,7 +151,7 @@ export function startGameLoop({ scene, onAwayProgress }: GameLoopOptions): () =>
 
     const next = simulation.getSnapshot();
     const events = simulation.drainPresentationEvents();
-    scene.sync(next, delta, events);
+    scene?.sync(next, delta, events);
     audio.handleEvents(events);
 
     publishAccumulator += delta;

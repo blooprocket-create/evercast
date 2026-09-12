@@ -253,6 +253,11 @@ export class WorldGenerator {
     return `${this.prettyBiome(sample.from)} → ${this.prettyBiome(sample.to)} ${Math.round(sample.t * 100)}%`;
   }
 
+  /** The scenery half of `EvercastScene.whenReady`. */
+  async whenReady(): Promise<void> {
+    await this.assets.whenReady();
+  }
+
   dispose(): void {
     for (const chunk of this.chunks.values()) this.disposeChunk(chunk);
     this.chunks.clear();

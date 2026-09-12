@@ -53,7 +53,15 @@ export function AppShell({
   return (
     <main className={styles.shell} style={{ '--accent': accent } as React.CSSProperties}>
       <canvas ref={canvasRef} className={styles.canvas} aria-label="Evercast game world" />
-      <div className={styles.layer}>
+      {/*
+        `aria-modal` on the gate is a promise to assistive technology, not a
+        mechanism: it makes nothing inert and traps no focus. The shelf renders
+        before the gate in DOM order and its buttons stay focusable, so Tab used
+        to walk straight into Character, Spell Tree and Gear behind an opaque
+        overlay - reachable, activatable, and completely invisible. `inert` is
+        the platform's own answer, and it costs one attribute.
+      */}
+      <div className={styles.layer} inert={!playing}>
         <HudOverlay />
         <ShelfContainer
           registry={registry}

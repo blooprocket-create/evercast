@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ASSET_WAIT_CEILING_MS, bootPhase } from './app/BootPhase';
 import { startGameLoop } from './app/GameLoop';
-import { resumedFromSave, runCommand, runCommandRepeated } from './app/runtime';
+import { creditTimeAtTheGate, resumedFromSave, runCommand, runCommandRepeated } from './app/runtime';
 import type { OfflineSummary } from './engine/offline/OfflineProgressor';
 import type { EvercastScene } from './game/EvercastScene';
 import { AppShell } from './ui/shell/AppShell';
@@ -68,11 +68,18 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, []);
 
-  // Nothing ticks until the player is looking at it. Time spent behind the gate
-  // is not lost: it lands in the away debt that `runtime` stamps against the
-  // save, and is settled on the first frame after Begin like any other absence.
+  /**
+   * Nothing ticks until the player is looking at it - but the clock does not
+   * stop for the gate, so the wait in front of it is credited as away time
+   * before the loop starts and settles the lot on its first frame. Without that
+   * an hour on the title screen was neither advanced live nor banked: the first
+   * save after Continue stamped `now` and the hour was simply gone.
+   *
+   * Started with or without a scene. A renderer that failed to build costs the
+   * picture; refusing to start the loop would cost the autosave too.
+   */
   useEffect(() => {
-    if (!scene || !begun) return;
+    if (!begun) return;
     return startGameLoop({ scene, onAwayProgress: setAwayProgress });
   }, [scene, begun]);
 
@@ -83,6 +90,13 @@ export default function App() {
   useEffect(() => {
     scene?.setDamageNumbersVisible(damageNumbers);
   }, [scene, damageNumbers]);
+
+  const beginPlaying = () => {
+    // Before `setBegun`, so the interval ends when the player pressed the button
+    // rather than whenever React next commits and the loop effect runs.
+    creditTimeAtTheGate();
+    setBegun(true);
+  };
 
   const commands = {
     run: (command: Parameters<typeof runCommand>[0]) => {
@@ -104,7 +118,7 @@ export default function App() {
         canvasRef={canvasRef}
         bootPhase={phase}
         resumedFromSave={resumedFromSave}
-        onBegin={() => setBegun(true)}
+        onBegin={beginPlaying}
         awayProgress={awayProgress}
         onDismissAwayProgress={() => setAwayProgress(null)}
       />

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import type { BootPhase } from '../../app/BootPhase';
 import { Button } from '../primitives/Button';
 import styles from './BootGate.module.css';
@@ -31,8 +32,19 @@ interface BootGateProps {
 }
 
 export function BootGate({ phase, resumed, onBegin }: BootGateProps) {
-  if (phase === 'playing') return null;
+  const action = useRef<HTMLButtonElement>(null);
   const preparing = phase === 'preparing';
+
+  /**
+   * Not `autoFocus`: that applies on mount, and on mount this button is
+   * disabled and therefore unfocusable. The moment worth focusing is the one
+   * where it becomes pressable, which is a re-render of the same element.
+   */
+  useEffect(() => {
+    if (!preparing) action.current?.focus();
+  }, [preparing]);
+
+  if (phase === 'playing') return null;
 
   return (
     <div className={styles.gate} role="dialog" aria-modal="true" aria-label="Evercast">
@@ -47,6 +59,7 @@ export function BootGate({ phase, resumed, onBegin }: BootGateProps) {
           className={styles.action}
           onClick={onBegin}
           disabled={preparing}
+          ref={action}
           // The label carries the wait rather than a second widget doing it.
           // A spinner beside a disabled button says the same thing twice.
           aria-busy={preparing}

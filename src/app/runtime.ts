@@ -78,6 +78,32 @@ export function awayDebt(): number {
   return awayDebtSeconds;
 }
 
+/**
+ * When this module was evaluated, which is as near as anything gets to when the
+ * player opened the game.
+ *
+ * `awayDebtSeconds` above covers the gap from the save's stamp to this moment.
+ * Everything after it - the boot gate, waiting on assets, a title screen left
+ * open while someone made coffee - was covered by nothing at all, and the first
+ * save after pressing Continue stamps `now` and erases it permanently.
+ */
+const bootedAt = Date.now();
+let gateCredited = false;
+
+/**
+ * Hands the loop the time the player spent in front of the boot gate.
+ *
+ * The two intervals are adjacent rather than overlapping - save to boot, then
+ * boot to Begin - so this adds to the debt rather than replacing it, and the
+ * one settlement on the first frame pays off both. Credited at most once: a
+ * second call would bill the same minutes twice.
+ */
+export function creditTimeAtTheGate(): void {
+  if (gateCredited) return;
+  gateCredited = true;
+  addAwayDebt((Date.now() - bootedAt) / 1000);
+}
+
 /** The loop reports back once it has settled what was owed. */
 export function setAwayDebt(seconds: number): void {
   awayDebtSeconds = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
