@@ -74,6 +74,13 @@ export function Moment({
 }: MomentProps) {
   // `aria-modal` below is a claim about focus; this is what makes it true.
   const dialog = useDialog<HTMLDivElement>(modal ? (onDismiss ?? secondary?.onClick) : undefined);
+  /*
+   * A danger moment with a way out is a confirmation, and a confirmation opens
+   * on its safe half. Danger with no secondary is a death screen: one button,
+   * nothing to protect the player from, and it takes the focus because it is
+   * the only thing there.
+   */
+  const safeActionTakesFocus = modal && tone === 'danger' && secondary !== undefined;
 
   return (
     <div
@@ -101,12 +108,24 @@ export function Moment({
           </div>
         )}
 
+        {/*
+          The primary action is drawn first and stays drawn first - it is the
+          one being offered, and moving it would make every moment in the game
+          read differently to serve one of them. What moves is the *focus*: a
+          danger moment that offers a way out lands on the way out. See
+          `initialFocus` in useDialog.ts for why that matters more than it
+          sounds like it should.
+        */}
         <div className={styles.actions}>
           <Button variant="primary" onClick={primary.onClick} disabled={primary.disabled}>
             {primary.label}
           </Button>
           {secondary && (
-            <Button onClick={secondary.onClick} disabled={secondary.disabled}>
+            <Button
+              onClick={secondary.onClick}
+              disabled={secondary.disabled}
+              data-autofocus={safeActionTakesFocus ? '' : undefined}
+            >
               {secondary.label}
             </Button>
           )}

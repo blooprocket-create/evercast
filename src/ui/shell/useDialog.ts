@@ -34,7 +34,7 @@ export function useDialog<T extends HTMLElement>(onClose?: () => void) {
     // Restoring focus to whatever had it is the half that is easy to forget,
     // and the half a screen-reader user notices immediately.
     const previous = document.activeElement as HTMLElement | null;
-    focusables(dialog)[0]?.focus();
+    initialFocus(dialog)?.focus();
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -78,6 +78,26 @@ export function useDialog<T extends HTMLElement>(onClose?: () => void) {
   }, [onClose]);
 
   return ref;
+}
+
+/**
+ * Where focus lands when the dialog opens.
+ *
+ * The first focusable is the right default and the wrong one for a
+ * confirmation. `Moment` draws its primary action first, so on "Erase this
+ * run?" the first focusable is `Erase everything` - and the player arrived by
+ * pressing Enter. A held key that auto-repeats, or one more reflexive Enter,
+ * and the run is gone with no undo. Opening a dialog must never put the
+ * irreversible option under the key that opened it.
+ *
+ * So a dialog may nominate its own landing spot with `data-autofocus`, and the
+ * destructive ones point it at the way out. The attribute rather than a ref
+ * because it survives being passed through `Moment`'s action tuple without
+ * every caller having to thread one.
+ */
+function initialFocus(root: HTMLElement): HTMLElement | undefined {
+  const targets = focusables(root);
+  return targets.find((element) => element.hasAttribute('data-autofocus')) ?? targets[0];
 }
 
 /**

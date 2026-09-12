@@ -28,6 +28,20 @@ const render = (props: Partial<Parameters<typeof Moment>[0]> = {}) =>
 
 const countButtons = (markup: string) => markup.split('<button').length - 1;
 
+/**
+ * Where focus lands when a moment opens.
+ *
+ * Static markup cannot run the effect that moves focus, but it can prove the
+ * mechanism is attached to the right button - which is the part that was
+ * wrong. The end-to-end behaviour is checked in a browser.
+ */
+const autofocusedLabel = (markup: string): string | null => {
+  const index = markup.indexOf('data-autofocus');
+  if (index === -1) return null;
+  const label = markup.slice(index).match(/>([^<]+)<\/button>/);
+  return label?.[1] ?? null;
+};
+
 describe('Moment', () => {
   it('states one thing and offers one choice', () => {
     const markup = render();
@@ -73,5 +87,58 @@ describe('rebirth gating', () => {
     const snapshot = new EvercastSimulation().getSnapshot();
     expect(snapshot.canRebirth).toBe(false);
     expect(snapshot.rebirthKnowledgeGain.display).toBe('0');
+  });
+
+  /**
+   * A confirmation opens on its safe half.
+   *
+   * `Moment` draws the primary action first, so the first focusable in an
+   * "Erase this run?" dialog was `Erase everything` - reached by pressing
+   * Enter, which is also how the player got there. One auto-repeat and the run
+   * was gone with no undo.
+   */
+  describe('a destructive confirmation', () => {
+    it('puts the opening focus on the way out, not the deletion', () => {
+      const markup = render({
+        tone: 'danger',
+        headline: 'Erase this run?',
+        primary: { label: 'Erase everything', onClick: () => {} },
+        secondary: { label: 'Keep my run', onClick: () => {} },
+      });
+      expect(autofocusedLabel(markup)).toBe('Keep my run');
+    });
+
+    it('still draws the primary action first', () => {
+      const markup = render({
+        tone: 'danger',
+        primary: { label: 'Erase everything', onClick: () => {} },
+        secondary: { label: 'Keep my run', onClick: () => {} },
+      });
+      // Moving the focus must not reorder what the player sees.
+      expect(markup.indexOf('Erase everything')).toBeLessThan(markup.indexOf('Keep my run'));
+    });
+
+    it('leaves a death screen alone: one button, nothing to protect against', () => {
+      expect(autofocusedLabel(render({ tone: 'danger' }))).toBeNull();
+    });
+
+    it('leaves an ordinary moment alone, so the offer keeps the focus', () => {
+      const markup = render({
+        tone: 'accent',
+        primary: { label: 'Rebirth', onClick: () => {} },
+        secondary: { label: 'Not yet', onClick: () => {} },
+      });
+      expect(autofocusedLabel(markup)).toBeNull();
+    });
+
+    it('does not claim focus at all when it is a surface rather than a dialog', () => {
+      const markup = render({
+        tone: 'danger',
+        modal: false,
+        primary: { label: 'Erase everything', onClick: () => {} },
+        secondary: { label: 'Keep my run', onClick: () => {} },
+      });
+      expect(autofocusedLabel(markup)).toBeNull();
+    });
   });
 });
