@@ -1,6 +1,8 @@
+import { useMemo } from 'react';
 import { formatBig } from '../../engine/numbers';
 import { Dashboard } from '../archetypes/Dashboard';
 import { NumberCell } from '../format/NumberCell';
+import { formatRunClock } from '../format/runClock';
 import { formatWait, timeToAfford } from '../format/timeToAfford';
 import { effectiveDps } from '../format/dps';
 import { Panel } from '../primitives/Panel';
@@ -36,6 +38,10 @@ export function OverviewSurface() {
     return answer.now ? 'now' : answer.seconds === null ? null : formatWait(answer.seconds);
   });
   const stagesPerHour = useSnapshotSelector((s) => s.stagesPerHour);
+  // Newest first, and only as many as the panel can hold without becoming the
+  // Chronicle surface; that one is a click away.
+  const chronicle = useSnapshotSelector((s) => s.chronicle);
+  const recent = useMemo(() => chronicle.slice(-10).reverse(), [chronicle]);
   const kills = useSnapshotSelector((s) => s.kills);
   const deaths = useSnapshotSelector((s) => s.deaths);
 
@@ -79,6 +85,7 @@ export function OverviewSurface() {
         </>
       }
       sections={
+        <>
         <Panel title="Equipment" note={`${gear.length} equipped`}>
           <div className={styles.rows} key={gearSignature}>
             {gear.map((piece) => (
@@ -105,6 +112,30 @@ export function OverviewSurface() {
             ))}
           </div>
         </Panel>
+
+        {/*
+          The spare height, spent on something.
+          
+          This surface ended around three fifths of the way down a 1440x900
+          window and a quarter of the way down a 1920x1080 one, with nothing
+          under it - which the audit called the single biggest "does not feel
+          finished" signal in the product. The chronicle is the thing the game
+          most obviously had nowhere to put: the shelf can show three lines of
+          it and the surface has room for ten.
+        */}
+        {recent.length > 0 && (
+          <Panel title="Recent" note="The Chronicle keeps the rest">
+            <div className={styles.chronicle}>
+              {recent.map((line) => (
+                <div className={styles.entry} key={line.seq}>
+                  <span className={styles.entryAt}>{formatRunClock(line.at)}</span>
+                  <span className={styles.entryText}>{line.text}</span>
+                </div>
+              ))}
+            </div>
+          </Panel>
+        )}
+        </>
       }
       aside={
         <>
