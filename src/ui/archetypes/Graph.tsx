@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { toScreen } from '../graph/fitView';
 import { shouldShowMinimap } from '../graph/fitView';
 import type { GraphBox, GraphLayout } from '../graph/layoutGraph';
@@ -14,9 +15,19 @@ import styles from './Graph.module.css';
  */
 export type EdgeTone = 'active' | 'reachable' | 'idle';
 
+/** What a node is being drawn at, so a surface can decide what is legible. */
+export interface GraphView {
+  scale: number;
+  /**
+   * The largest hit area a node may claim without stealing its neighbour's
+   * taps, in screen pixels. Grows with the zoom and stops at --touch-target.
+   */
+  hitArea: number;
+}
+
 interface GraphProps {
   layout: GraphLayout;
-  renderNode: (box: GraphBox) => React.ReactNode;
+  renderNode: (box: GraphBox, view: GraphView) => React.ReactNode;
   edgeTone: (from: string, to: string) => EdgeTone;
   nodeTone?: (id: string) => string;
   /**
@@ -29,6 +40,35 @@ interface GraphProps {
   inspector?: React.ReactNode;
   /** Called with a node box when something asks to centre on it. */
   focusRef?: (focus: (box: GraphBox) => void) => void;
+}
+
+/**
+ * `--touch-target` in a number, because this arithmetic happens in JS. Kept
+ * beside the one place that uses it rather than duplicated into a token
+ * lookup; the sheet is still the authority for everything CSS draws.
+ */
+const TOUCH_TARGET = 44;
+
+/**
+ * The shortest centre-to-centre distance between any two nodes in the layout.
+ *
+ * O(n^2) over 127 nodes, run once per layout - the spell tree's is a module
+ * constant, so this is a single pass for the life of the tab.
+ */
+function closestNeighbour(layout: GraphLayout): number {
+  const centres = [...layout.boxes.values()].map((box) => ({
+    x: box.x + box.width / 2,
+    y: box.y + box.height / 2,
+  }));
+  let shortest = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < centres.length; i += 1) {
+    for (let j = i + 1; j < centres.length; j += 1) {
+      const a = centres[i]!;
+      const b = centres[j]!;
+      shortest = Math.min(shortest, Math.hypot(a.x - b.x, a.y - b.y));
+    }
+  }
+  return Number.isFinite(shortest) ? shortest : TOUCH_TARGET;
 }
 
 const EDGE_STROKE: Record<EdgeTone, { stroke: string; width: number }> = {
@@ -54,6 +94,24 @@ export function Graph({
   const showMinimap = shouldShowMinimap(bounds, view.viewport, view.transform.scale);
   const zoomPercent = Math.round(view.transform.scale * 100);
 
+  /*
+   * A node is drawn at its authored size times the zoom, so the spell tree's
+   * 26px `minor` nodes measured 6-12px on screen at every viewport and not one
+   * node anywhere reached the 44px the rest of the shell respects.
+   *
+   * Handing every node a flat 44px hit area would be worse rather than better:
+   * at the fitted zoom the rings are ~15px apart, so the targets would overlap
+   * three deep and a tap would land on an arbitrary node. The cap is therefore
+   * the distance to the closest neighbour anywhere in the layout - the target
+   * grows as the player zooms in and stops the moment it would start stealing
+   * taps. Measured once; the layout is a module constant.
+   */
+  const closest = useMemo(() => closestNeighbour(layout), [layout]);
+  const graphView: GraphView = {
+    scale: view.transform.scale,
+    hitArea: Math.min(TOUCH_TARGET, closest * view.transform.scale),
+  };
+
   return (
     <div className={styles.graph}>
       <div className={styles.main}>
@@ -70,7 +128,11 @@ export function Graph({
               transform: `translate(${view.transform.x + bounds.x * view.transform.scale}px, ${
                 view.transform.y + bounds.y * view.transform.scale
               }px) scale(${view.transform.scale})`,
-            }}
+              // World units per screen pixel, so a node can size a hit area in
+              // screen terms from inside a scaled layer.
+              '--graph-inverse-scale': 1 / Math.max(view.transform.scale, 1e-6),
+              '--graph-hit-area': `${graphView.hitArea}px`,
+            } as React.CSSProperties}
           >
             <svg
               className={styles.edges}
@@ -137,7 +199,7 @@ export function Graph({
                   height: box.height,
                 }}
               >
-                {renderNode(box)}
+                {renderNode(box, graphView)}
               </div>
             ))}
           </div>

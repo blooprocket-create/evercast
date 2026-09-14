@@ -31,6 +31,34 @@ const KIND_LABEL: Record<string, string> = {
   apex: 'Apex',
 };
 
+/**
+ * Which names are worth drawing at a given zoom.
+ *
+ * 127 labels at the fitted zoom is not a labelled graph, it is a texture - the
+ * audit measured them at 3-4px, and they are counter-scaled now so they would
+ * be 127 legible labels on top of each other instead. The ladder is the
+ * content's own hierarchy: the routes are always named, the identities and
+ * capstones arrive when there is room for them, and the rest when the player
+ * has zoomed in far enough to be choosing between them.
+ *
+ * The selected node and every search hit are named regardless. Those are the
+ * two cases where the player is already looking for one in particular.
+ */
+const LABEL_ZOOM: Record<string, number> = {
+  root: 0,
+  route: 0,
+  apex: 0.3,
+  identity: 0.34,
+  fusion: 0.5,
+  mutation: 0.5,
+};
+
+function labelAtZoom(kind: string, scale: number): boolean {
+  if (!LABELLED_KINDS.has(kind as never)) return false;
+  const threshold = LABEL_ZOOM[kind];
+  return threshold !== undefined && scale >= threshold;
+}
+
 const STATUS_NOTE: Record<string, string> = {
   active: 'Awakened',
   available: 'Available for one point',
@@ -112,24 +140,36 @@ export function SpellTreeSurface() {
       edgeTone={edgeTone}
       nodeTone={nodeTone}
       edgeAnchor="centre"
-      renderNode={(box) => {
+      renderNode={(box, view) => {
         const node = SPELL_TREE_NODE_BY_ID.get(box.id);
         if (!node) return null;
         const nodeStatus = statuses.get(box.id) ?? 'unknown';
         const classes = [styles.node, styles[nodeStatus]];
         if (box.id === selected.id) classes.push(styles.selected);
         if (matches.has(box.id)) classes.push(styles.match);
+        const labelled =
+          box.id === selected.id || matches.has(box.id) || labelAtZoom(node.kind, view.scale);
         return (
           <button
             type="button"
             className={classes.filter(Boolean).join(' ')}
             onClick={() => setSelectedId(box.id)}
-            title={`${node.name} - ${STATUS_NOTE[nodeStatus]}`}
+            title={`${node.name} \u00b7 ${STATUS_NOTE[nodeStatus]}`}
             aria-label={`${node.name}: ${STATUS_NOTE[nodeStatus]}`}
             aria-pressed={box.id === selected.id}
           >
-            {LABELLED_KINDS.has(node.kind) && (
-              <span className={styles.name}>{node.name}</span>
+            {labelled && (
+              /*
+                Counter-scaled, so a label is the size it was authored at
+                whatever the zoom - it used to shrink with the graph and was
+                3-4px of noise at the fitted zoom.
+              */
+              <span
+                className={styles.name}
+                style={{ '--label-scale': 'var(--graph-inverse-scale, 1)' } as React.CSSProperties}
+              >
+                {node.name}
+              </span>
             )}
           </button>
         );
