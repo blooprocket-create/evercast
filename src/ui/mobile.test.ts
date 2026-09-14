@@ -281,7 +281,17 @@ describe('mobile layout', () => {
      * through the wordmark.
      */
     const phone = mediaBlock(sheet('shell/HudOverlay.module.css'), '(max-width: 860px)');
-    expect(declarations(phone)).toMatch(/\.place,\s*\n\s*\.wallets\s*\{[^}]*position:\s*static/);
+    /*
+     * `relative`, not `static`. `.chrome::before` is the HUD fade and it is
+     * absolutely positioned, so a positioned descendant paints above it and an
+     * in-flow one does not: made static, these two sat under their own
+     * 60%-opaque gradient and the wordmark, Frontier, Best and the mode pill
+     * all lost contrast against a sky the tokens already call marginal.
+     * Relative is still in flow - the column lays them out either way.
+     */
+    expect(declarations(phone)).toMatch(
+      /\.place,\s*\n\s*\.wallets\s*\{[^}]*position:\s*relative[^}]*inset:\s*auto/,
+    );
     // No offset reserving room for a box whose height nobody measured.
     for (const selector of ['.place', '.wallets'])
       expect(declarations(rule(phone, selector))).not.toMatch(/(^|\s)(top|left|right):/);

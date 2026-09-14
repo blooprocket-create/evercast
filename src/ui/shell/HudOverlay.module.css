@@ -226,10 +226,24 @@
    * Margins rather than padding on `.chrome`: an absolutely positioned child
    * resolves against its containing block's padding box, so padding here would
    * inset the gradient with them and leave a bare strip down each side of it.
+   *
+   * `relative` rather than `static`, and that is load-bearing rather than
+   * decorative. `.chrome::before` is the HUD fade, it is absolutely positioned,
+   * and a positioned descendant paints above in-flow content - so as static
+   * these two went *under* their own 60%-opaque gradient, which measurably
+   * dimmed the wordmark, Frontier, Best and the mode pill. On the Greenfields
+   * sky, which tokens.css already records as close enough in value to
+   * --ink-low to need a text-shadow, that is contrast this block cannot spare.
+   * Relative keeps them in flow - the column still lays them out - and puts
+   * them back after the pseudo-element in paint order.
+   *
+   * `inset: auto` because the base rule's `top` and `left` are still declared:
+   * inert on a static box, they would become real offsets on a relative one.
    */
   .place,
   .wallets {
-    position: static;
+    position: relative;
+    inset: auto;
     margin: 0 max(var(--space-3), var(--safe-right)) 0 max(var(--space-3), var(--safe-left));
   }
 
@@ -337,9 +351,11 @@
     gap: var(--space-3);
   }
 
+  /* `relative` and `inset: auto` for the reason the portrait rule gives. */
   .place,
   .wallets {
-    position: static;
+    position: relative;
+    inset: auto;
     margin: max(var(--space-2), var(--safe-top)) max(var(--space-3), var(--safe-right)) 0
       max(var(--space-3), var(--safe-left));
     min-width: 0;
