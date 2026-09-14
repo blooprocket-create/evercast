@@ -3,6 +3,7 @@ import type { GameEvent } from '../events/GameEvent';
 import type { GameState } from '../model';
 import type Decimal from 'break_eternity.js';
 import { big } from '../numbers';
+import { masteryMultiplier } from '../prestige/Mastery';
 import {
   GEAR_COST_GROWTH,
   GEAR_DEFINITIONS,
@@ -217,9 +218,8 @@ export class GearSystem {
   }
 
   syncMageStats(state: GameState, preserveHealthGain = false): void {
-    const compiled = compileGearStats(state.equipment);
     const previousMax = state.run.mage.maxHp;
-    const nextMax = big(this.config.baseMageHealth).add(compiled.maxHpBonus);
+    const nextMax = mageMaxHealth(state, this.config.baseMageHealth);
     const gain = nextMax.sub(previousMax);
     state.run.mage.maxHp = nextMax;
     if (preserveHealthGain && gain.cmp(0) > 0) {
@@ -228,6 +228,23 @@ export class GearSystem {
       state.run.mage.hp = big(nextMax);
     }
   }
+}
+
+/**
+ * The mage's maximum health: her base, plus what gear contributes, times what
+ * every Rebirth so far is worth.
+ *
+ * One definition, because three had already started to drift - GearSystem,
+ * RebirthSystem and the save codec each wrote this expression out longhand, and
+ * a multiplier added to one of them would have been missing from the other two.
+ * Mastery is applied here rather than inside `compileGearStats` because that has
+ * to stay a pure function of gear levels to be memoizable, and because the base
+ * health is not gear and would otherwise go unmultiplied.
+ */
+export function mageMaxHealth(state: GameState, baseMageHealth: number): Decimal {
+  return big(baseMageHealth)
+    .add(compileGearStats(state.equipment).maxHpBonus)
+    .mul(masteryMultiplier(state.meta));
 }
 
 export function gearDisplayData(equipment: EquipmentState, slot: GearSlot) {

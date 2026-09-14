@@ -1,6 +1,6 @@
 import type { EngineConfig } from '../config';
 import type { GameEvent } from '../events/GameEvent';
-import { compileGearStats } from '../gear/GearSystem';
+import { mageMaxHealth } from '../gear/GearSystem';
 import type { GameState } from '../model';
 import { big } from '../numbers';
 import { createInitialRunState } from '../state';
@@ -34,10 +34,12 @@ export class RebirthSystem {
     state.meta.rebirths += 1;
     state.run = createInitialRunState(this.config);
 
-    // Equipment intentionally lives outside RunState until prestige behavior is designed.
-    // Preserve its additive stats rather than accidentally making rebirth wipe gear power.
-    const gearStats = compileGearStats(state.equipment);
-    state.run.mage.maxHp = big(this.config.baseMageHealth).add(gearStats.maxHpBonus);
+    // Equipment intentionally lives outside RunState, so gear power survives a
+    // Rebirth rather than being wiped by it. The new run's maximum is computed
+    // *after* Knowledge is banked above, so the fresh mage already stands on the
+    // Mastery the Rebirth just bought - computing it first would start every run
+    // one Rebirth behind.
+    state.run.mage.maxHp = mageMaxHealth(state, this.config.baseMageHealth);
     state.run.mage.hp = big(state.run.mage.maxHp);
 
     this.emit({

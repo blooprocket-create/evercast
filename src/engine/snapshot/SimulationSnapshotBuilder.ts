@@ -16,6 +16,7 @@ import {
 import type { LastSummonSnapshot, SimulationSnapshot } from '../types';
 import { buildCompanionSnapshots } from './CompanionSnapshotBuilder';
 import { wizardPerHit } from '../companions/CompanionCombat';
+import { masteryMultiplier } from '../prestige/Mastery';
 // prettier-ignore
 import { effectiveCastInterval, hasArrived, livingByDistance } from '../combat/SpellCombatState';
 
@@ -46,7 +47,7 @@ export function buildSimulationSnapshot({
   const gearStats = compileGearStats(state.equipment);
   // One definition, shared with combat, so what a companion hits for and what
   // this surface reports cannot drift apart again.
-  const finalDamage = wizardPerHit(run, state.equipment);
+  const finalDamage = wizardPerHit(run, state.equipment, masteryMultiplier(state.meta));
   const enemyHpPercent =
     target && target.maxHp.cmp(0) > 0 ? percent(target.hp.div(target.maxHp).toNumber()) : 0;
   const mageHpPercent = run.mage.maxHp.cmp(0) > 0 ? percent(run.mage.hp.div(run.mage.maxHp).toNumber()) : 0;

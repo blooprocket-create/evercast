@@ -1,4 +1,5 @@
 import { EvercastScene } from '../../src/game/EvercastScene';
+import { NO_MASTERY } from '../../src/engine/prestige/Mastery';
 import { CombatSystem } from '../../src/engine/combat/CombatSystem';
 import {
   clearSpellCombat,
@@ -132,7 +133,7 @@ function collectDead(ids: number[]) {
 function cast(lethal = false) {
   const old = state.run.spell.baseDamage;
   if (lethal) state.run.spell.baseDamage = '1e20';
-  collectDead(combat.cast(state.run, state.equipment).killedEnemyIds);
+  collectDead(combat.cast(state.run, state.equipment, NO_MASTERY).killedEnemyIds);
   state.run.spell.baseDamage = old;
   state.run.castCooldown = effectiveCastInterval(state.run);
   flush();

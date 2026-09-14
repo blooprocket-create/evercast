@@ -1,6 +1,6 @@
 import type { EngineConfig } from '../config';
 import { GEAR_SLOT_ORDER } from '../gear/GearCatalog';
-import { compileGearStats, createInitialEquipmentState, equivalentGearLevel } from '../gear/GearSystem';
+import { createInitialEquipmentState, equivalentGearLevel, mageMaxHealth } from '../gear/GearSystem';
 import type { EquipmentState, GearPieceState, GearSlot } from '../gear/types';
 import { COMPANION_BY_ID } from '../companions/CompanionCatalog';
 import { createInitialCompanionsState } from '../companions/CompanionSystem';
@@ -290,9 +290,7 @@ export class SaveCodec {
     // derived from. Re-deriving it costs nothing on a save that already agreed,
     // and stops a migrated one from loading two health bars out of step with its
     // own equipment until the next purchase happened to resync them.
-    state.run.mage.maxHp = big(this.config.baseMageHealth).add(
-      compileGearStats(state.equipment).maxHpBonus,
-    );
+    state.run.mage.maxHp = mageMaxHealth(state, this.config.baseMageHealth);
     state.run.mage.hp = state.run.mage.hp.min(state.run.mage.maxHp);
     // A run cannot have got further than the account's own record of it.
     state.meta.highestStageEver = Math.max(

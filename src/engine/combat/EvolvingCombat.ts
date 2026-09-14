@@ -1,3 +1,4 @@
+import type Decimal from 'break_eternity.js';
 import type { EngineConfig } from '../config';
 import type { GameEvent } from '../events/GameEvent';
 import { compileGearStats } from '../gear/GearSystem';
@@ -19,7 +20,7 @@ export class EvolvingCombat {
   ) {
     this.effects = new TimedSpellEffects(config, emit);
   }
-  cast(run: RunState, equipment: EquipmentState): number[] {
+  cast(run: RunState, equipment: EquipmentState, mastery: Decimal): number[] {
     ensurePositions(run, this.config.enemyAttackRange);
     const spell = compileSpell(run.spell),
       m = spell.mechanics!,
@@ -33,6 +34,7 @@ export class EvolvingCombat {
     const castId = ++run.stats.casts;
     const base = big(spell.damage)
       .add(compileGearStats(equipment).baseDamageBonus)
+      .mul(mastery)
       .mul(routeDamageScale(m));
     // Twin decides how many projectiles leave the staff; Piercing decides how
     // far each one carries. They are separate questions, so a blended build is
