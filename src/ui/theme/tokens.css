@@ -114,7 +114,13 @@
    */
   --text-input-min: 16px;
 
-  --font-display: Georgia, 'Times New Roman', serif;
+  /*
+   * Both faces ship with the game; see theme/fonts.css for which subsets and
+   * why Gelasio stands where Georgia used to. The rest of each stack is what
+   * draws a glyph the subset does not carry, and what draws everything in the
+   * moment before the file lands.
+   */
+  --font-display: Gelasio, Georgia, 'Times New Roman', serif;
   --font-ui: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 
   /* Radius: four values. The UI this replaces used seventeen. */
