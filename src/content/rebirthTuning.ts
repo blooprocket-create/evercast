@@ -24,3 +24,14 @@ export const MASTERY_PIVOT = 1;
  * health while damage keeps the whole multiplier.
  */
 export const MASTERY_EXPONENT = 0.5;
+
+/**
+ * How much deeper a run has to go before a Rebirth is worth more.
+ *
+ * Total Knowledge ever earned is `floor((deepest rebirth stage / unlock stage) ^
+ * this)`, and a Rebirth pays the difference from what has already been banked.
+ * Relocated here from an inline literal in `RebirthSystem`, where it was the
+ * kind of number that gets tuned a hundred times and should never have been
+ * hiding inside a system file.
+ */
+export const KNOWLEDGE_STAGE_EXPONENT = 1.5;
