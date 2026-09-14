@@ -538,3 +538,14 @@
     display: none;
   }
 }
+
+/*
+ * And on the smallest landscape phones, none of them: see the matching rule in
+ * Shelf.module.css for the width arithmetic. The live region beside this stack
+ * is untouched, so the newest line is still announced.
+ */
+@media (max-height: 520px) and (max-width: 700px) and (orientation: landscape) {
+  .logLines {
+    display: none;
+  }
+}

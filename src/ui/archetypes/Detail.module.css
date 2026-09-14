@@ -27,8 +27,18 @@
   flex-direction: column;
 }
 
+/*
+ * `height: 0` and then grow, rather than `flex: 1`.
+ *
+ * `flex: 1` is `flex-basis: 0%`, and a percentage against an indefinite height
+ * resolves back to the content - so the pane's own automatic height came out
+ * as the whole scrollable content plus the action, and on a short screen it
+ * pushed both off the bottom of the surface. An explicit zero height is the
+ * one thing a parent measuring its children reads as nothing.
+ */
 .paneScroll {
-  flex: 1;
+  flex: 1 1 auto;
+  height: 0;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
@@ -64,15 +74,33 @@
   }
 
   /*
-   * flex: none pins the list to its 45%; without it the pane below, sized to
-   * its content, pushed the split until the list was a single row.
+   * 45% of the column, and not a row more - without the cap the pane below,
+   * sized to its content, pushed the split until the list was a single row.
+   *
+   * And never so much that the pane has nowhere to be. On a 320x568 screen
+   * 45% plus an action the height of three touch targets came to more than the
+   * surface has, and what gave way was the action: it ended 55px past the
+   * bottom of the host, where `elementFromPoint` over Level up returned the
+   * shelf rather than the button. The second term reserves 12rem for the pane
+   * - the action itself, plus enough of a margin to see that something is
+   * above it - and only binds on the shortest screens.
    */
   .list {
     width: 100%;
-    flex: none;
-    max-height: 45%;
+    flex: 0 1 auto;
+    max-height: min(45%, 100% - 12rem);
+    min-height: 0;
     border-right: 0;
     border-bottom: 1px solid var(--line);
+  }
+
+  /*
+   * Grows into what the list leaves and never shrinks below it. With the
+   * scroller's height at zero, "it" is exactly the action - so the one thing
+   * the surface is for is the last thing to give way rather than the first.
+   */
+  .pane {
+    flex: 1 0 auto;
   }
 
   .paneScroll {
@@ -95,11 +123,18 @@
     flex-direction: row;
   }
 
+  /* A column again, so the width is fixed and the height is the container's. */
   .list {
     width: 240px;
+    flex: none;
     max-height: none;
     border-right: 1px solid var(--line);
     border-bottom: 0;
+  }
+
+  /* Back to a row item: what `auto` would size here is a width, not a height. */
+  .pane {
+    flex: 1;
   }
 
   .paneScroll {
@@ -108,5 +143,42 @@
 
   .action {
     padding: var(--space-2) max(var(--space-3), var(--safe-right)) var(--space-3) var(--space-3);
+  }
+}
+
+/*
+ * Sideways and narrower than the three-column gate - a 568x320 phone, and
+ * nothing else the game runs on. Here the stacked layout gets 114px of detail
+ * and the action alone is 165 of them, so pinning it puts Level up under the
+ * shelf where nothing can reach it. The pane goes back to being the scroller
+ * and the action back into the flow: cramped, but everything scrolls and
+ * nothing is cut off, which is the trade the 640px gate in SurfaceHost already
+ * documents for this size.
+ *
+ * The fade goes with it - `useScrollEdges` watches the inner box, and that box
+ * no longer moves - which is the honest signal here: what scrolls is the pane.
+ */
+@media (max-height: 520px) and (max-width: 639px) and (orientation: landscape) {
+  /* The pane reserves nothing here, so the list keeps its plain share. */
+  .list {
+    max-height: 45%;
+  }
+
+  .pane {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .paneScroll {
+    flex: none;
+    height: auto;
+    overflow: visible;
+  }
+
+  .action {
+    border-top: 0;
+    padding-top: 0;
   }
 }

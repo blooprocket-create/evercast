@@ -181,6 +181,12 @@ describe('mobile layout', () => {
      *
      * tokens.css and HudOverlay are exempt on purpose: the shelf and the HUD
      * only ever need one row, so they hold at any width.
+     *
+     * Every landscape rule in these files has to bound its width one way or
+     * the other, and at least one of them has to be the `min-width` that opens
+     * the columns. `max-width` is the other half of the same statement - a
+     * rule for the sizes below that gate, where Detail hands the scroll back
+     * to the pane because 114px of it cannot hold a pinned action.
      */
     const columnBuilders = [
       'shell/SurfaceHost.module.css',
@@ -192,7 +198,8 @@ describe('mobile layout', () => {
     for (const path of columnBuilders) {
       const queries = sheet(path).match(/@media[^{]*orientation:\s*landscape[^{]*\{/g) ?? [];
       expect(queries.length).toBeGreaterThan(0);
-      for (const query of queries) expect(`${path} ${query}`).toMatch(/min-width:/);
+      expect(queries.some((query) => /min-width:/.test(query)), `${path} opens columns at no stated width`).toBe(true);
+      for (const query of queries) expect(`${path} ${query}`).toMatch(/min-width:|max-width:/);
     }
   });
 

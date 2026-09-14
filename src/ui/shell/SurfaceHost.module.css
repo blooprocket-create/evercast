@@ -132,7 +132,7 @@
   /*
    * One row, still: wrapping put the wallet values on a line of their own
    * where they read as two stray numbers. The title takes the slack and
-   * truncates instead.
+   * truncates instead - until 560px, where it stops taking the line at all.
    */
   .header {
     height: auto;
@@ -184,6 +184,34 @@
     overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap;
+  }
+
+  /*
+   * The title gives up the line too, by the same clipping rather than by
+   * `display: none` - so it stays a heading for a screen reader while the
+   * three wallets get the width they need.
+   *
+   * It was already truncating here, and shipping the real typeface made that
+   * worse rather than better: Gelasio is wider than the fallback serif the
+   * layout had been getting on this machine, so `--value-width`'s 10ch reserve
+   * grew and "Gear" came out as "G..". Nothing is lost by removing it: the nav
+   * rail directly beneath marks the active destination and scrolls it into
+   * view, and the surface itself carries the same name as its `aria-label`.
+   */
+  .title {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* Back keeps the left edge without a spacer between them to hold it. */
+  .wallets {
+    margin-left: auto;
   }
 }
 
