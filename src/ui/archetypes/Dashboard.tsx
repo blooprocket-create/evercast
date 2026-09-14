@@ -1,3 +1,4 @@
+import { scrollEdgeAttributes, useScrollEdges } from './useScrollEdges';
 import styles from './Dashboard.module.css';
 
 /**
@@ -12,8 +13,14 @@ interface DashboardProps {
 }
 
 export function Dashboard({ stats, sections, aside }: DashboardProps) {
+  const edges = useScrollEdges();
+
   return (
-    <div className={aside ? `${styles.dashboard} ${styles.withAside}` : styles.dashboard}>
+    <div
+      ref={edges.ref}
+      className={aside ? `${styles.dashboard} ${styles.withAside}` : styles.dashboard}
+      {...scrollEdgeAttributes(edges)}
+    >
       <div className={styles.main}>
         <div className={styles.stats}>{stats}</div>
         {sections}

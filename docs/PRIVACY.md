@@ -35,8 +35,16 @@ telemetry, no embedded third-party script, no font CDN, no social widget and no
 advertising.
 
 The only network requests the game makes are for its own files — the JavaScript
-bundle, the stylesheet, and the `.glb` models under `public/models/` — all from
-the origin the page was served from.
+bundle, the stylesheet, the two `.woff2` typefaces under `public/fonts/`, and
+the `.glb` models under `public/models/` — all from the origin the page was
+served from.
+
+The typefaces are the reason "no font CDN" is worth stating rather than
+assuming. Gelasio and Inter are both under the SIL Open Font License (the full
+text of each ships beside them in `public/fonts/`), so they are served from the
+site itself. A `<link>` to Google Fonts would have been two lines less work and
+would have told a third party the IP address, the user agent and the referring
+page of everyone who opened the game.
 
 Check it yourself, two ways:
 

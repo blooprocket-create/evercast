@@ -1,13 +1,16 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { BootPhase } from '../../app/BootPhase';
 import { accentForZone, accentInkVariable, accentVariable } from '../theme/biome';
 import { BootGate } from './BootGate';
 import { CoachMark } from '../onboarding/CoachMark';
 import { HudOverlay, ShelfLog, ShelfVitals } from './HudOverlay';
-import { PREMISE_FLAG } from '../onboarding/flags';
+import { FIRST_DEFEAT_FLAG, PREMISE_FLAG } from '../onboarding/flags';
 import { Premise } from '../surfaces/Premise';
 import { WelcomeBack } from '../surfaces/WelcomeBack';
 import { SurfaceHost } from './SurfaceHost';
+import { Toasts, useToasts } from './Toasts';
+import { useDefeat } from './useDefeat';
+import { Moment } from '../archetypes/Moment';
 import { Shelf } from '../nav/Shelf';
 import {
   type Badge,
@@ -67,6 +70,8 @@ export function AppShell({
   // The threshold is the away report's own, not a second guess at it: a moment
   // that is not drawn must not silence the onboarding standing behind it.
   const welcoming = awayProgress !== null && awayProgress.secondsApplied >= WELCOME_BACK_SECONDS;
+  const { toasts, raise, expire } = useToasts();
+  const defeat = useDefeat();
 
   return (
     <main
@@ -126,10 +131,12 @@ export function AppShell({
           on.
         */}
         {playing && !welcoming && activeId === null && <CoachMark onOpen={setActiveId} />}
+        <Toasts toasts={toasts} onExpire={expire} />
         {welcoming && playing && (
           <WelcomeBack summary={awayProgress} onDismiss={onDismissAwayProgress} />
         )}
         {playing && !welcoming && <PremiseGate />}
+        {playing && !welcoming && <DefeatGate defeat={defeat} onToast={raise} />}
       </div>
       <BootGate phase={bootPhase} resumed={resumedFromSave} lit={titleLit} onBegin={onBegin} />
     </main>
@@ -196,6 +203,76 @@ function ActiveSurface({
       badgeFor={(id) => badges.get(id) ?? null}
       onSelect={onSelect}
       onClose={onClose}
+    />
+  );
+}
+
+/**
+ * What the game says when the mage falls.
+ *
+ * Nothing said anything. The only failure state in the game produced one log
+ * line that the next event overwrote a second later - and on any phone that
+ * log is not rendered at all - plus a pill quietly changing to `FARMING n` and
+ * a bright `Retry Frontier` button appearing beside the wallets, unannounced.
+ * A new player's first death was a button they were not told about next to a
+ * word nobody explained.
+ *
+ * The first one is a Moment, because it is the one that has to teach the loop.
+ * Every one after it is a toast, because death *is* the loop and a full screen
+ * each time would be the worse bug.
+ */
+function DefeatGate({
+  defeat,
+  onToast,
+}: {
+  defeat: ReturnType<typeof useDefeat>;
+  onToast: (toast: Parameters<typeof Toasts>[0]['toasts'][number]) => void;
+}) {
+  const run = useCommand();
+  const explained = useSnapshotSelector((s) => s.storyFlags.includes(FIRST_DEFEAT_FLAG));
+  const announced = useRef<number | null>(null);
+
+  const first = defeat !== null && !explained;
+
+  useEffect(() => {
+    if (defeat === null) return;
+    if (announced.current === defeat.serial) return;
+    /*
+     * Claimed before the `first` check, not after it.
+     *
+     * Dismissing the moment writes the flag, which makes `first` false while
+     * `defeat` still names the same fall - so an effect that had skipped
+     * without claiming the serial would come straight back and toast the death
+     * it had just spent a full screen explaining.
+     */
+    announced.current = defeat.serial;
+    if (first) return;
+    onToast({
+      id: `defeat-${defeat.serial}`,
+      tone: 'defeat',
+      icon: 'rebirth',
+      title: `The frontier held at ${defeat.stage}`,
+      detail: `${defeat.enemy} finished it. Farming ${defeat.farmStage} until the mage is stronger.`,
+    });
+  }, [defeat, first, onToast]);
+
+  if (!first || defeat === null) return null;
+
+  return (
+    <Moment
+      tone="danger"
+      icon="rebirth"
+      headline="The mage falls"
+      consequence={`${defeat.enemy} finished it at Frontier ${defeat.stage}. Nothing is lost - the Evercast drops back to ${defeat.farmStage} and keeps killing until it is strong enough to try again.`}
+      cells={[
+        { label: 'Reached', value: String(defeat.stage) },
+        { label: 'Farming', value: String(defeat.farmStage) },
+      ]}
+      primary={{
+        label: 'Keep casting',
+        onClick: () => run({ type: 'mark_story_flag', flag: FIRST_DEFEAT_FLAG }),
+      }}
+      hint="Retry Frontier sends it straight back up. It will go on its own once it can."
     />
   );
 }

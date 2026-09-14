@@ -36,6 +36,21 @@ export function CompanionsSurface() {
 
   return (
     <Detail
+      /* Pinned: it was below the fold on every phone and every landscape phone. */
+      action={
+        <button
+          type="button"
+          className={styles.ascend}
+          disabled={!selected.canAscend}
+          onClick={() => run({ type: 'ascend_companion', definitionId: selected.definitionId })}
+        >
+          {selected.shardsForNextStar === null
+            ? 'Nothing left to ascend'
+            : selected.canAscend
+              ? `Ascend to ${selected.stars + 1} stars`
+              : `Needs ${selected.shardsForNextStar - selected.shards} more shards`}
+        </button>
+      }
       list={
         <Ledger
           items={roster}
@@ -129,18 +144,6 @@ export function CompanionsSurface() {
               readout={`${selected.shards} / ${selected.shardsForNextStar}`}
             />
           )}
-          <button
-            type="button"
-            className={styles.ascend}
-            disabled={!selected.canAscend}
-            onClick={() => run({ type: 'ascend_companion', definitionId: selected.definitionId })}
-          >
-            {selected.shardsForNextStar === null
-              ? 'Nothing left to ascend'
-              : selected.canAscend
-                ? `Ascend to ${selected.stars + 1} stars`
-                : `Needs ${selected.shardsForNextStar - selected.shards} more shards`}
-          </button>
           <p className={styles.hint}>
             Summoning a companion you already have banks shards instead of a second copy.
           </p>

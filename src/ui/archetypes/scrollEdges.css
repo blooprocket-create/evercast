@@ -1,0 +1,56 @@
+/*
+ * The fade a scroll container wears while there is something past its edge.
+ *
+ * Global rather than a module class, because it is one rule about a fact -
+ * `data-scroll-above` / `data-scroll-below`, set by `useScrollEdges` - rather
+ * than a name each archetype would have to choose and keep in step. Every
+ * scroller in the game is owned by an archetype, and this is what makes them
+ * all say the same thing.
+ *
+ * It exists because none of them said anything. Scrollbars are suppressed on
+ * coarse pointers, so on a phone a row cut exactly at the container edge reads
+ * as the end of the list rather than as more of it - which is how the audit
+ * found content stranded below the fold on Companions, Party, Gear and
+ * Settings, with nothing on screen suggesting the pane moved at all.
+ *
+ * Only the alpha of the stops matters, which is why `currentColor` names no
+ * colour: a mask reads luminance-independent alpha here, so this works
+ * whatever the element's text colour is.
+ *
+ * A scroller that needs a shallower fade sets `--scroll-fade` on itself; the
+ * default is one --space-5.
+ */
+[data-scroll-above='true'] {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, currentColor var(--scroll-fade, var(--space-5)));
+  mask-image: linear-gradient(to bottom, transparent 0, currentColor var(--scroll-fade, var(--space-5)));
+}
+
+[data-scroll-below='true'] {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    currentColor calc(100% - var(--scroll-fade, var(--space-5))),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    currentColor calc(100% - var(--scroll-fade, var(--space-5))),
+    transparent 100%
+  );
+}
+
+[data-scroll-above='true'][data-scroll-below='true'] {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    currentColor var(--scroll-fade, var(--space-5)),
+    currentColor calc(100% - var(--scroll-fade, var(--space-5))),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    currentColor var(--scroll-fade, var(--space-5)),
+    currentColor calc(100% - var(--scroll-fade, var(--space-5))),
+    transparent 100%
+  );
+}

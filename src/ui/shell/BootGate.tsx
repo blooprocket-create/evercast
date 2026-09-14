@@ -40,6 +40,15 @@ interface BootGateProps {
 export function BootGate({ phase, resumed, lit, onBegin }: BootGateProps) {
   const action = useRef<HTMLButtonElement>(null);
   const preparing = phase === 'preparing';
+  /*
+   * The button has been pressed and the loop is paying the absence down. It is
+   * one synchronous call of up to ten minutes of simulation, so this is a
+   * frozen frame rather than an animated one - which is exactly why it has to
+   * be a frame that says something. Before this the gate was already gone and
+   * the first seconds of a session were an interface that did not answer.
+   */
+  const settling = phase === 'settling';
+  const busy = preparing || settling;
 
   /**
    * Not `autoFocus`: that applies on mount, and on mount this button is
@@ -47,8 +56,8 @@ export function BootGate({ phase, resumed, lit, onBegin }: BootGateProps) {
    * where it becomes pressable, which is a re-render of the same element.
    */
   useEffect(() => {
-    if (!preparing) action.current?.focus();
-  }, [preparing]);
+    if (!busy) action.current?.focus();
+  }, [busy]);
 
   if (phase === 'playing') return null;
 
@@ -73,21 +82,29 @@ export function BootGate({ phase, resumed, lit, onBegin }: BootGateProps) {
           variant="primary"
           className={styles.action}
           onClick={onBegin}
-          disabled={preparing}
+          disabled={busy}
           ref={action}
           // The label carries the wait rather than a second widget doing it.
           // A spinner beside a disabled button says the same thing twice.
-          aria-busy={preparing}
+          aria-busy={busy}
         >
-          {preparing ? 'Gathering the world' : resumed ? 'Continue' : 'Begin'}
+          {preparing
+            ? 'Gathering the world'
+            : settling
+              ? 'Catching up'
+              : resumed
+                ? 'Continue'
+                : 'Begin'}
         </Button>
 
         <p className={styles.note} aria-live="polite">
           {preparing
             ? 'Waking the woods…'
-            : resumed
-              ? 'It held the line while you were gone.'
-              : 'Everything it kills makes it stronger.'}
+            : settling
+              ? 'Working through the time you were away…'
+              : resumed
+                ? 'It held the line while you were gone.'
+                : 'Everything it kills makes it stronger.'}
         </p>
       </div>
     </div>

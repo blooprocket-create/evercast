@@ -89,40 +89,50 @@
   align-content: center;
 }
 
-.logLine {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font: 400 var(--text-small) / 1.35 var(--font-ui);
-  color: var(--ink-mid);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+/*
+ * The log takes a row of its own until there is width for it to share one.
+ *
+ * Everything else in the shelf is fixed: 306 of vitals, 408 of slots, two
+ * hairlines, four gaps and the side padding come to 860, so what the log gets
+ * on a shared row is the width minus that. At 1024 it is 164px and at 820 it
+ * is 86 - `Frontier adva...`, which is a log that exists without saying
+ * anything. 1160 is where the remainder first reaches the ~300px a line of it
+ * actually needs.
+ *
+ * The wrap costs no height: the shelf is 132px here and a row of slots is 74
+ * of them. The trailing hairline goes, because with the log moved there is
+ * nothing left for it to separate.
+ */
+@media (max-width: 1160px) {
+  .shelf {
+    flex-wrap: wrap;
+    align-content: center;
+    row-gap: var(--space-2);
+  }
 
-.pip {
-  width: 4px;
-  height: 4px;
-  border-radius: var(--radius-pill);
-  background: var(--accent);
-  flex: none;
+  .log {
+    flex-basis: 100%;
+    order: -1;
+  }
+
+  .divider:last-of-type {
+    display: none;
+  }
 }
 
 @media (max-width: 860px) {
-  .log {
-    display: none;
-  }
-
   .vitals {
     width: 180px;
   }
 }
 
 @media (max-width: 620px) {
+  /* Three rows now rather than two, so the gap between them gives way first. */
   .shelf {
     flex-direction: column;
+    flex-wrap: nowrap;
     justify-content: center;
-    gap: var(--space-3);
+    gap: var(--space-2);
     padding: var(--space-3) max(var(--space-3), var(--safe-right))
       calc(var(--space-3) + var(--safe-bottom)) max(var(--space-3), var(--safe-left));
   }
@@ -133,6 +143,23 @@
 
   .vitals {
     width: 100%;
+    order: -2;
+  }
+
+  /*
+   * The log exists on a phone now. It was `display: none` below 860px, which
+   * is every phone and every portrait tablet - so the one place the game
+   * narrates itself in words did not exist there, and the canvas's own
+   * `aria-label` pointed at it regardless.
+   *
+   * Ordered between the vitals and the slots rather than left where it falls
+   * in the DOM, so the nav keeps the bottom edge and the thumb reach that goes
+   * with it. Only the visible stack moves; the live region that announces the
+   * newest line has no size and no position.
+   */
+  .log {
+    width: 100%;
+    order: -1;
   }
 
   .slots {
@@ -161,11 +188,27 @@
  * 390px-tall screen keeps three-quarters of itself for the diorama.
  */
 @media (max-height: 520px) and (orientation: landscape) {
+  /*
+   * One row, and it stays one: there is width to spare sideways and no height
+   * at all, so the log shares the row here rather than taking one.
+   */
   .shelf {
     flex-direction: row;
+    flex-wrap: nowrap;
     gap: var(--space-3);
     padding: 0 max(var(--space-3), var(--safe-right)) var(--safe-bottom)
       max(var(--space-3), var(--safe-left));
+  }
+
+  /*
+   * Basis zero, not auto: the log and the vitals split what the slots leave,
+   * and a log sized to its own text took 304 of the 416 available - which
+   * squeezed the vitals to 124px, wrapped `6.45e48 / 6.45e48` onto three
+   * lines, and pushed the bar 6px past the bottom of the screen.
+   */
+  .log {
+    flex: 1 1 0%;
+    order: 0;
   }
 
   .divider {
@@ -190,5 +233,26 @@
     gap: var(--space-1);
     line-height: 1.2;
     letter-spacing: 0.06em;
+  }
+}
+
+/*
+ * The one shape with no room for it.
+ *
+ * Sideways under 700px the slots alone take 368 of the width, and what is left
+ * splits between the vitals and the log at about 119px each - which wraps
+ * `6.45e48 / 6.45e48` onto three lines and pushes the bar past the bottom of
+ * the screen. The vitals win, because a health bar that cannot be read is a
+ * worse loss than a log line, and because the toasts and the Chronicle surface
+ * both still work here.
+ *
+ * `flex: 0 0 0` rather than `display: none` on `.log`: the live region inside
+ * it is absolutely positioned and one pixel square, so it goes on announcing
+ * while only the visible stack is hidden (see `.logLines` in
+ * HudOverlay.module.css).
+ */
+@media (max-height: 520px) and (max-width: 700px) and (orientation: landscape) {
+  .log {
+    flex: 0 0 0;
   }
 }

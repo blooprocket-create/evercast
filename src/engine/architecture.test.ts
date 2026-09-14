@@ -43,6 +43,8 @@ describe('engine dependency boundary', () => {
     const source = readFileSync(join(engineRoot, 'EvercastSimulation.ts'), 'utf8');
     expect(source.split('\n').length).toBeLessThan(300);
     expect(source).toContain("from './snapshot/SimulationSnapshotBuilder'");
-    expect(source).toContain("from './events/describeGameEvent'");
+    // Narration moved behind `Chronicle`, which is the same delegation one
+    // step further out: the coordinator keeps a log, it does not write one.
+    expect(source).toContain("from './events/Chronicle'");
   });
 });

@@ -10,29 +10,38 @@
   flex: 1;
   min-width: 0;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-/* On a wide screen the toolbar floats over the graph; there is room to spare. */
+/*
+ * In flow, not over the graph.
+ *
+ * It floated on the grounds that a wide screen has room to spare, and the room
+ * it spent was the top of the picture: at 1440x900 the `Contagion` and
+ * `Blight` nodes sat under it, unreadable and unclickable, and the row's own
+ * last control was clipped by the inspector's edge. A row that lays out
+ * normally costs ~60px of a 690px graph and covers nothing.
+ *
+ * It still floats on a landscape phone, where those 60px are a fifth of the
+ * height - see the short-viewport rule at the end of this sheet.
+ */
 .toolbar {
-  position: absolute;
-  left: var(--space-3);
-  top: var(--space-3);
-  right: var(--space-3);
+  position: relative;
   z-index: 1;
+  flex: none;
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  pointer-events: none;
-}
-
-.toolbar > * {
+  padding: var(--space-3) var(--space-3) 0;
   pointer-events: auto;
 }
 
 /* One transformed layer inside a hidden box: never two scroll axes. */
 .viewport {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
   touch-action: none;
   /* A drag is a pan, not a text selection over the node labels. */
@@ -73,6 +82,34 @@
   place-items: stretch;
   cursor: pointer;
   text-align: center;
+}
+
+/*
+ * The node's hit area, in screen pixels, from inside a scaled layer.
+ *
+ * A node is drawn at its authored size times the zoom, which put the spell
+ * tree's 63 `minor` nodes at 6-12px - not a small target, not a target. The
+ * box below is sized in screen terms (`--graph-hit-area`) and then divided by
+ * the zoom (`--graph-inverse-scale`) so the transform hands it back unchanged.
+ *
+ * `--graph-hit-area` is capped at the closest neighbour in the layout, so this
+ * grows as the player zooms in and stops before it can steal an adjacent
+ * node's taps. A pseudo-element belongs to its originating element for hit
+ * testing, so pressing it presses the button.
+ */
+.node > button {
+  position: relative;
+}
+
+.node > button::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(var(--graph-hit-area, 0px) * var(--graph-inverse-scale, 1));
+  height: calc(var(--graph-hit-area, 0px) * var(--graph-inverse-scale, 1));
+  transform: translate(-50%, -50%);
+  border-radius: var(--radius-pill);
 }
 
 .controls {
@@ -185,12 +222,17 @@
   }
 
   /*
-   * 150x104 of minimap over a 375px-wide graph is a quarter of the viewport,
-   * covering the nodes it is meant to help find. Pan and pinch are the way
-   * around a graph on a phone.
+   * 150x104 over a 375px graph was a quarter of the viewport, so this used to
+   * hide the minimap outright - on the one screen where the graph did not fit
+   * and the minimap was the only thing that could have said so. The graph fits
+   * now (see `fitScale`), so `shouldShowMinimap` only brings it back once the
+   * player has zoomed past the frame, which is exactly when a phone needs it.
+   * It is smaller here rather than absent.
    */
   .minimap {
-    display: none;
+    top: var(--space-2);
+    width: 96px;
+    height: 68px;
   }
 
   /* Zoom and Fit are thumb targets here, not 32px cursor targets. */
@@ -283,6 +325,12 @@
     display: block;
   }
 
+  /*
+   * ~245px of graph is all there is sideways on a phone, so here the toolbar
+   * goes back over the picture rather than taking a fifth of it. Its own
+   * children keep the pointer; the row itself gives it up so a drag that
+   * starts between two chips still pans the graph.
+   */
   .toolbar {
     position: absolute;
     pointer-events: none;
@@ -292,6 +340,10 @@
     padding: 0;
     border-bottom: 0;
     background: transparent;
+  }
+
+  .toolbar > * {
+    pointer-events: auto;
   }
 
   .viewport {

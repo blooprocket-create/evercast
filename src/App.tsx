@@ -15,9 +15,12 @@ export default function App() {
   const [awayProgress, setAwayProgress] = useState<OfflineSummary | null>(null);
   const [assetsSettled, setAssetsSettled] = useState(false);
   const [begun, setBegun] = useState(false);
+  // The loop settles the whole absence on its first frame; the gate waits for
+  // it rather than lifting onto a frozen interface. See `BootConditions`.
+  const [awaySettled, setAwaySettled] = useState(false);
   const [titleLit, setTitleLit] = useState(false);
   const { depthOfField, vfxQuality, damageNumbers } = useUiSettings().display;
-  const phase = bootPhase({ assetsSettled, begun });
+  const phase = bootPhase({ assetsSettled, begun, awaySettled });
 
   // Effect budgets are fixed when the pool is built, so quality is the one
   // display setting that needs the scene rebuilding. The simulation is a module
@@ -113,7 +116,11 @@ export default function App() {
    */
   useEffect(() => {
     if (!begun) return;
-    return startGameLoop({ scene, onAwayProgress: setAwayProgress });
+    return startGameLoop({
+      scene,
+      onAwayProgress: setAwayProgress,
+      onAwaySettled: () => setAwaySettled(true),
+    });
   }, [scene, begun]);
 
   useEffect(() => {

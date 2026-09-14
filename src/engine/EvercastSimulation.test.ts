@@ -88,6 +88,47 @@ describe('EvercastSimulation', () => {
     expect(snapshot.farmStage).toBeLessThan(snapshot.stage);
   });
 
+  describe('the last defeat', () => {
+    it('is nothing until the mage falls', () => {
+      expect(new EvercastSimulation().getSnapshot().lastDefeat).toBeNull();
+    });
+
+    it('names the enemy that landed the blow, and survives a catch-up', () => {
+      /*
+       * The interface used to work this out by watching the death counter and
+       * naming whichever enemy was on screen the tick before it moved - which
+       * a single `advance` of 900 seconds defeats entirely, because the whole
+       * span is simulated before anything is published. This is the fact it
+       * reads instead.
+       */
+      const sim = new EvercastSimulation({ config: { autoRetryFarmKills: 999 } });
+      sim.advance(900, { presentationEvents: false });
+
+      const defeat = sim.getSnapshot().lastDefeat;
+      expect(defeat).not.toBeNull();
+      expect(defeat!.enemyName.length).toBeGreaterThan(0);
+      // An authored name, not an identifier: no snake_case, no camelCase.
+      expect(defeat!.enemyName).not.toMatch(/_|\b[a-z]+[A-Z]/);
+      expect(defeat!.stage).toBeGreaterThan(0);
+    });
+
+    it('counts up once per fall, so a reader can tell one from a re-render', () => {
+      // The default config retries the frontier on its own, so a long enough
+      // run falls more than once.
+      const sim = new EvercastSimulation();
+      sim.advance(900, { presentationEvents: false });
+      const first = sim.getSnapshot().lastDefeat!;
+      expect(first.serial).toBe(sim.getSnapshot().deaths);
+      // Reading it again is not a new defeat.
+      expect(sim.getSnapshot().lastDefeat!.serial).toBe(first.serial);
+
+      sim.advance(2700, { presentationEvents: false });
+      const later = sim.getSnapshot().lastDefeat!;
+      expect(later.serial).toBeGreaterThan(first.serial);
+      expect(later.serial).toBe(sim.getSnapshot().deaths);
+    });
+  });
+
   describe('story flags', () => {
     it('records a beat once and refuses it thereafter', () => {
       const sim = new EvercastSimulation();

@@ -13,7 +13,8 @@ import {
   totalSpellPoints,
   unspentSpellPoints,
 } from '../spellTree/SpellTreeSystem';
-import type { LastSummonSnapshot, SimulationSnapshot } from '../types';
+import type { DefeatSnapshot, LastSummonSnapshot, SimulationSnapshot } from '../types';
+import type { ChronicleLine } from '../events/Chronicle';
 import { buildCompanionSnapshots } from './CompanionSnapshotBuilder';
 import { wizardPerHit } from '../companions/CompanionCombat';
 import { masteryMultiplier, previewMastery } from '../prestige/Mastery';
@@ -28,7 +29,8 @@ export interface SimulationSnapshotBuildContext {
   rebirthKnowledgeGain: Decimal;
   nextKnowledgeStage: number;
   lastSummon: LastSummonSnapshot | null;
-  lastEvent: string;
+  chronicle: readonly ChronicleLine[];
+  lastDefeat: DefeatSnapshot | null;
 }
 
 export function buildSimulationSnapshot({
@@ -39,7 +41,8 @@ export function buildSimulationSnapshot({
   rebirthKnowledgeGain,
   nextKnowledgeStage,
   lastSummon,
-  lastEvent,
+  chronicle,
+  lastDefeat,
 }: SimulationSnapshotBuildContext): SimulationSnapshot {
   const run = state.run;
   // The same enemy the spell is aimed at, or the readout names one thing while
@@ -143,7 +146,8 @@ export function buildSimulationSnapshot({
         nextLevelCost: quantity(data.nextLevelCost),
       };
     }),
-    lastEvent,
+    chronicle,
+    lastDefeat,
   };
 }
 

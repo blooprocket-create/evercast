@@ -26,3 +26,23 @@ describe('boot phase', () => {
     expect(ASSET_WAIT_CEILING_MS).toBeLessThanOrEqual(15_000);
   });
 });
+
+describe('the away settle', () => {
+  it('holds the gate while the absence is still being paid down', () => {
+    expect(bootPhase({ assetsSettled: true, begun: true, awaySettled: false })).toBe('settling');
+  });
+
+  it('opens it the moment the debt is settled', () => {
+    expect(bootPhase({ assetsSettled: true, begun: true, awaySettled: true })).toBe('playing');
+  });
+
+  it('still never reopens over a session in progress', () => {
+    // A quality change rebuilds the scene under a running game. Whatever the
+    // assets are doing, a settled session is playing.
+    expect(bootPhase({ assetsSettled: false, begun: true, awaySettled: true })).toBe('playing');
+  });
+
+  it('defaults to settled, so a caller with nothing owed is unchanged', () => {
+    expect(bootPhase({ assetsSettled: true, begun: true })).toBe('playing');
+  });
+});

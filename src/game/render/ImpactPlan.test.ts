@@ -80,7 +80,7 @@ describe('planImpact', () => {
       ...Array.from({ length: 10 }, () => effect('meteor')),
       killed(1),
       killed(2),
-      { type: 'mage_defeated', time: 0, stage: 4 },
+      { type: 'mage_defeated', time: 0, stage: 4, enemyId: 'ash_beetle', enemyName: 'Ash Beetle' },
       { type: 'rebirth_performed', time: 0, knowledgeGained: '10', rebirths: 1 },
     ];
     const impact = planImpact(everything, () => true);
@@ -118,7 +118,7 @@ describe('planImpact', () => {
     const wave = Array.from({ length: 30 }, () => hit(true));
     expect(planImpact(wave).climax).toBe(false);
     expect(planImpact([...wave, killed(7)], (id) => id === 7).climax).toBe(true);
-    expect(planImpact([{ type: 'mage_defeated', time: 0, stage: 4 }]).climax).toBe(true);
+    expect(planImpact([{ type: 'mage_defeated', time: 0, stage: 4, enemyId: 'ash_beetle', enemyName: 'Ash Beetle' }]).climax).toBe(true);
   });
 
   it('flashes for a perfectly timed cast without freezing it', () => {

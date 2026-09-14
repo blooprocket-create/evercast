@@ -35,9 +35,16 @@ export interface GameLoopOptions {
    */
   scene: EvercastScene | null;
   onAwayProgress: (summary: OfflineSummary) => void;
+  /**
+   * Called once the away debt has been paid down - immediately on the first
+   * frame when nothing was owed. The boot gate waits on this, because the
+   * settle is one synchronous call of up to ten minutes of simulation and the
+   * gate used to be gone before it ran.
+   */
+  onAwaySettled?: () => void;
 }
 
-export function startGameLoop({ scene, onAwayProgress }: GameLoopOptions): () => void {
+export function startGameLoop({ scene, onAwayProgress, onAwaySettled }: GameLoopOptions): () => void {
   const backgroundProgressor = new OfflineProgressor(simulation.config.maxOfflineSeconds);
   let previous = performance.now();
   let publishAccumulator = 0;
@@ -117,6 +124,7 @@ export function startGameLoop({ scene, onAwayProgress }: GameLoopOptions): () =>
    * counter already past one and is swallowed until the six hundredth, which
    * loses the first trace of the incident that actually matters.
    */
+  let awayReported = false;
   let failureStreak = 0;
   const reportFrameFailure = (error: unknown) => {
     failureStreak += 1;
@@ -148,6 +156,17 @@ export function startGameLoop({ scene, onAwayProgress }: GameLoopOptions): () =>
         console.error('Evercast away progress could not be applied.', error);
         setAwayDebt(0);
       }
+    }
+    /*
+     * Reported after the attempt rather than after a success: a settle that
+     * threw has already been zeroed above, and a gate that stayed up over a
+     * failed catch-up would be the trap the ceiling exists to prevent. Latched,
+     * because later absences - a backgrounded tab - are settled by this same
+     * line and must not reopen anything.
+     */
+    if (!awayReported) {
+      awayReported = true;
+      onAwaySettled?.();
     }
 
     const frameMs = now - previous;

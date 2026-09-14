@@ -19,12 +19,19 @@
   border-color: var(--ink-mid);
 }
 
-/* Sits under the circle rather than inside it, so the node stays a node. */
+/*
+ * Sits under the circle rather than inside it, so the node stays a node - and
+ * holds its authored size whatever the zoom. Inside the graph's scaled layer a
+ * 10px label rendered at 10px times the zoom, which is 3-4px once the tree is
+ * fitted. `--label-scale` is the graph's inverse scale, handed down by the
+ * archetype.
+ */
 .name {
   position: absolute;
   top: calc(100% + 5px);
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-50%) scale(var(--label-scale, 1));
+  transform-origin: top center;
   white-space: nowrap;
   font: 600 var(--text-small) / 1 var(--font-display);
   color: var(--ink-mid);

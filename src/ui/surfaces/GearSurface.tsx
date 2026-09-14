@@ -64,6 +64,59 @@ export function GearSurface() {
 
   return (
     <Detail
+      /*
+        The primary verb of the primary economy, handed to the archetype so it
+        is pinned to the foot of the pane instead of ordered after the
+        description and the facts - which put it past the fold on every phone.
+      */
+      action={
+        <div className={styles.buy}>
+          <div className={styles.buyHead}>
+            <span className={styles.eyebrow} style={{ color: 'var(--ink-low)' }}>
+              Buy
+            </span>
+            <div className={styles.quantities}>
+              {QUANTITIES.map((option) => (
+                <button
+                  key={option.label}
+                  type="button"
+                  className={
+                    quantity === option.id ? `${styles.quantity} ${styles.quantityOn}` : styles.quantity
+                  }
+                  onClick={() => setQuantity(option.id)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className={styles.buyButton}
+            disabled={purchase.levels === 0}
+            onClick={() => runMany({ type: 'level_gear', slot: selected.slot }, purchase.levels)}
+          >
+            <span className={styles.buyText}>
+              <span>{buyLabel}</span>
+              {purchase.levels > 1 && (
+                <span className={styles.buySub}>
+                  {purchase.levels} level{purchase.levels === 1 ? '' : 's'}
+                  {purchase.levels < quantity && quantity !== GEAR_BULK_LIMIT
+                    ? ` of ${quantity} - all you can afford`
+                    : ''}
+                </span>
+              )}
+            </span>
+            <span className={styles.price}>
+              <NumberCell
+                value={purchase.levels === 0 ? selected.nextLevelCost : formatBig(purchase.total)}
+                title={purchase.levels === 0 ? undefined : `${purchase.total.toString()} gold total`}
+              />
+            </span>
+          </button>
+        </div>
+      }
       list={
         <Ledger
           items={gear}
@@ -119,53 +172,6 @@ export function GearSurface() {
             suffix={` ${selected.primaryStatLabel}`}
           />
         </div>
-      </div>
-
-      <div className={styles.buy}>
-        <div className={styles.buyHead}>
-          <span className={styles.eyebrow} style={{ color: 'var(--ink-low)' }}>
-            Buy
-          </span>
-          <div className={styles.quantities}>
-            {QUANTITIES.map((option) => (
-              <button
-                key={option.label}
-                type="button"
-                className={
-                  quantity === option.id ? `${styles.quantity} ${styles.quantityOn}` : styles.quantity
-                }
-                onClick={() => setQuantity(option.id)}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <button
-          type="button"
-          className={styles.buyButton}
-          disabled={purchase.levels === 0}
-          onClick={() => runMany({ type: 'level_gear', slot: selected.slot }, purchase.levels)}
-        >
-          <span className={styles.buyText}>
-            <span>{buyLabel}</span>
-            {purchase.levels > 1 && (
-              <span className={styles.buySub}>
-                {purchase.levels} level{purchase.levels === 1 ? '' : 's'}
-                {purchase.levels < quantity && quantity !== GEAR_BULK_LIMIT
-                  ? ` of ${quantity} - all you can afford`
-                  : ''}
-              </span>
-            )}
-          </span>
-          <span className={styles.price}>
-            <NumberCell
-              value={purchase.levels === 0 ? selected.nextLevelCost : formatBig(purchase.total)}
-              title={purchase.levels === 0 ? undefined : `${purchase.total.toString()} gold total`}
-            />
-          </span>
-        </button>
       </div>
 
       <Panel

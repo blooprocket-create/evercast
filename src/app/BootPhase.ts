@@ -8,13 +8,28 @@
  * costing. There is no separate loading screen because there is nothing for one
  * to do that the gate is not already doing.
  */
-export type BootPhase = 'preparing' | 'ready' | 'playing';
+export type BootPhase = 'preparing' | 'ready' | 'settling' | 'playing';
 
 export interface BootConditions {
   /** The scene reported its assets in, or the wait below was abandoned. */
   assetsSettled: boolean;
   /** The player pressed the button. */
   begun: boolean;
+  /**
+   * The away debt has been paid down, so the world on the other side of the
+   * gate is the world the player left.
+   *
+   * `GameLoop` settles an absence in one synchronous call on its first frame -
+   * up to ten minutes of simulation, which measured 1.3-2.0s of blocked main
+   * thread on a built-up save. The gate used to be gone by then, so the first
+   * seconds of every session were a frozen interface with nothing saying why,
+   * and anything that measured itself in that window came out wrong: opening
+   * the spell tree mid-stall gave a ResizeObserver viewport of {0,0}.
+   *
+   * Defaults to true so that a caller with nothing owed - and every existing
+   * test - keeps the two-state behaviour it had.
+   */
+  awaySettled?: boolean;
 }
 
 /**
@@ -36,7 +51,11 @@ export const ASSET_WAIT_CEILING_MS = 8_000;
  * scene and builds a new one, unsettling its assets - from throwing the gate
  * back up over a game already in progress.
  */
-export function bootPhase({ assetsSettled, begun }: BootConditions): BootPhase {
-  if (begun) return 'playing';
+export function bootPhase({
+  assetsSettled,
+  begun,
+  awaySettled = true,
+}: BootConditions): BootPhase {
+  if (begun) return awaySettled ? 'playing' : 'settling';
   return assetsSettled ? 'ready' : 'preparing';
 }
