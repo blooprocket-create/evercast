@@ -46,8 +46,10 @@
    *   greenfields       Color3(0.72, 0.80, 0.35)
    *   whispering_woods  Color3(0.34, 0.72, 0.46)
    *   gravehollow       Color3(0.50, 0.38, 0.62)
-   * Ashen Road has no authored biome in the renderer yet; this is provisional
-   * and drawn from the road and trunk browns already in the scene.
+   *   ashen_road        Color3(0.79, 0.54, 0.31)
+   * Ashen Road was the zone the renderer skipped - the biome cycle ran three
+   * against the content's four - so this used to be provisional. It is the
+   * authored accent now, and the world wears it too.
    */
   --accent-greenfields: #b8cc59;
   --accent-whispering-woods: #57b875;

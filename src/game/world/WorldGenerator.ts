@@ -18,8 +18,20 @@ import { chooseEnvironmentProp } from './EnvironmentPropCatalog';
 import { createTerrainChunk, createTerrainMaterials, terrainHeight, type TerrainPalette } from './WorldTerrain';
 import { createGroundDetails, createContactShadow } from './WorldGroundDetails';
 import { WorldBackdrop } from './WorldBackdrop';
+import { ZONES } from '../../content/zones';
+import { DEFAULT_ENGINE_CONFIG } from '../../engine/config';
+import { WORLD_UNITS_PER_ZONE, worldTravelSpeed } from './JourneyProgress';
 
-export type BiomeId = 'greenfields' | 'whispering_woods' | 'gravehollow';
+/**
+ * The rendered biomes are the authored zones, one for one, by id.
+ *
+ * They were three against the content's four, cycling on travel distance while
+ * the HUD named its zone from the stage - so the two agreed at the start of a
+ * run and nowhere after it. Observed at stage 766: the interface reading
+ * `Gravehollow` in purple over bright green Greenfields grass, with gravestones
+ * scattered through it.
+ */
+export type BiomeId = (typeof ZONES)[number]['id'];
 
 interface BiomeStyle {
   id: BiomeId;
@@ -61,14 +73,14 @@ const CHUNK_SIZE = 12;
 const VISIBLE_BEHIND = 4;
 const VISIBLE_AHEAD = 8;
 // Each region has a clear arrival, a settled landscape, and a gradual ecological drift.
-const SEGMENT_LENGTH = 120;
-const TRANSITION_LENGTH = 72;
-const CYCLE_LENGTH = SEGMENT_LENGTH * 3;
+const SEGMENT_LENGTH = WORLD_UNITS_PER_ZONE;
+const TRANSITION_LENGTH = SEGMENT_LENGTH * 0.6;
+const CYCLE_LENGTH = SEGMENT_LENGTH * ZONES.length;
 const WORLD_ANCHOR_X = 0;
 const FAR_LOOKAHEAD = 28;
 
-const BIOMES: readonly BiomeStyle[] = [
-  {
+const STYLES: Record<BiomeId, BiomeStyle> = {
+  greenfields: {
     id: 'greenfields',
     ground: new Color3(0.12, 0.19, 0.085),
     road: new Color3(0.23, 0.174, 0.092),
@@ -82,7 +94,7 @@ const BIOMES: readonly BiomeStyle[] = [
     ambient: 0.9,
     sun: 2.1,
   },
-  {
+  whispering_woods: {
     id: 'whispering_woods',
     ground: new Color3(0.036, 0.077, 0.043),
     road: new Color3(0.11, 0.10, 0.063),
@@ -96,7 +108,7 @@ const BIOMES: readonly BiomeStyle[] = [
     ambient: 0.96,
     sun: 1.85,
   },
-  {
+  gravehollow: {
     id: 'gravehollow',
     ground: new Color3(0.065, 0.056, 0.072),
     road: new Color3(0.135, 0.12, 0.117),
@@ -110,7 +122,59 @@ const BIOMES: readonly BiomeStyle[] = [
     ambient: 0.8,
     sun: 1.8,
   },
-] as const;
+  /*
+   * The zone the renderer never had. Ashen Road has been in `content/zones.ts`
+   * and in the HUD's accent since the beginning, and the world simply skipped
+   * it - which is half of why the two disagreed at all.
+   *
+   * Its props are the ones the road already owns: dead trees, bare rock,
+   * broken fences and rubble, none of them tinted by this palette. So the place
+   * is made by the ground, the air and the light - scorched earth, a pale ash
+   * road, the thickest fog in the game, and a low sun through it, which is the
+   * warmest light anywhere on the journey. The accent is the same amber
+   * `--accent-ashen-road` the interface has always worn here.
+   */
+  ashen_road: {
+    id: 'ashen_road',
+    ground: new Color3(0.108, 0.083, 0.064),
+    road: new Color3(0.2, 0.177, 0.158),
+    trunk: new Color3(0.085, 0.062, 0.052),
+    foliage: new Color3(0.2, 0.145, 0.075),
+    stone: new Color3(0.3, 0.275, 0.25),
+    accent: new Color3(0.79, 0.54, 0.31),
+    sky: new Color3(0.086, 0.055, 0.052),
+    fog: new Color3(0.26, 0.21, 0.185),
+    fogDensity: 0.027,
+    ambient: 0.88,
+    sun: 2.05,
+  },
+};
+
+/**
+ * In the zones' own order, so the segment a distance falls in *is* the zone a
+ * stage falls in. A zone added to the content without a style above is a type
+ * error here rather than a fourth biome quietly rendering as the third.
+ */
+const BIOMES: readonly BiomeStyle[] = ZONES.map((zone) => STYLES[zone.id]);
+
+/**
+ * The tree that makes each zone's skyline, where a zone has one. Gravehollow
+ * and Ashen Road share their dead trees; only the light on them differs.
+ */
+const CANOPY_TREE: Record<BiomeId, string> = {
+  greenfields: 'healthy_tree',
+  whispering_woods: 'dark_tree',
+  gravehollow: 'dead_tree',
+  ashen_road: 'dead_tree',
+};
+
+/** What stands at the mouth of each zone. */
+const LANDMARK_GATE: Record<BiomeId, string> = {
+  greenfields: 'graveyard_gate',
+  whispering_woods: 'forest_shrine_arch',
+  gravehollow: 'graveyard_gate',
+  ashen_road: 'ruined_arch',
+};
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
@@ -199,6 +263,8 @@ export class WorldGenerator {
   private readonly moteMaterial: StandardMaterial;
   private distance = 0;
   private visualTime = 0;
+  /** Overwritten from the snapshot on the first sync; see `setZoneLength`. */
+  private zoneLength = DEFAULT_ENGINE_CONFIG.zoneLength;
   private lastCenterIndex = Number.NaN;
 
   constructor(
@@ -228,9 +294,18 @@ export class WorldGenerator {
     this.rebuildVisibleChunks();
   }
 
+  /**
+   * The run's zone length, so the road walks one biome per zone of stages
+   * rather than per twenty-five of them. Set from the snapshot, which is where
+   * the HUD reads the same number.
+   */
+  setZoneLength(zoneLength: number): void {
+    this.zoneLength = zoneLength;
+  }
+
   update(deltaSeconds: number, walking: boolean): void {
     this.visualTime += deltaSeconds;
-    this.distance += walking ? deltaSeconds * 2.6 : 0;
+    this.distance += walking ? deltaSeconds * worldTravelSpeed(this.zoneLength) : 0;
     this.rebuildVisibleChunks();
     this.updateAtmosphere();
     this.updateMotes(deltaSeconds);
@@ -313,7 +388,9 @@ export class WorldGenerator {
     createGroundDetails(index, this.scene, this.terrainMaterials[0], this.paletteAt).parent = root;
     const center = index * CHUNK_SIZE;
     const arrival = wrap(center, CYCLE_LENGTH);
-    const landmark = center > 0 && (arrival === SEGMENT_LENGTH || arrival === SEGMENT_LENGTH * 2);
+    // One at the mouth of every zone but the first, whose mouth is the start.
+    const boundary = arrival / SEGMENT_LENGTH;
+    const landmark = center > 0 && Number.isInteger(boundary) && boundary > 0;
 
     this.addFarScenery(index, root);
     // Three spaced anchors create groves and clearings rather than a random pile of props.
@@ -324,18 +401,21 @@ export class WorldGenerator {
       const biome = random01(seed + 2) < style.t ? style.to.id : style.from.id;
       if (landmark && slot === 1) continue;
       const prop = chooseEnvironmentProp(biome, random01(seed + 10));
-      const id = slot === 0 && !landmark
-        ? biome === 'greenfields' ? `healthy_tree_${String.fromCharCode(97 + Math.floor(random01(seed + 18) * 3))}`
-          : biome === 'whispering_woods' ? `dark_tree_${String.fromCharCode(97 + Math.floor(random01(seed + 18) * 3))}`
-          : prop.id
-        : prop.id;
+      const canopy = CANOPY_TREE[biome];
+      const id =
+        slot === 0 && !landmark && canopy
+          ? `${canopy}_${String.fromCharCode(97 + Math.floor(random01(seed + 18) * 3))}`
+          : prop.id;
       const tall = /tree|fir|waystone|lantern|mausoleum|arch|gravestone|fence/.test(id);
       const z = tall ? 3.5 + random01(seed + 3) * 1.6 : 2.1 + random01(seed + 3) * 1.2;
       const scale = (id.includes('tree') ? 0.91 : prop.scale) * (0.9 + random01(seed + 4) * 0.2);
       this.placeProp(id, root, x, z, scale, (random01(seed + 5) - 0.5) * 0.6);
       if (tall && !id.includes('mausoleum')) {
-        const companion = biome === 'greenfields' ? (slot % 2 ? 'fallen_log' : 'rock_b')
-          : biome === 'whispering_woods' ? 'mossy_rock_a' : 'gravestone_b';
+        const companion =
+          biome === 'greenfields' ? (slot % 2 ? 'fallen_log' : 'rock_b')
+            : biome === 'whispering_woods' ? 'mossy_rock_a'
+              : biome === 'ashen_road' ? (slot % 2 ? 'rock_a' : 'small_ruin_stone')
+                : 'gravestone_b';
         this.placeProp(companion, root, x + 0.85, z - 0.65, biome === 'gravehollow' ? 0.55 : 0.4, random01(seed + 6) * 2);
       }
     }
@@ -354,17 +434,26 @@ export class WorldGenerator {
       } else if (biome === 'whispering_woods') {
         id = random01(seed + 3) < 0.48 ? 'forest_fern' : (slot % 3 ? 'mushroom_patch' : 'root_cluster');
         scale = 0.4 + random01(seed + 4) * 0.25;
-      } else {
+      } else if (biome === 'gravehollow') {
         if (slot % 3 !== 0) continue;
-        id = 'bone_pile_rubble';scale = 0.28 + random01(seed + 4) * 0.22;
+        id = 'bone_pile_rubble';
+        scale = 0.28 + random01(seed + 4) * 0.22;
+      } else {
+        // Sparser than anywhere else, because nothing grows here.
+        if (slot % 4 !== 0) continue;
+        id = random01(seed + 3) < 0.55 ? 'bone_pile_rubble' : 'small_ruin_stone';
+        scale = 0.26 + random01(seed + 4) * 0.2;
       }
       this.placeProp(id, root, x, z, scale, random01(seed + 5) * Math.PI * 2, false);
     }
 
     if (landmark) {
-      const shrine = arrival === SEGMENT_LENGTH;
-      this.placeProp(shrine ? 'forest_shrine_arch' : 'graveyard_gate', root, 0, 4.6, 1.35);
-      if (!shrine) {
+      // The gateway names the zone being entered, so it belongs to the biome
+      // on the far side of the boundary rather than to the one being left.
+      const entering = BIOMES[boundary % BIOMES.length]!.id;
+      const gate = LANDMARK_GATE[entering];
+      this.placeProp(gate, root, 0, 4.6, 1.35);
+      if (gate !== 'forest_shrine_arch') {
         this.placeProp('broken_fence_segment', root, -3.4, 4.6, 1.05);
         this.placeProp('broken_fence_segment', root, 3.4, 4.6, 1.05);
         this.placeProp('vigil_lantern', root, -2.1, 3.8, 0.95);
@@ -433,7 +522,7 @@ export class WorldGenerator {
     const count = biome === 'greenfields' ? 2 : 3;
     for (let slot = 0; slot < count; slot++) {
       const variant = String.fromCharCode(97 + Math.floor(random01(seed + slot + 9) * 3));
-      const family = biome === 'greenfields' ? 'healthy_tree' : biome === 'whispering_woods' ? 'dark_tree' : 'dead_tree';
+      const family = CANOPY_TREE[biome] ?? 'dead_tree';
       const id = biome === 'whispering_woods' && random01(seed + slot + 6) < 0.55 ? 'ancient_fir' : `${family}_${variant}`;
       this.placeProp(id, root, -4 + slot * (count === 2 ? 7 : 4),
         10.5 + random01(seed + slot + 8) * 5,
@@ -505,9 +594,8 @@ export class WorldGenerator {
     chunk.root.dispose();
   }
 
+  /** Debug overlay only. The player reads `zoneName` from the snapshot. */
   private prettyBiome(id: BiomeId): string {
-    if (id === 'greenfields') return 'Greenfields';
-    if (id === 'whispering_woods') return 'Whispering Woods';
-    return 'Gravehollow';
+    return ZONES.find((zone) => zone.id === id)?.name ?? id;
   }
 }

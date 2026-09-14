@@ -102,6 +102,51 @@
   color: var(--ink-num);
 }
 
+/* A meter that has not watched long enough to speak. See `RateMeter`. */
+.pending {
+  font: 500 var(--text-label) / 1 var(--font-ui);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+/* The chronicle's tail, in the room the surface was leaving empty. */
+.chronicle {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.entry {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-chip);
+  background: var(--veil-2);
+}
+
+.entryAt {
+  min-width: 4.5ch;
+  text-align: right;
+  font: 500 var(--text-label) / 1.3 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-dim);
+}
+
+.entryText {
+  font: 400 var(--text-small) / 1.35 var(--font-ui);
+  color: var(--ink-mid);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The newest is the one being read. */
+.entry:first-child .entryText {
+  color: var(--ink);
+}
+
 /*
  * Narrow enough that a row cannot hold all four of its parts on one line.
  *

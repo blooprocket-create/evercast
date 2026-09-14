@@ -7,6 +7,7 @@ import type { GearSnapshot } from '../../engine/types';
 import { Detail } from '../archetypes/Detail';
 import { Ledger } from '../archetypes/Ledger';
 import { NumberCell } from '../format/NumberCell';
+import { affordabilityLabel } from '../format/timeToAfford';
 import type { IconName } from '../icons/names';
 import { Panel } from '../primitives/Panel';
 import { Row } from '../primitives/Row';
@@ -62,6 +63,12 @@ export function GearSurface() {
         ? 'Level up'
         : `Level to ${selected.level + purchase.levels}`;
 
+  // Only when the button is not already the answer.
+  const wait =
+    purchase.levels === 0
+      ? affordabilityLabel(selected.nextLevelCost.raw, snapshot.gold.raw, snapshot.income.gold?.raw)
+      : null;
+
   return (
     <Detail
       /*
@@ -107,6 +114,13 @@ export function GearSurface() {
                     : ''}
                 </span>
               )}
+              {/*
+                What the price costs in time, which is the question the number
+                beside it cannot answer on its own: 5.92e50 against 1.21e47 is
+                three and a half orders of magnitude, and whether that is two
+                minutes or two days depends on a rate nothing showed.
+              */}
+              {wait !== null && <span className={styles.buySub}>{wait}</span>}
             </span>
             <span className={styles.price}>
               <NumberCell

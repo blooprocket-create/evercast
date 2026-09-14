@@ -1,9 +1,13 @@
 import { ZONES } from '../../content/zones';
 
 /**
- * Which accent the interface wears. The renderer cycles biomes by travel
- * distance rather than by zone, so the UI keys off the zone the snapshot
- * reports — the same thing the player reads in the corner of the HUD.
+ * Which accent the interface wears, keyed off the zone the snapshot reports -
+ * the same thing the player reads in the corner of the HUD.
+ *
+ * The renderer used to cycle its biomes by travel distance over a list of
+ * three, against the content's four zones, so the accent and the terrain drifted
+ * apart within a single run. They are the same list now; see
+ * `WorldGenerator`'s `BIOMES` and `WORLD_UNITS_PER_ZONE`.
  */
 export type BiomeAccent =
   | 'greenfields'

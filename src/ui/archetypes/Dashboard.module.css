@@ -1,6 +1,21 @@
+/*
+ * A measure, not the width of the screen.
+ *
+ * Every track was `1fr`, so extra width became more columns rather than wider
+ * ones: at 1920 the stat row ran six cards across and the equipment list four,
+ * which was narrow enough that the item names were dropped entirely - `HELM Lv
+ * 1596 +1.05e48` with nothing saying what the helm was - while 500px of the
+ * row and most of the viewport sat empty. Capping the columns is what makes
+ * extra width widen a cell instead of adding one: the grids inside are all
+ * `auto-fill` against a minimum, so they follow this without knowing about it.
+ *
+ * `justify-content: center` rather than `margin: auto`, because the scroll
+ * container is this element and centring it would centre its scrollbar too.
+ */
 .dashboard {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 72rem);
+  justify-content: center;
   gap: var(--space-5);
   padding: var(--space-5);
   overflow-y: auto;
@@ -9,7 +24,7 @@
 }
 
 .withAside {
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 24rem);
+  grid-template-columns: minmax(0, 48rem) minmax(280px, 24rem);
 }
 
 .main {
@@ -41,7 +56,9 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  /* The screen is the measure here; there is no width to give back. */
   .dashboard {
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-4);
     padding: var(--space-4) max(var(--space-3), var(--safe-right)) var(--space-4)
       max(var(--space-3), var(--safe-left));
@@ -63,6 +80,10 @@
 }
 
 @media (max-height: 520px) and (min-width: 640px) and (orientation: landscape) {
+  .dashboard {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .withAside {
     grid-template-columns: minmax(0, 1fr) minmax(240px, 20rem);
   }

@@ -82,15 +82,33 @@
   font-size: var(--text-small);
 }
 
+/*
+ * A button now, not a label. It was a picture of a formation with nothing in
+ * it to press; pressing a name selects that companion's slot. The touch height
+ * is the shell's, because on a phone this is the fastest way into a slot.
+ */
 .chip {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--rarity);
+  min-height: var(--touch-target);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--rarity, var(--line));
   border-radius: var(--radius-pill);
-  color: var(--rarity);
+  background: transparent;
+  color: var(--rarity, var(--ink-low));
   font: 500 var(--text-small) / 1 var(--font-ui);
+  cursor: pointer;
+}
+
+.chip:hover {
+  background: var(--veil-2);
+}
+
+/* The slot the pane below is describing. */
+.chipOn {
+  background: color-mix(in srgb, var(--rarity, var(--accent)) 16%, transparent);
+  box-shadow: inset 0 0 0 1px var(--rarity, var(--accent-ink));
 }
 
 .chipDown {

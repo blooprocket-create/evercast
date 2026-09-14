@@ -45,6 +45,8 @@ const snapshot = () =>
     nextKnowledgeStage: 1,
       rebirthKnowledgeGain: big(0),
     chronicle: [],
+    income: { gold: null, essence: null, knowledge: null, starlight: null },
+    stagesPerSecond: null,
     lastDefeat: null,
   });
 const mode = document.querySelector<HTMLSelectElement>('#mode')!;

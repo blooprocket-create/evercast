@@ -13,7 +13,8 @@ import { EncounterSystem } from './encounters/EncounterSystem';
 import { EventBus } from './events/EventBus';
 import type { GameEvent } from './events/GameEvent';
 import { Chronicle } from './events/Chronicle';
-import type { DefeatSnapshot } from './types';
+import { RateMeter } from './rates/RateMeter';
+import type { DefeatSnapshot, ResourceKind } from './types';
 import { GearSystem } from './gear/GearSystem';
 import { EPSILON, EncounterLoop } from './loop/EncounterLoop';
 import type { GameState } from './model';
@@ -46,6 +47,12 @@ export class EvercastSimulation {
   private readonly gachaSystem: GachaSystem;
   private recordPresentationEvents = true;
   private readonly chronicle = new Chronicle();
+  /**
+   * One meter for everything the run produces. `stage` is in it because a
+   * climb rate is the same kind of question as an income - "how long until"
+   * - and the audit found the interface answering neither.
+   */
+  private readonly income = new RateMeter<ResourceKind | 'stage'>();
   /**
    * The last defeat, kept from the event rather than reconstructed later. See
    * `DefeatSnapshot` for why the interface cannot work it out for itself.
@@ -108,7 +115,11 @@ export class EvercastSimulation {
             `Simulation safety limit exceeded while advancing ${seconds}s (${steps} steps).`,
           );
         }
-        remaining -= this.loop.step(this.state, remaining);
+        const consumed = this.loop.step(this.state, remaining);
+        remaining -= consumed;
+        // After the step, so everything it earned is in the sample it belongs
+        // to rather than in the one before it.
+        this.income.tick(consumed);
       }
     } finally {
       if (!this.recordPresentationEvents) clearTelegraphs(this.state.run);
@@ -238,6 +249,13 @@ export class EvercastSimulation {
       nextKnowledgeStage: this.rebirthSystem.nextKnowledgeStage(this.state),
       lastSummon: this.lastSummon,
       chronicle: this.chronicle.read(),
+      income: {
+        gold: this.income.read('gold'),
+        essence: this.income.read('essence'),
+        knowledge: this.income.read('knowledge'),
+        starlight: this.income.read('starlight'),
+      },
+      stagesPerSecond: this.income.read('stage'),
       lastDefeat: this.lastDefeat,
     });
   }
@@ -254,6 +272,18 @@ export class EvercastSimulation {
     // What is worth a line, and what is a telegraph for the renderer to
     // animate, is `logWeight`'s decision rather than one taken twice.
     this.chronicle.record(event);
+    if (event.type === 'resource_gained') this.income.add(event.resource, event.amount);
+    if (event.type === 'stage_advanced') this.income.add('stage', '1');
+    /*
+     * A rebirth is a new run, and the meter has to be told so.
+     *
+     * Everything it had measured belongs to the state the rebirth just spent:
+     * the same second that resets the frontier to 1 leaves a gold rate earned
+     * at stage 900 sitting in the average. Nothing else in the simulation
+     * carries a memory across this line, and a rate that did would make every
+     * price in the new run read as affordable now.
+     */
+    if (event.type === 'rebirth_performed') this.income.reset();
     if (event.type === 'mage_defeated') {
       this.defeats += 1;
       this.lastDefeat = { serial: this.defeats, stage: event.stage, enemyName: event.enemyName };
