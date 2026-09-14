@@ -13,7 +13,7 @@ import {
   totalSpellPoints,
   unspentSpellPoints,
 } from '../spellTree/SpellTreeSystem';
-import type { LastSummonSnapshot, SimulationSnapshot } from '../types';
+import type { DefeatSnapshot, LastSummonSnapshot, SimulationSnapshot } from '../types';
 import type { ChronicleLine } from '../events/Chronicle';
 import { buildCompanionSnapshots } from './CompanionSnapshotBuilder';
 import { wizardPerHit } from '../companions/CompanionCombat';
@@ -30,6 +30,7 @@ export interface SimulationSnapshotBuildContext {
   nextKnowledgeStage: number;
   lastSummon: LastSummonSnapshot | null;
   chronicle: readonly ChronicleLine[];
+  lastDefeat: DefeatSnapshot | null;
 }
 
 export function buildSimulationSnapshot({
@@ -41,6 +42,7 @@ export function buildSimulationSnapshot({
   nextKnowledgeStage,
   lastSummon,
   chronicle,
+  lastDefeat,
 }: SimulationSnapshotBuildContext): SimulationSnapshot {
   const run = state.run;
   // The same enemy the spell is aimed at, or the readout names one thing while
@@ -145,6 +147,7 @@ export function buildSimulationSnapshot({
       };
     }),
     chronicle,
+    lastDefeat,
   };
 }
 

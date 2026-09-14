@@ -100,6 +100,25 @@ export interface LastSummonSnapshot {
   results: SummonResultSnapshot[];
 }
 
+/**
+ * The last time the mage fell, as a fact rather than an inference.
+ *
+ * The interface used to derive this: watch the death counter, and name
+ * whichever enemy happened to be on screen the tick before it moved. A
+ * catch-up settles a whole absence before publishing one snapshot, so that
+ * enemy is the one from before the absence - or, for a defeat that happened
+ * while nobody was watching, nothing at all.
+ *
+ * `serial` counts up for the life of the session and never repeats, so a
+ * reader can tell a new defeat from a re-render without comparing anything
+ * else.
+ */
+export interface DefeatSnapshot {
+  serial: number;
+  stage: number;
+  enemyName: string;
+}
+
 export interface SimulationSnapshot {
   spellMechanics?: import('./spell/SpellMechanics').SpellMechanics;
   combatState?: import('./combat/SpellCombatState').SpellCombatState;
@@ -197,6 +216,8 @@ export interface SimulationSnapshot {
    * and the one line was hidden below 860px anyway.
    */
   chronicle: readonly ChronicleLine[];
+  /** Null until the mage falls in this session. See `DefeatSnapshot`. */
+  lastDefeat: DefeatSnapshot | null;
 }
 
 export type EngineCommand =

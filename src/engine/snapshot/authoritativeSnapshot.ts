@@ -5,19 +5,20 @@ import type { SimulationSnapshot } from '../types';
  * state.
  *
  * Two simulations that hold identical state can legitimately disagree about
- * the chronicle: it is a session log with its own monotonic counter, it is
- * deliberately not saved, and a run resumed from a save therefore starts it
- * empty while the run that never stopped carries what came before. Comparing
- * full snapshots to prove a save round-trip lost nothing would be asserting
- * that it *did* carry that - which is the opposite of the design.
+ * the chronicle and the last defeat: both are session records with their own
+ * monotonic counters, neither is saved, and a run resumed from a save
+ * therefore starts them empty while the run that never stopped carries what
+ * came before. Comparing full snapshots to prove a save round-trip lost
+ * nothing would be asserting that it *did* carry them - which is the opposite
+ * of the design.
  *
  * Lives here rather than in a test file because it is a fact about the read
  * model, and the next ephemeral field added to it needs one obvious place to
  * be declared rather than two test files to be remembered in.
  */
-export type AuthoritativeSnapshot = Omit<SimulationSnapshot, 'chronicle'>;
+export type AuthoritativeSnapshot = Omit<SimulationSnapshot, 'chronicle' | 'lastDefeat'>;
 
 export function authoritativeSnapshot(snapshot: SimulationSnapshot): AuthoritativeSnapshot {
-  const { chronicle: _sessionLog, ...authoritative } = snapshot;
+  const { chronicle: _sessionLog, lastDefeat: _sessionFall, ...authoritative } = snapshot;
   return authoritative;
 }

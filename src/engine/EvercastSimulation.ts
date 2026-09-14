@@ -13,6 +13,7 @@ import { EncounterSystem } from './encounters/EncounterSystem';
 import { EventBus } from './events/EventBus';
 import type { GameEvent } from './events/GameEvent';
 import { Chronicle } from './events/Chronicle';
+import type { DefeatSnapshot } from './types';
 import { GearSystem } from './gear/GearSystem';
 import { EPSILON, EncounterLoop } from './loop/EncounterLoop';
 import type { GameState } from './model';
@@ -45,6 +46,12 @@ export class EvercastSimulation {
   private readonly gachaSystem: GachaSystem;
   private recordPresentationEvents = true;
   private readonly chronicle = new Chronicle();
+  /**
+   * The last defeat, kept from the event rather than reconstructed later. See
+   * `DefeatSnapshot` for why the interface cannot work it out for itself.
+   */
+  private lastDefeat: DefeatSnapshot | null = null;
+  private defeats = 0;
   private lastSummon: LastSummonSnapshot | null = null;
 
   constructor(options: SimulationOptions = {}) {
@@ -231,6 +238,7 @@ export class EvercastSimulation {
       nextKnowledgeStage: this.rebirthSystem.nextKnowledgeStage(this.state),
       lastSummon: this.lastSummon,
       chronicle: this.chronicle.read(),
+      lastDefeat: this.lastDefeat,
     });
   }
 
@@ -246,6 +254,10 @@ export class EvercastSimulation {
     // What is worth a line, and what is a telegraph for the renderer to
     // animate, is `logWeight`'s decision rather than one taken twice.
     this.chronicle.record(event);
+    if (event.type === 'mage_defeated') {
+      this.defeats += 1;
+      this.lastDefeat = { serial: this.defeats, stage: event.stage, enemyName: event.enemyName };
+    }
     if (this.recordPresentationEvents) this.presentationEvents.push(event);
   }
 }

@@ -11,7 +11,9 @@ const stage = (n: number): GameEvent => ({ type: 'stage_advanced', time: n, stag
 const kill = (n: number): GameEvent => ({
   type: 'enemy_killed', time: n, stage: 1, instanceId: n, enemyId: 'moss_slime', gold: '3',
 });
-const defeat = (n: number): GameEvent => ({ type: 'mage_defeated', time: n, stage: n });
+const defeat = (n: number): GameEvent => ({
+  type: 'mage_defeated', time: n, stage: n, enemyId: 'ash_beetle', enemyName: 'Ash Beetle',
+});
 
 describe('what earns a line', () => {
   it('classifies every variant in the union', () => {
@@ -70,7 +72,7 @@ describe('the chronicle', () => {
 
     expect(chronicle.read().map((line) => line.text)).toEqual([
       'Frontier advanced to stage 2.',
-      'The mage falls at stage 3.',
+      'Ash Beetle brings the mage down at stage 3.',
       'Frontier advanced to stage 4.',
     ]);
   });
@@ -96,7 +98,9 @@ describe('the chronicle', () => {
     const lines = chronicle.read();
     expect(lines).toHaveLength(CHRONICLE_DEPTH);
     // The newest survive, not the oldest: what the player missed is the tail.
-    expect(lines[lines.length - 1]!.text).toBe(`The mage falls at stage ${CHRONICLE_DEPTH * 5}.`);
+    expect(lines[lines.length - 1]!.text).toBe(
+      `Ash Beetle brings the mage down at stage ${CHRONICLE_DEPTH * 5}.`,
+    );
   });
 
   it('numbers its lines monotonically, folded ones included', () => {
