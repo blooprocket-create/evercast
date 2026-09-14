@@ -20,7 +20,7 @@ anything about what just happened. Nearly every finding below is of that kind.
 1. [How this was measured](#1-how-this-was-measured)
 2. [Executive summary](#2-executive-summary)
 3. [Severity index](#3-severity-index)
-4. [Blocking defects](#4-blocking-defects)
+4. [The four that matter most](#4-the-four-that-matter-most)
 5. [Layout and responsive behaviour](#5-layout-and-responsive-behaviour)
 6. [Navigation and information architecture](#6-navigation-and-information-architecture)
 7. [The HUD and game feel](#7-the-hud-and-game-feel)
@@ -83,16 +83,18 @@ The ten things that matter most, in order.
 1. **Rebirth is a navigation trap.** Opening it covers the header, the Back
    button and the whole nav rail with its own 72%-opaque scrim, which also
    swallows clicks. On a phone there is no Escape key, so the only way out is
-   a shelf slot. [BLK-1](#blk-1-the-rebirth-surface-traps-the-player)
+   a shelf slot. [BLK-1](#blk-1-the-rebirth-surface-traps-the-player--s1)
 2. **The spell tree — the game's headline system — is unusable on a phone and
    barely usable on a desktop.** The fit is clamped at 25%, so on a phone the
    graph is cut off on all four sides and *cannot be fitted*; `Fit` is a no-op.
    No node at any viewport reaches 44px, and the 63 `minor` nodes measure
    6-12px. The minimap is disabled on exactly the screens that need it.
-   [BLK-2](#blk-2-the-spell-tree-cannot-be-fitted-or-aimed-at)
-3. **The primary action of the Gear screen is below the fold on a phone**,
-   with no scroll affordance. Buying gear levels is the core loop.
-   [BLK-3](#blk-3-the-gear-buy-control-is-below-the-fold-on-a-phone)
+   [BLK-2](#blk-2-the-spell-tree-cannot-be-fitted-or-aimed-at--s1)
+3. **The primary action of the Gear screen is clipped out of sight on every
+   phone**, with no scroll affordance — it is reachable, but only once the
+   player guesses to scroll a pane that gives no sign of scrolling. Buying gear
+   levels is the core loop, and three other surfaces do the same thing.
+   [BLK-3](#blk-3-the-gear-buy-control-is-below-the-fold-on-a-phone--s2)
 4. **Nothing tells you that you died.** The mage falling — the only real
    failure state — produces one log line that the next event overwrites a
    second later, and a quiet change of a pill from `PUSHING` to `FARMING n`.
@@ -140,12 +142,16 @@ are all better than the norm. The problems are on top of a good foundation.
 frustrates.
 **S3 — polish**: quality gap against a AAA bar.
 
+Counts: **2 S1, 31 S2, 18 S3**. Two findings in section 4 are S2 and are
+grouped there for reach rather than severity; the rubric decides the label,
+the placement is editorial.
+
 | Id | Severity | Area | Finding |
 | --- | --- | --- | --- |
-| [BLK-1](#blk-1-the-rebirth-surface-traps-the-player) | S1 | Rebirth | Moment scrim covers and blocks the header and rail |
-| [BLK-2](#blk-2-the-spell-tree-cannot-be-fitted-or-aimed-at) | S1 | Spell tree | Fit clamped at 25%; graph unfittable on a phone; 6-9px targets |
-| [BLK-3](#blk-3-the-gear-buy-control-is-below-the-fold-on-a-phone) | S1 | Gear | Buy control below the fold, no affordance |
-| [BLK-4](#blk-4-the-first-frame-after-continue-blocks-for-seconds) | S2 | Boot | Away settle blocks the main thread in one burst |
+| [BLK-1](#blk-1-the-rebirth-surface-traps-the-player--s1) | S1 | Rebirth | Moment scrim covers and blocks the header and rail |
+| [BLK-2](#blk-2-the-spell-tree-cannot-be-fitted-or-aimed-at--s1) | S1 | Spell tree | Fit clamped at 25%; graph unfittable on a phone; 6-12px targets |
+| [BLK-3](#blk-3-the-gear-buy-control-is-below-the-fold-on-a-phone--s2) | S2 | Gear | Buy control clipped by the pane, no scroll affordance |
+| [BLK-4](#blk-4-the-first-frame-after-continue-blocks-for-seconds--s2) | S2 | Boot | Away settle blocks the main thread in one burst |
 | [LAY-1](#lay-1-surfaces-do-not-use-the-screen) | S2 | All | 30-60% dead space on desktop; truncation at 1920 |
 | [LAY-2](#lay-2-the-shelf-vitals-wrap-between-621px-and-860px) | S2 | Shelf | Vitality readout wraps into the meter |
 | [LAY-3](#lay-3-two-stacked-scroll-regions-with-no-affordance) | S2 | Detail/Graph | Two scrollers, no fade, content cut mid-row |
@@ -164,7 +170,7 @@ frustrates.
 | [FEEL-2](#feel-2-rebirth-is-irreversible-and-unconfirmed) | S2 | Feel | One click, no confirm, no itemised preview |
 | [FEEL-3](#feel-3-respec-is-the-same) | S2 | Feel | 105 points undone with no confirmation |
 | [FEEL-4](#feel-4-the-hud-and-the-world-name-different-places) | S2 | Feel | Zone name/accent decoupled from rendered biome |
-| [FEEL-5](#feel-5-no-reward-beat-for-anything-but-a-summon) | S3 | Feel | Evolution, rebirth, new zone, milestone all silent |
+| [FEEL-5](#feel-5-the-reward-beats-are-audio-only) | S3 | Feel | Evolution, rebirth and apex have a cue but no visual beat |
 | [SUR-*](#8-surface-by-surface) | S2/S3 | Surfaces | See section 8 |
 | [TYP-1](#typ-1-the-game-ships-no-fonts) | S2 | Type | Georgia/Inter with no webfont |
 | [TYP-2](#typ-2-numbers-are-not-actually-aligned) | S2 | Type | Suffix inside the cell breaks the column |
@@ -181,9 +187,15 @@ frustrates.
 
 ---
 
-## 4. Blocking defects
+## 4. The four that matter most
 
-### BLK-1: the Rebirth surface traps the player
+Two of these are S1 — the player genuinely cannot do the thing. Two are the
+worst S2s in the audit and are listed here because their reach is wider than
+anything in section 5, not because they block outright; each says which it is
+and why. Every one was reproduced in the running app and measured in the live
+DOM, not inferred from source.
+
+### BLK-1: the Rebirth surface traps the player — S1
 
 **Severity S1. Every viewport. Reproduced at 1280x800, 1024x768, 1180x820,
 820x1180 and 390x844.**
@@ -227,9 +239,16 @@ moment paints a scrim.
 
 ---
 
-### BLK-2: the spell tree cannot be fitted, or aimed at
+### BLK-2: the spell tree cannot be fitted, or aimed at — S1
 
 **Severity S1. Worst on phones; present everywhere.**
+
+The S1 part is specific: on a phone there is **no gesture that shows the whole
+tree**. `Fit` recomputes a transform the clamp has already pinned, and the
+minimap that would substitute for it is switched off at that width — so
+"see the graph I am navigating" is not an action the player can complete at
+all. The 6px targets are severe but not blocking on their own, because pinch
+zoom makes a node hittable.
 
 Three separate problems compound on the game's headline system.
 
@@ -307,9 +326,26 @@ labels below ~50% zoom and show the selected node's label always.
 
 ---
 
-### BLK-3: the Gear buy control is below the fold on a phone
+### BLK-3: the Gear buy control is below the fold on a phone — S2
 
-**Severity S1. 390x844, 360x800, 320x568. Both `fresh` and `late` saves.**
+**Severity S2, reclassified from S1 after review. 390x844, 844x390, 320x568.
+Both `fresh` and `late` saves.**
+
+Filed S1 first, and that was wrong by this document's own rubric: the pane does
+scroll, so the action is reachable. Measured on the `late` save, tracking the
+buy button's own box against the pane that clips it:
+
+```
+viewport   pane (scrollHeight/clientHeight)   button before      after scrolling the pane
+390x844    534 / 305                          y 736-792  clipped  y 507-563  visible
+844x390    508 / 253                          y 396-452  clipped  y 141-197  visible
+320x568    534 / 153                          y 612-668  clipped  y 231-287  visible
+```
+
+So this is S2 — "the action is possible but the screen hides it" — and it is
+listed here rather than in section 5 because it is the widest-reaching S2 in
+the audit: it is the primary verb of the primary economy, on the platform
+where most play happens, and the same shape repeats on three other surfaces.
 
 `Detail` gives the list a `max-height: 45%` band and the pane the rest. On a
 390x844 phone, once the header (56px), the rail strip (61px), the list band
@@ -337,7 +373,7 @@ bottom fade whenever it has hidden content. Ordering the pane
 
 ---
 
-### BLK-4: the first frame after Continue blocks for seconds
+### BLK-4: the first frame after Continue blocks for seconds — S2
 
 **Severity S2 (S1 on a slow phone). All viewports.**
 
@@ -649,10 +685,13 @@ The mage falling is the only failure state in the game. What the player gets:
 - the mode pill quietly changing from `PUSHING` to `FARMING 766`,
 - plus a `Retry Frontier` button appearing beside the wallets.
 
-There is no screen, no sound cue called out in the UI, no shake, no summary of
-what killed you. `Moment` exists for exactly this — `WelcomeBack`'s own doc
-comment describes it as "the same component the defeat and rebirth screens
-use", and **there is no defeat screen**. A new player's first death is
+There *is* a sound: `AudioCuePlan.ts` maps `mage_defeated` to a `defeat` cue at
+gain 0.9, one of the loudest in the file. What there is none of is anything on
+screen — no moment, no shake, no summary of what killed you, nothing that
+survives the sound being off or the next log line arriving. `Moment` exists for
+exactly this: `WelcomeBack`'s own doc comment describes it as "the same
+component the defeat and rebirth screens use", and **there is no defeat
+screen**. A new player's first death is
 therefore: a button they were not told about appears, labelled `Retry
 Frontier`, next to a pill that now says `FARMING 4`, with no explanation of
 either.
@@ -689,20 +728,39 @@ and a blue-green sky — Greenfields terrain, with Gravehollow props (mausoleum,
 gravestones, bone piles) scattered through it. The interface and the world are
 telling the player two different things about where they are.
 
-### FEEL-5: no reward beat for anything but a summon
+### FEEL-5: the reward beats are audio-only
 
-The game has exactly one celebration: the summon reveal. Nothing marks
+The audio layer is further ahead than the interface here, and the gap is
+specifically visual. `AudioCuePlan.ts` already authors distinct cues for the
+moments that matter:
 
-- a gear piece evolving into a new tier (six tiers, eight slots — 48 events),
-- a rebirth completing,
-- entering a new zone,
-- a capstone/apex spell node being awakened,
-- a new best frontier,
-- a companion reaching a new star level.
+| Event | Cue | Gain |
+| --- | --- | --- |
+| `gear_evolved`, `spell_node_activated` | `awaken` | 0.7 |
+| `rebirth_performed` | `rebirth` | 1.0 — the loudest in the file |
+| `stage_advanced` | `advance` | 0.5 |
+| `gear_leveled`, `spell_point_purchased` | `levelUp` | 0.45 |
+| `mage_defeated` | `defeat` | 0.9 |
+| a boss dying | `bossKill` | 0.9 |
 
-All of them are log lines. For a game whose entire loop is "numbers get
-bigger", the moments where something *qualitatively* changes are the ones
-worth staging, and none of them are.
+So the claim is not that these moments pass unmarked — it is that **on screen**
+each one is a single line in a log that the next event overwrites, and on a
+phone that log is not rendered at all
+([HUD-2](#hud-2-the-log-is-a-single-line-and-disappears-below-860px)). A player with the
+sound off, or on a phone in public, gets nothing for a gear tier, a rebirth or
+an apex node. The summon reveal remains the only event with any visual
+staging.
+
+Three moments have no cue of their own either:
+
+- **entering a new zone** — `stage_advanced` fires for every stage, so crossing
+  from Greenfields into Whispering Woods sounds exactly like stage 412,
+- **a new best frontier**,
+- **a companion reaching a new star level** (`companion_ascended`).
+
+For a game whose entire loop is "numbers get bigger", the moments where
+something *qualitatively* changes are the ones worth staging, and the staging
+currently exists in one medium only.
 
 ---
 
@@ -729,7 +787,7 @@ Gaps:
   is no progress at all. On a cold load the ceiling is 8 seconds, and
   "Gathering the world" with a static line under it is a long time to show
   nothing — especially as the same wait is charged again, invisibly, after the
-  button is pressed (see [BLK-4](#blk-4-the-first-frame-after-continue-blocks-for-seconds)).
+  button is pressed (see [BLK-4](#blk-4-the-first-frame-after-continue-blocks-for-seconds--s2)).
 
 ### SUR-CHR: Character
 
@@ -755,7 +813,7 @@ Gaps:
 
 ### SUR-TREE: Spell Tree
 
-Covered in [BLK-2](#blk-2-the-spell-tree-cannot-be-fitted-or-aimed-at). Beyond
+Covered in [BLK-2](#blk-2-the-spell-tree-cannot-be-fitted-or-aimed-at--s1). Beyond
 the blocking issues:
 
 - The inspector header reads `CORE · CORE` for the root node — kind and region
@@ -776,7 +834,7 @@ the blocking issues:
 
 ### SUR-GEAR: Gear
 
-- [BLK-3](#blk-3-the-gear-buy-control-is-below-the-fold-on-a-phone).
+- [BLK-3](#blk-3-the-gear-buy-control-is-below-the-fold-on-a-phone--s2).
 - The list shows contribution, not price, so choosing what to level requires
   opening each slot in turn. Eight slots, one at a time.
 - No damage-per-gold or "best value" hint, and no way to sort.
@@ -910,7 +968,7 @@ the blocking issues:
 
 ### SUR-REB: Rebirth
 
-- [BLK-1](#blk-1-the-rebirth-surface-traps-the-player) and
+- [BLK-1](#blk-1-the-rebirth-surface-traps-the-player--s1) and
   [FEEL-2](#feel-2-rebirth-is-irreversible-and-unconfirmed).
 - The `Mastery x15.36` cell and the hint sentence state the same number twice.
 - A 560px card on a 1440px screen with ~60% of the width and ~22% of the
@@ -1161,7 +1219,7 @@ Settings has Audio, Display and Account. There is no:
   who is standing.
 - **The rail strip has no `aria` affordance for its scrollability**, and no
   keyboard way to reach the entries scrolled out of view other than Tab.
-- **Rebirth's scrim** ([BLK-1](#blk-1-the-rebirth-surface-traps-the-player)) is
+- **Rebirth's scrim** ([BLK-1](#blk-1-the-rebirth-surface-traps-the-player--s1)) is
   `role="group"` covering interactive content — the content is still in the
   accessibility tree and still focusable, but not clickable. That mismatch
   between what a screen reader can reach and what a pointer can reach is its
@@ -1273,8 +1331,9 @@ incremental or a mobile RPG would expect to find and does not.
 
 - **A defeat moment** ([FEEL-1](#feel-1-death-is-invisible)) that names what
   killed you and what the farm fallback is doing.
-- **Reward beats** for evolution, apex nodes, new zones and new bests
-  ([FEEL-5](#feel-5-no-reward-beat-for-anything-but-a-summon)).
+- **Visual reward beats** for evolution, apex nodes, new zones and new bests —
+  the audio cues already exist, the screen shows nothing
+  ([FEEL-5](#feel-5-the-reward-beats-are-audio-only)).
 - **Toasts.** There is no transient notification channel at all, so
   everything either takes a full-screen moment or vanishes into a one-line log.
 - **A real log.** Scrollable, filterable by kind, and present on phones.
@@ -1313,7 +1372,7 @@ Ordered by (player impact ÷ effort), not by section order.
 
 1. `.surface { position: relative }` in `SurfaceHost.module.css`, or drop the
    scrim background/pointer-events for `modal={false}`. Fixes
-   [BLK-1](#blk-1-the-rebirth-surface-traps-the-player). One line.
+   [BLK-1](#blk-1-the-rebirth-surface-traps-the-player--s1). One line.
 2. Fix the `WelcomeBack` clock ([TXT-2](#txt-2-the-welcome-back-clock-is-wrong)).
    A few lines and a unit test.
 3. Name the effects, statuses, combat states and gear slots in
@@ -1324,7 +1383,7 @@ Ordered by (player impact ÷ effort), not by section order.
 5. Show the wallet labels, or icons, below 560px
    ([A11Y-1](#a11y-1-wallets-are-colour-only-below-560px)).
 6. Drop the fit clamp so `Fit` can actually fit
-   ([BLK-2](#blk-2-the-spell-tree-cannot-be-fitted-or-aimed-at) (a)).
+   ([BLK-2](#blk-2-the-spell-tree-cannot-be-fitted-or-aimed-at--s1) (a)).
 7. Add `scrollIntoView` for the active nav-rail entry, and an edge fade on the
    strip ([NAV-2](#nav-2-the-rail-never-shows-where-you-are)).
 8. Ungate the HUD enemy card from `boss`
@@ -1334,7 +1393,7 @@ Ordered by (player impact ÷ effort), not by section order.
 
 9. **Sticky action region in `Detail` and `Dashboard`** on short viewports,
    plus a scroll-fade on every archetype scroller. Fixes
-   [BLK-3](#blk-3-the-gear-buy-control-is-below-the-fold-on-a-phone),
+   [BLK-3](#blk-3-the-gear-buy-control-is-below-the-fold-on-a-phone--s2),
    [LAY-3](#lay-3-two-stacked-scroll-regions-with-no-affordance) and
    [SUR-SHORT](#sur-short-the-pattern-behind-three-of-these) together.
 10. **Spell-tree hit areas and level-of-detail** — minimum 44px hit target,
@@ -1343,7 +1402,7 @@ Ordered by (player impact ÷ effort), not by section order.
 11. **Self-host the two typefaces** ([TYP-1](#typ-1-the-game-ships-no-fonts)).
 12. **A defeat moment**, and confirmations on Rebirth and Respec.
 13. **Keep the gate up until the away settle finishes**
-    ([BLK-4](#blk-4-the-first-frame-after-continue-blocks-for-seconds)).
+    ([BLK-4](#blk-4-the-first-frame-after-continue-blocks-for-seconds--s2)).
 14. **Make the log real**: history, present on phones, in the space
     [LAY-1](#lay-1-surfaces-do-not-use-the-screen) is currently wasting.
 
@@ -1380,20 +1439,20 @@ Worth adding, in order of value per line:
 
 1. **A "no overlay covers its own chrome" test.** Render each surface, assert
    `document.elementFromPoint` over the Back button and over a rail entry
-   returns that element. Catches [BLK-1](#blk-1-the-rebirth-surface-traps-the-player)
+   returns that element. Catches [BLK-1](#blk-1-the-rebirth-surface-traps-the-player--s1)
    and anything like it.
 2. **A "primary action is above the fold" test.** For each surface at
    390x844 and 844x390, assert the first `<button>` marked as the surface's
    primary action is within the viewport. Catches
-   [BLK-3](#blk-3-the-gear-buy-control-is-below-the-fold-on-a-phone) and
+   [BLK-3](#blk-3-the-gear-buy-control-is-below-the-fold-on-a-phone--s2) and
    [SUR-SHORT](#sur-short-the-pattern-behind-three-of-these).
 3. **A hit-target test on coarse pointers.** Every element with a click
    handler measures at least 44x44 at the default zoom. Catches
-   [BLK-2](#blk-2-the-spell-tree-cannot-be-fitted-or-aimed-at) (b) and
+   [BLK-2](#blk-2-the-spell-tree-cannot-be-fitted-or-aimed-at--s1) (b) and
    [A11Y-2](#a11y-2-touch-targets-under-44px).
 4. **A fit test for `Graph`.** After `fit()`, assert the layout bounds are
    fully inside the viewport at every breakpoint. Catches
-   [BLK-2](#blk-2-the-spell-tree-cannot-be-fitted-or-aimed-at) (a) — and this
+   [BLK-2](#blk-2-the-spell-tree-cannot-be-fitted-or-aimed-at--s1) (a) — and this
    one is a pure unit test over `fitToBounds`, no DOM required.
 5. **A horizontal-overflow test.** No element's border box may exceed the
    viewport width, except inside a container that is explicitly marked
