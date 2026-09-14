@@ -260,7 +260,7 @@ export function gearDisplayData(equipment: EquipmentState, slot: GearSlot) {
     description: definition.description,
     primaryStatLabel: definition.primaryStatLabel,
     contribution,
-    perLevel: definition.statPerLevel,
+    nextLevelGain: gearContribution(definition.statPerLevel, piece.level + 1).sub(contribution),
     nextLevelCost: gearLevelCost(slot, piece.level),
     nextEvolutionLevel: nextEvolutionLevel(piece.level),
     unlockedTreeTier: tier + 1,

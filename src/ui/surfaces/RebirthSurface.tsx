@@ -12,9 +12,11 @@ export function RebirthSurface() {
   const run = useCommand();
   const gain = useSnapshotSelector((s) => s.rebirthKnowledgeGain.display);
   const knowledge = useSnapshotSelector((s) => s.knowledge.display);
-  const rebirths = useSnapshotSelector((s) => s.rebirths);
   const best = useSnapshotSelector((s) => s.highestStageEver);
   const canRebirth = useSnapshotSelector((s) => s.canRebirth);
+  const mastery = useSnapshotSelector((s) => s.mastery.display);
+  const masteryAfter = useSnapshotSelector((s) => s.masteryAfterRebirth.display);
+  const nextStage = useSnapshotSelector((s) => s.nextKnowledgeStage);
 
   return (
     <Moment
@@ -24,18 +26,31 @@ export function RebirthSurface() {
       tone="essence"
       icon="rebirth"
       headline="Unmake the spell"
-      consequence="Everything resets to Frontier 1. What you learned about the Evercast does not, and your gear keeps the power it has already earned."
+      consequence="Everything resets to Frontier 1. What you learned about the Evercast does not, your gear keeps the power it has already earned, and Mastery makes the next climb faster than this one was."
+      // Three is a hard cap, and Mastery has to be one of them: it is the whole
+      // reason to press the button. Rebirths gave way rather than Banked - a
+      // count of past rebirths is a vanity number, while the balance is what
+      // decides whether an attunement is affordable, and the decision on this
+      // screen is between spending depth now or going deeper first.
       cells={[
         { label: 'Knowledge', value: <NumberCell value={gain} prefix="+" /> },
         { label: 'Banked', value: <NumberCell value={knowledge} /> },
-        { label: 'Rebirths', value: <NumberCell value={String(rebirths)} /> },
+        { label: 'Mastery', value: <NumberCell value={canRebirth ? masteryAfter : mastery} prefix="x" /> },
       ]}
       primary={{
-        label: canRebirth ? 'Rebirth' : 'Not yet possible',
+        label: canRebirth ? 'Rebirth' : 'Nothing new to learn',
         disabled: !canRebirth,
         onClick: () => run({ type: 'rebirth' }),
       }}
-      hint={`Your deepest run reached Frontier ${best}. Going further before rebirthing yields more.`}
+      // Knowledge is paid for depth beyond the deepest run already cashed out,
+      // so the honest hint names the frontier the next point waits at. Without
+      // it the button greys out with nothing to say, which reads as broken
+      // rather than as not yet.
+      hint={
+        canRebirth
+          ? `Your deepest run reached Frontier ${best}. Rebirthing now takes Mastery to x${masteryAfter}.`
+          : `Knowledge is paid for new depth. The next point waits at Frontier ${nextStage}.`
+      }
     />
   );
 }

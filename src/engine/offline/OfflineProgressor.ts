@@ -56,6 +56,11 @@ export class OfflineProgressor {
    * per-second rate for the rewards that repeat, and the remainder is paid at
    * that rate. Cost is bounded by the sample rather than by how long the player
    * was gone, so a day and a week cost the same.
+   *
+   * The rate is measured from what the sampled window actually banked, never
+   * derived from a formula. That is what keeps this correct now that Gold is a
+   * fraction of enemy health rather than a function of the stage: whatever the
+   * economy pays, the sample already contains it.
    */
   apply(simulation: OfflineAdvanceable, elapsedSeconds: number): OfflineSummary {
     const owed = clampSeconds(elapsedSeconds, this.maxOfflineSeconds);

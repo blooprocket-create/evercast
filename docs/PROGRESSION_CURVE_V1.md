@@ -5,9 +5,12 @@ power adds a constant. Those two statements are the whole bug, and no amount of
 tuning inside the current shapes can reconcile them — an additive sequence loses
 to a geometric one eventually, and "eventually" currently lands around stage 40.
 
-This document is a design proposal. It changes no behaviour on its own. It sets
-out what is broken, what the target curves should be, which constants to move,
-and what the save migration has to do before any of it can ship.
+**Status: implemented.** This began as a proposal and is now the record of what
+shipped. The numbers below are measured against the built game by
+`tools/balance/`, not projected - run it with
+`npx vitest run --config tools/balance/vitest.config.ts` to reproduce them.
+Where measurement disagreed with the design, the measurement is what is written
+here and the disagreement is called out.
 
 ## What is actually broken
 
@@ -262,6 +265,49 @@ from the rounded level, so the same save always migrates to the same state.
 Gold, essence, starlight, spell tree, companions and stage are all untouched by
 this migration.
 
+## Rebirth, and the exploit the fix uncovered
+
+The curve above ends a run in a soft stall, which is only a good thing if
+stalling is a cue to do something. It was not: `RebirthSystem.perform` paid
+Knowledge and nothing else, so a prestige was a pure reset with a currency
+attached.
+
+**Mastery** is the answer - a permanent multiplier on the mage's damage and
+maximum health, and through her on the whole party, since companion power is
+already a share of both. It reads off a new `meta.lifetimeKnowledge` rather than
+the spendable balance, because `buyAttunement` subtracts from the balance:
+keyed to that, buying Schism would cost the player damage, and the attunements
+and the multiplier would be substitutes with one of them a trap. Against the
+high-water mark they are complements. Older saves reconstruct the field exactly,
+since attunements are the only sink that has ever existed.
+
+Implementing it uncovered something that was already true and had been harmless
+only because Knowledge bought so little. **A Rebirth keeps equipment and gold**,
+and `previewKnowledgeGain` read `highestStageThisRun`, which resets - so a player
+who had been to stage 250 could re-reach the unlock stage in minutes and cash out
+again. Measured on the real engine:
+
+| | Knowledge per hour |
+| --- | --- |
+| Spamming shallow rebirths | **10.91** |
+| Pushing as deep as an 8h run goes | 1.82 |
+
+Spam won by six times, before any multiplier was attached to Knowledge. Attaching
+one would have promoted a pointless exploit to the dominant strategy.
+
+Knowledge now pays **the difference** between what the run is worth and what has
+already been banked, which needs no extra state because lifetime Knowledge is
+already the high-water mark. Spam falls to 1.70 K/hr against 1.82, and the
+re-climb goes from 5.5 minutes to 34 because a record has to be beaten rather
+than revisited. Raising the stage exponent from 1.5 to 2 then widens that margin
+to 1.97 against 3.57 - and moves the rate-optimal cash-out from stage 166 to 260,
+which is the stall the gear curve was built to produce.
+
+One design claim did not survive measurement: the argument for the exponent was
+that 1.5 put the optimum near stage 92, far short of the stall. Measured, 1.5 put
+it at 166. The change is still right, but for the margin and the payout rather
+than for that.
+
 ## What this does not fix
 
 Worth naming so the next pass has somewhere to start.
@@ -275,22 +321,6 @@ skip the first interval.
 **The sawtooth is reduced, not removed.** Median stage time still alternates
 between bands (1.04 min at 26–50, 0.46 at 51–100, 1.25 at 101+). Pacing is a
 separate problem from scaling, and the boss cadence is the driver.
-
-**Rebirth still grants no power.** `RebirthSystem.perform` pays knowledge and
-nothing else, so a prestige is a pure reset with a currency attached. The
-standard contract — prestige currency also being a global multiplier, so each
-re-climb is faster than the last — is absent. With the curves above the soft
-stall becomes the natural rebirth trigger, which makes this the most valuable
-follow-up.
-
-**Knowledge income is too thin for its sink.** The sink is well-designed:
-Broadened Study (1), Schism (6), Confluence (25) widen the exclusive groups and
-genuinely reshape a build. But `floor((highestStageThisRun / 50)^1.5)` pays
-exactly **1** at stage 56, so Schism costs six full run-wipes and Confluence
-twenty-five. With the curves above a run reaches stage 262, which pays
-`floor((262/50)^1.5)` = 11 — better, and probably still short. Worth revisiting
-once the main curve lands, since the exponent only matters relative to how deep a
-run now goes.
 
 **`piece.treeNodes` is a dead field.** Declared in `types.ts`, initialised in
 `createInitialEquipmentState`, persisted through `SaveCodec`, and surfaced by
@@ -308,10 +338,18 @@ save — it reproduces every enemy stat and both player stats exactly, so the
 arithmetic in this document describes the shipping game rather than an
 approximation of it.
 
-The measured rows come from a throwaway harness driving `EvercastSimulation`
-headlessly, with the candidate curves injected behind environment variables so a
-sweep could run several configurations in one process. It is not included in this
-branch — the proposal is documentation only. It is worth rebuilding as a proper
-`tools/balance/` harness when the change is implemented, both to re-derive these
-tables and to keep them honest afterwards; `src/engine` is already constrained to
-run headlessly in Node, which is what makes that cheap.
+The measured rows come from `tools/balance/`, a greedy bot driving
+`EvercastSimulation` headlessly for eight simulated hours. It is measurement
+only - nothing in `src/` imports it, and the root vitest config scopes the
+default suite to `src/**` so an eight-hour simulation cannot wander into CI:
+
+```bash
+npx vitest run --config tools/balance/vitest.config.ts
+```
+
+The bot reads marginal stat-per-gold out of `compileGearStats` itself rather than
+reimplementing the curve, so it stays correct when the curve changes shape
+underneath it. The exploratory sweep that produced the candidate table patched
+constants behind environment variables; the harness that shipped measures
+whatever the build says, and reproduced the prototype's baseline exactly, which
+is the main reason to believe the rest of it.

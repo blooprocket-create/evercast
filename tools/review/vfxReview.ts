@@ -42,7 +42,8 @@ const snapshot = () =>
     catalog,
     canRebirth: false,
     lastSummon: null,
-    rebirthKnowledgeGain: big(0),
+    nextKnowledgeStage: 1,
+      rebirthKnowledgeGain: big(0),
     lastEvent: 'Authored spell review',
   });
 const mode = document.querySelector<HTMLSelectElement>('#mode')!;

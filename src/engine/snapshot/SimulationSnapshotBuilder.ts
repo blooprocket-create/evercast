@@ -16,7 +16,7 @@ import {
 import type { LastSummonSnapshot, SimulationSnapshot } from '../types';
 import { buildCompanionSnapshots } from './CompanionSnapshotBuilder';
 import { wizardPerHit } from '../companions/CompanionCombat';
-import { masteryMultiplier } from '../prestige/Mastery';
+import { masteryMultiplier, previewMastery } from '../prestige/Mastery';
 // prettier-ignore
 import { effectiveCastInterval, hasArrived, livingByDistance } from '../combat/SpellCombatState';
 
@@ -26,6 +26,7 @@ export interface SimulationSnapshotBuildContext {
   catalog: ContentCatalog;
   canRebirth: boolean;
   rebirthKnowledgeGain: Decimal;
+  nextKnowledgeStage: number;
   lastSummon: LastSummonSnapshot | null;
   lastEvent: string;
 }
@@ -36,6 +37,7 @@ export function buildSimulationSnapshot({
   catalog,
   canRebirth,
   rebirthKnowledgeGain,
+  nextKnowledgeStage,
   lastSummon,
   lastEvent,
 }: SimulationSnapshotBuildContext): SimulationSnapshot {
@@ -128,11 +130,16 @@ export function buildSimulationSnapshot({
     storyFlags: [...state.meta.storyFlags],
     canRebirth,
     rebirthKnowledgeGain: quantity(rebirthKnowledgeGain),
+    lifetimeKnowledge: quantity(state.meta.lifetimeKnowledge),
+    mastery: quantity(masteryMultiplier(state.meta)),
+    masteryAfterRebirth: quantity(previewMastery(state.meta, rebirthKnowledgeGain)),
+    nextKnowledgeStage,
     gear: GEAR_SLOT_ORDER.map((slot) => {
       const data = gearDisplayData(state.equipment, slot);
       return {
         ...data,
         contribution: quantity(data.contribution),
+        nextLevelGain: quantity(data.nextLevelGain),
         nextLevelCost: quantity(data.nextLevelCost),
       };
     }),
