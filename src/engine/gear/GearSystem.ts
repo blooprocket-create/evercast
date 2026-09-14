@@ -3,7 +3,14 @@ import type { GameEvent } from '../events/GameEvent';
 import type { GameState } from '../model';
 import type Decimal from 'break_eternity.js';
 import { big } from '../numbers';
-import { GEAR_DEFINITIONS, GEAR_SLOT_ORDER, evolutionTierForLevel, nextEvolutionLevel } from './GearCatalog';
+import {
+  GEAR_COST_GROWTH,
+  GEAR_DEFINITIONS,
+  GEAR_POWER_GROWTH,
+  GEAR_SLOT_ORDER,
+  evolutionTierForLevel,
+  nextEvolutionLevel,
+} from './GearCatalog';
 import type { EquipmentState, GearSlot } from './types';
 
 export interface CompiledGearStats {
@@ -65,8 +72,7 @@ export function compileGearStats(equipment: EquipmentState): CompiledGearStats {
   for (const slot of GEAR_SLOT_ORDER) {
     const piece = equipment.pieces[slot];
     const definition = GEAR_DEFINITIONS[slot];
-    const paidLevels = Math.max(0, piece.level - 1);
-    const contribution = big(definition.statPerLevel).mul(paidLevels);
+    const contribution = gearContribution(definition.statPerLevel, piece.level);
     if (definition.primaryStat === 'baseDamage') baseDamageBonus = baseDamageBonus.add(contribution);
     if (definition.primaryStat === 'maxHp') maxHpBonus = maxHpBonus.add(contribution);
   }
@@ -79,9 +85,37 @@ export function compileGearStats(equipment: EquipmentState): CompiledGearStats {
   return stats;
 }
 
+/**
+ * What a slot's levels are worth, as a geometric sum rather than a product.
+ *
+ * Anchored so the bottom of the curve is unchanged: level 1 contributes nothing
+ * and level 2 contributes exactly `statPerLevel`, because the sum of one term of
+ * a geometric series is that term. Everything above level 2 compounds, which is
+ * the whole point - enemy health always did.
+ */
+export function gearContribution(statPerLevel: number, level: number): Decimal {
+  const paidLevels = Math.max(0, level - 1);
+  if (paidLevels === 0) return big(0);
+  return big(GEAR_POWER_GROWTH)
+    .pow(paidLevels)
+    .sub(1)
+    .div(GEAR_POWER_GROWTH - 1)
+    .mul(statPerLevel);
+}
+
+/**
+ * Built as a Decimal before it is exponentiated, never with `Math.pow`. A double
+ * saturates to Infinity somewhere past level 4,000 on this curve, and gold is a
+ * Decimal precisely because the player gets that far.
+ */
 export function gearLevelCost(slot: GearSlot, currentLevel: number) {
   const definition = GEAR_DEFINITIONS[slot];
-  return big(Math.floor(definition.baseLevelCost + Math.pow(Math.max(1, currentLevel), 1.35) * definition.costGrowth));
+  const paidLevels = Math.max(0, currentLevel - 1);
+  return big(definition.baseLevelCost)
+    .mul(definition.costGrowth)
+    .mul(big(GEAR_COST_GROWTH).pow(paidLevels))
+    .floor()
+    .max(1);
 }
 
 /**
@@ -89,6 +123,15 @@ export function gearLevelCost(slot: GearSlot, currentLevel: number) {
  * them are actually affordable. The cost curve rises per level, so a bulk
  * purchase is not the next level's price times the count - the interface must
  * not guess at it, and the curve lives here.
+ *
+ * Still a loop, deliberately. A geometric curve has a closed form for both the
+ * count and the total, but `gearLevelCost` floors each level and `levelUp`
+ * charges those floored prices one at a time, so a closed form over unfloored
+ * terms would quote a total the engine then disagrees with - and quoting under
+ * what is charged makes the button buy fewer levels than it promised. The
+ * geometric curve also bounds the loop by itself: affordable levels grow with
+ * `log(gold)`, so the iteration count stays small at any wealth the economy can
+ * actually reach.
  */
 export function gearBulkPurchase(
   slot: GearSlot,
@@ -114,10 +157,6 @@ export function gearBulkPurchase(
 
 /** A Max purchase must terminate even when gold is effectively unbounded. */
 export const GEAR_BULK_LIMIT = 10_000;
-
-export function goldRewardForKill(stage: number, boss: boolean) {
-  return big(Math.max(1, Math.floor(stage * (boss ? 5 : 1))));
-}
 
 export class GearSystem {
   constructor(

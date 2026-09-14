@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_ENGINE_CONFIG } from '../config';
 import { createInitialGameState } from '../state';
-import { evolutionTierForLevel, nextEvolutionLevel } from './GearCatalog';
+import { GEAR_DEFINITIONS, GEAR_POWER_GROWTH, evolutionTierForLevel, nextEvolutionLevel } from './GearCatalog';
 import { GearSystem, compileGearStats, gearLevelCost } from './GearSystem';
 
 describe('GearSystem', () => {
@@ -12,13 +12,41 @@ describe('GearSystem', () => {
     expect(stats.maxHpBonus.toNumber()).toBe(0);
   });
 
-  it('adds flat stats per paid gear level instead of multipliers', () => {
+  /**
+   * These pin the curve's shape rather than a magic number at one level, because
+   * the growth constant is expected to move during tuning and a value assertion
+   * would only record whatever it was last set to.
+   */
+  it('keeps statPerLevel meaning exactly what it used to at the bottom of the curve', () => {
+    const state = createInitialGameState(DEFAULT_ENGINE_CONFIG);
+    state.equipment.pieces.staff.level = 2;
+    state.equipment.pieces.robe.level = 2;
+    const stats = compileGearStats(state.equipment);
+
+    // One term of a geometric series is that term: the first paid level is
+    // worth statPerLevel exactly, whatever the growth constant is.
+    expect(stats.baseDamageBonus.toNumber()).toBe(GEAR_DEFINITIONS.staff.statPerLevel);
+    expect(stats.maxHpBonus.toNumber()).toBe(GEAR_DEFINITIONS.robe.statPerLevel);
+  });
+
+  it('compounds each paid gear level instead of adding a flat amount', () => {
     const state = createInitialGameState(DEFAULT_ENGINE_CONFIG);
     state.equipment.pieces.staff.level = 10;
-    state.equipment.pieces.robe.level = 10;
-    const stats = compileGearStats(state.equipment);
-    expect(stats.baseDamageBonus.toNumber()).toBe(9);
-    expect(stats.maxHpBonus.toNumber()).toBe(18);
+    const compounded = compileGearStats(state.equipment).baseDamageBonus;
+
+    // Nine paid levels are worth strictly more than nine flat ones - that gap is
+    // the whole change, and it is what lets the player keep up with enemy health.
+    expect(compounded.toNumber()).toBeGreaterThan(9 * GEAR_DEFINITIONS.staff.statPerLevel);
+
+    // ...and the marginal level grows by exactly the growth constant.
+    state.equipment.pieces.staff.level = 11;
+    const oneMore = compileGearStats(state.equipment).baseDamageBonus;
+    state.equipment.pieces.staff.level = 9;
+    const oneFewer = compileGearStats(state.equipment).baseDamageBonus;
+
+    const thisLevel = oneMore.sub(compounded).toNumber();
+    const lastLevel = compounded.sub(oneFewer).toNumber();
+    expect(thisLevel / lastLevel).toBeCloseTo(GEAR_POWER_GROWTH, 10);
   });
 
   it('levels a gear piece with gold and applies the health delta', () => {

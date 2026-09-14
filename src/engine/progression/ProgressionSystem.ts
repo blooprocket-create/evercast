@@ -1,9 +1,9 @@
 import type { EngineConfig } from '../config';
 import type { GameEvent } from '../events/GameEvent';
-import { goldRewardForKill } from '../gear/GearSystem';
 import type { EnemyState, GameState } from '../model';
 import { big } from '../numbers';
 import { firstClearEssenceReward } from './EssenceEconomy';
+import { goldRewardForKill } from './GoldEconomy';
 import { starlightRewardForKill } from './StarlightEconomy';
 import { clearSpellCombat } from '../combat/SpellCombatState';
 import { restoreCompanions } from '../companions/CompanionSystem';
@@ -16,7 +16,7 @@ export class ProgressionSystem {
 
   handleEnemyKilled(state: GameState, enemy: EnemyState): void {
     const { run, meta, equipment, companions } = state;
-    const gold = goldRewardForKill(enemy.stage, enemy.boss);
+    const gold = goldRewardForKill(enemy.maxHp, enemy.boss);
     equipment.gold = equipment.gold.add(gold);
     const starlight = starlightRewardForKill(enemy.stage, enemy.boss);
     companions.starlight = companions.starlight.add(starlight);
