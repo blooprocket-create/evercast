@@ -65,6 +65,12 @@
   font: 500 var(--text-body) / 1 var(--font-display);
 }
 
+/* The glyph sits on the row's middle, not on the numerals' baseline. */
+.walletItem svg {
+  flex: none;
+  align-self: center;
+}
+
 /*
  * The header covers the HUD, which is where the wallets are named. Three bare
  * numbers in the corner are a riddle, so the labels come with them.
@@ -157,19 +163,27 @@
  * edge - value and all - because `.wallets` is deliberately `flex: none` and so
  * widens the header rather than shrinking. Measured: three labelled wallets
  * plus Back and a title need about 560px.
+ *
+ * What gave way used to be the label, replaced by a 7px dot in the wallet's
+ * own colour. That left Gold, Essence and Starlight as three numbers told
+ * apart by hue alone - WCAG 1.4.1, on the readout every purchase in the game
+ * is judged against - and the dot was a `::before` with no text, so a screen
+ * reader got three bare numbers too.
+ *
+ * The glyph carries it on screen now, and the word is clipped rather than
+ * removed so it still reaches assistive technology. Nothing here depends on
+ * colour to be legible.
  */
 @media (max-width: 560px) {
   .walletLabel {
-    display: none;
-  }
-
-  .walletItem::before {
-    content: '';
-    width: 7px;
-    height: 7px;
-    align-self: center;
-    border-radius: var(--radius-pill);
-    background: currentColor;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 }
 

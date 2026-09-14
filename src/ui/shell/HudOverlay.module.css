@@ -159,6 +159,14 @@
   gap: var(--space-2);
 }
 
+/*
+ * The card shows for every encounter now, so the thing that used to make it
+ * special - being drawn at all - has to be said in the card instead.
+ */
+.enemyBoss {
+  border-color: var(--hp-foe);
+}
+
 .enemyHead {
   display: flex;
   align-items: baseline;

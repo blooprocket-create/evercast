@@ -62,10 +62,19 @@
  * On a 375px phone it laid out three columns in a 343px box and the third was
  * clipped, taking the Continue button off the right edge with it.
  */
+/*
+ * The track has a ceiling as well as a floor, and the ceiling is the fix.
+ *
+ * With `1fr` as the maximum, `auto-fit` gave a single result the whole 56rem
+ * column - and `.card`'s 3/4 aspect ratio, bounded on neither axis, turned
+ * that into a 896x1195 card on a 900px viewport: clipped at the top and the
+ * bottom at once, its four lines of content stranded near the edge. A single
+ * draw is the common case, so that was the common case.
+ */
 .cards {
   display: grid;
   width: 100%;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8.5rem), 13rem));
   gap: var(--space-3);
   justify-content: center;
   align-self: center;
@@ -74,7 +83,7 @@
 
 /* A whole batch at once is a summary, so the cards can afford to be smaller. */
 .summary {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 7.5rem), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 7.5rem), 11rem));
 }
 
 .card {
@@ -89,6 +98,12 @@
   gap: var(--space-1);
   aspect-ratio: 3 / 4;
   max-width: 100%;
+  /*
+   * A backstop on the axis the aspect ratio derives. The track ceiling above
+   * already keeps the width sane, so this only binds on a very short viewport
+   * - which is exactly where an underived height runs off the screen.
+   */
+  max-height: min(22rem, 55vh);
   padding: var(--space-3);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);

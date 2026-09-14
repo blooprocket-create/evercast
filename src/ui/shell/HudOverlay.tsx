@@ -70,8 +70,18 @@ export function HudOverlay() {
         )}
       </div>
 
-      {phase === 'combat' && boss && (
-        <div className={styles.enemy}>
+      {/*
+        Every encounter, not only a boss.
+
+        This was gated on `boss` as well as `combat`, so for the whole of an
+        ordinary fight - which is nearly the whole game - the HUD carried no
+        enemy name, no enemy health and no wave progress. The only readouts
+        were a 10px world-space bar over the mesh and one line in a log that is
+        not rendered below 860px at all. The snapshot has carried the counts
+        the entire time.
+      */}
+      {phase === 'combat' && (
+        <div className={boss ? `${styles.enemy} ${styles.enemyBoss}` : styles.enemy}>
           <div className={styles.enemyHead}>
             <span className={styles.enemyName}>
               {boss ? '\u2605 ' : ''}
@@ -84,7 +94,7 @@ export function HudOverlay() {
           <Meter percent={enemyPercent} tone="foe" />
           <div className={styles.wave}>
             <span>
-              {alive} alive - {spawned}/{total} spawned
+              {alive} alive &middot; {spawned}/{total} spawned
             </span>
           </div>
         </div>

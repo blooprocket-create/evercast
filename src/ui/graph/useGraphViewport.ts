@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
-  DEFAULT_SCALE_LIMITS,
   type Rect,
   type Size,
   type Transform,
   clampPan,
   fitToBounds,
   focusOn,
+  scaleLimitsFor,
   zoomAt,
 } from './fitView';
 
@@ -75,7 +75,9 @@ export function useGraphViewport(bounds: Rect): GraphViewport {
       const factor = Math.exp(-event.deltaY * 0.0015);
       adjusted.current = true;
       const { transform: current, bounds: box, viewport: size } = latest.current;
-      setTransform(clampPan(zoomAt(current, factor, pointer), box, size, 80));
+      setTransform(
+        clampPan(zoomAt(current, factor, pointer, scaleLimitsFor(box, size)), box, size, 80),
+      );
     };
 
     element.addEventListener('wheel', onWheel, { passive: false });
@@ -87,7 +89,9 @@ export function useGraphViewport(bounds: Rect): GraphViewport {
     if (size.width === 0) return;
     adjusted.current = true;
     const centre = { x: size.width / 2, y: size.height / 2 };
-    setTransform(clampPan(zoomAt(current, factor, centre, DEFAULT_SCALE_LIMITS), box, size, 80));
+    setTransform(
+      clampPan(zoomAt(current, factor, centre, scaleLimitsFor(box, size)), box, size, 80),
+    );
   }, []);
 
   const focus = useCallback((box: Rect) => {
@@ -141,7 +145,9 @@ export function useGraphViewport(bounds: Rect): GraphViewport {
         if (pinchDistance && distance > 0) {
           const factor = distance / pinchDistance;
           pinchDistance = distance;
-          setTransform(clampPan(zoomAt(current, factor, midpoint()), box, size, 80));
+          setTransform(
+            clampPan(zoomAt(current, factor, midpoint(), scaleLimitsFor(box, size)), box, size, 80),
+          );
         }
         return;
       }

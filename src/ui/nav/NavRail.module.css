@@ -83,6 +83,30 @@
     display: none;
   }
 
+  /*
+   * ...but something has to say the strip moves. With the scrollbar gone the
+   * entries were cut dead at the edge, which reads as the end of the list
+   * rather than as more of it. A mask softens both ends instead of adding an
+   * element; only the alpha of these stops matters, which is why `currentColor`
+   * does the job without naming a colour.
+   */
+  .rail {
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      currentColor var(--space-3),
+      currentColor calc(100% - var(--space-4)),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      currentColor var(--space-3),
+      currentColor calc(100% - var(--space-4)),
+      transparent 100%
+    );
+  }
+
   .rail > div {
     display: flex;
     gap: var(--space-2);

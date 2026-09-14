@@ -54,6 +54,39 @@ export function toScreen(transform: Transform, world: Point): Point {
   };
 }
 
+/**
+ * The scale at which the whole graph fits inside the viewport, with padding.
+ *
+ * Bounded above but **not below**, and that is the fix rather than an
+ * oversight. It used to clamp to `limits.min`, which is 0.25 - and the spell
+ * tree's bounds are 1719x1846, so a 390x844 phone (a ~390x318 graph viewport)
+ * needed 0.146 and got 0.25. The tree was drawn 430x461 inside a 390x318 box,
+ * off the edge on all four sides, and `Fit` recomputed the same pinned
+ * transform every time it was pressed. There was no gesture that showed the
+ * whole graph.
+ *
+ * A floor still exists, at the point where the picture stops being a picture,
+ * so a degenerate viewport cannot produce a zero or a negative scale.
+ */
+export const MIN_FIT_SCALE = 0.02;
+
+export function fitScale(
+  bounds: Rect,
+  viewport: Size,
+  padding = 24,
+  limits: ScaleLimits = DEFAULT_SCALE_LIMITS,
+): number {
+  const usableWidth = Math.max(1, viewport.width - padding * 2);
+  const usableHeight = Math.max(1, viewport.height - padding * 2);
+  const needed = Math.min(
+    usableWidth / Math.max(1, bounds.width),
+    usableHeight / Math.max(1, bounds.height),
+  );
+  if (!Number.isFinite(needed)) return limits.max;
+  // A fit may shrink as far as it must; it may never magnify past the ceiling.
+  return Math.min(limits.max, Math.max(MIN_FIT_SCALE, needed));
+}
+
 /** The whole graph, centred, with padding. This is the default state. */
 export function fitToBounds(
   bounds: Rect,
@@ -61,18 +94,26 @@ export function fitToBounds(
   padding = 24,
   limits: ScaleLimits = DEFAULT_SCALE_LIMITS,
 ): Transform {
-  const usableWidth = Math.max(1, viewport.width - padding * 2);
-  const usableHeight = Math.max(1, viewport.height - padding * 2);
-  const scale = clamp(
-    Math.min(usableWidth / Math.max(1, bounds.width), usableHeight / Math.max(1, bounds.height)),
-    limits.min,
-    limits.max,
-  );
+  const scale = fitScale(bounds, viewport, padding, limits);
   return {
     scale,
     x: (viewport.width - bounds.width * scale) / 2 - bounds.x * scale,
     y: (viewport.height - bounds.height * scale) / 2 - bounds.y * scale,
   };
+}
+
+/**
+ * The zoom range the player may move through, given what the graph needs to
+ * fit. Without the lower end following the fit, pressing zoom-out on a phone
+ * jumped *in* - from the 0.146 the graph was fitted at to the 0.25 floor.
+ */
+export function scaleLimitsFor(
+  bounds: Rect,
+  viewport: Size,
+  padding = 24,
+  limits: ScaleLimits = DEFAULT_SCALE_LIMITS,
+): ScaleLimits {
+  return { min: Math.min(limits.min, fitScale(bounds, viewport, padding, limits)), max: limits.max };
 }
 
 /** Zoom about a screen point — whatever is under the cursor stays under it. */

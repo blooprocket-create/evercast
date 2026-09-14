@@ -1,18 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_SCALE_LIMITS,
+  MIN_FIT_SCALE,
   type Rect,
   type Size,
   clampPan,
   fitToBounds,
   focusOn,
   overflowRatio,
+  scaleLimitsFor,
   shouldShowMinimap,
   shouldShowSearch,
   toScreen,
   toWorld,
   zoomAt,
 } from './fitView';
+import { SPELL_TREE_LAYOUT } from '../spellTree/spellTreeGraph';
 
 const VIEWPORT: Size = { width: 800, height: 600 };
 const BOUNDS: Rect = { x: 0, y: 0, width: 1600, height: 900 };
@@ -42,11 +45,67 @@ describe('fitToBounds', () => {
     }
   });
 
-  it('respects the scale limits rather than magnifying a tiny graph forever', () => {
+  it('never magnifies a tiny graph past the ceiling', () => {
     const tiny = fitToBounds({ x: 0, y: 0, width: 10, height: 10 }, VIEWPORT, 24);
     expect(tiny.scale).toBe(DEFAULT_SCALE_LIMITS.max);
+  });
+
+  it('shrinks as far as the graph needs, floor or no floor', () => {
+    /*
+     * This asserted `DEFAULT_SCALE_LIMITS.min` and that was the bug, not the
+     * rule: a fit clamped from below is not a fit. The spell tree's bounds are
+     * 1719x1846 and a phone gives the graph about 390x318, which needs 0.146 -
+     * so `Fit` pinned 0.25, drew the tree off all four edges, and did nothing
+     * at all when pressed again.
+     */
     const huge = fitToBounds({ x: 0, y: 0, width: 1e6, height: 1e6 }, VIEWPORT, 24);
-    expect(huge.scale).toBe(DEFAULT_SCALE_LIMITS.min);
+    expect(huge.scale).toBeLessThan(DEFAULT_SCALE_LIMITS.min);
+    expect(huge.scale).toBeGreaterThanOrEqual(MIN_FIT_SCALE);
+  });
+
+  it('actually fits the real spell tree at every viewport the game has', () => {
+    /*
+     * The regression test the audit asked for, and it needs no DOM: the whole
+     * point of `Fit` is that afterwards the graph is inside the frame. Each
+     * entry is the graph viewport a breakpoint leaves once the rail, the
+     * inspector, the header and the shelf have taken theirs.
+     */
+    const viewports: [string, Size][] = [
+      ['1920x1080', { width: 1356, height: 872 }],
+      ['1440x900', { width: 876, height: 692 }],
+      ['1280x800', { width: 716, height: 592 }],
+      ['1024x768', { width: 460, height: 560 }],
+      ['820x1180 portrait', { width: 820, height: 715 }],
+      ['390x844 portrait', { width: 390, height: 318 }],
+      ['360x800 portrait', { width: 360, height: 300 }],
+      ['320x568 portrait', { width: 320, height: 190 }],
+      ['844x390 landscape', { width: 428, height: 258 }],
+      ['568x320 landscape', { width: 568, height: 120 }],
+    ];
+
+    for (const [name, viewport] of viewports) {
+      const t = fitToBounds(SPELL_TREE_LAYOUT.bounds, viewport, 24);
+      const { bounds } = SPELL_TREE_LAYOUT;
+      const topLeft = toScreen(t, { x: bounds.x, y: bounds.y });
+      const bottomRight = toScreen(t, {
+        x: bounds.x + bounds.width,
+        y: bounds.y + bounds.height,
+      });
+      expect(topLeft.x, `${name} left`).toBeGreaterThanOrEqual(-1e-6);
+      expect(topLeft.y, `${name} top`).toBeGreaterThanOrEqual(-1e-6);
+      expect(bottomRight.x, `${name} right`).toBeLessThanOrEqual(viewport.width + 1e-6);
+      expect(bottomRight.y, `${name} bottom`).toBeLessThanOrEqual(viewport.height + 1e-6);
+    }
+  });
+
+  it('lets the player zoom back out to whatever the fit needed', () => {
+    // Without this the zoom-out button jumps *in* on a phone: the graph is
+    // fitted below the default floor, and the floor is where zoom stops.
+    const viewport: Size = { width: 390, height: 318 };
+    const fitted = fitToBounds(SPELL_TREE_LAYOUT.bounds, viewport, 24);
+    const limits = scaleLimitsFor(SPELL_TREE_LAYOUT.bounds, viewport, 24);
+    expect(limits.min).toBeLessThanOrEqual(fitted.scale + 1e-9);
+    expect(zoomAt(fitted, 0.5, { x: 0, y: 0 }, limits).scale).toBeLessThanOrEqual(fitted.scale);
   });
 
   it('survives a degenerate single-node graph', () => {

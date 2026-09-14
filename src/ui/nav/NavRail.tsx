@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { Badge } from '../primitives/Badge';
 import { Icon } from '../icons/Icon';
 import { type Badge as BadgeValue, type GroupedDestinations } from './destinations';
@@ -22,6 +23,21 @@ interface NavRailProps {
 }
 
 export function NavRail({ groups, activeId, badgeFor, onSelect }: NavRailProps) {
+  const current = useRef<HTMLButtonElement>(null);
+
+  /*
+   * Below 860px the rail is a horizontally scrolling strip, and it never
+   * scrolled. Opening Settings - last in the registry - from the shelf's More
+   * left a 390px phone showing Character, Spell Tree, Gear, Attunements and no
+   * highlighted entry at all: the current one was off the right edge, with
+   * nothing on screen saying the strip moves. `nearest` on both axes so this
+   * is the smallest correction that makes the entry visible, and so it is a
+   * no-op on the wide layout where the column already shows everything.
+   */
+  useEffect(() => {
+    current.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [activeId]);
+
   return (
     <nav className={styles.rail} aria-label="Destinations">
       {groups.map((section) => (
@@ -33,6 +49,7 @@ export function NavRail({ groups, activeId, badgeFor, onSelect }: NavRailProps) 
               <button
                 key={destination.id}
                 type="button"
+                ref={activeId === destination.id ? current : undefined}
                 className={
                   activeId === destination.id ? `${styles.entry} ${styles.current}` : styles.entry
                 }
