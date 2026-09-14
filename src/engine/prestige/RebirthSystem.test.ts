@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EvercastSimulation } from '../EvercastSimulation';
+import { KNOWLEDGE_STAGE_EXPONENT } from '../../content/rebirthTuning';
 import { DEFAULT_ENGINE_CONFIG } from '../config';
 import { big } from '../numbers';
 import { createInitialGameState } from '../state';
@@ -83,7 +84,9 @@ describe('rebirth boundary', () => {
     const state = createInitialGameState(DEFAULT_ENGINE_CONFIG);
     const system = new RebirthSystem(DEFAULT_ENGINE_CONFIG, () => {});
     const worth = (stage: number) =>
-      Math.floor(Math.pow(stage / DEFAULT_ENGINE_CONFIG.rebirthUnlockStage, 1.5));
+      Math.floor(
+        Math.pow(stage / DEFAULT_ENGINE_CONFIG.rebirthUnlockStage, KNOWLEDGE_STAGE_EXPONENT),
+      );
 
     state.run.highestStageThisRun = 200;
     expect(system.previewKnowledgeGain(state).toNumber()).toBe(worth(200));

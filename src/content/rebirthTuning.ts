@@ -30,8 +30,15 @@ export const MASTERY_EXPONENT = 0.5;
  *
  * Total Knowledge ever earned is `floor((deepest rebirth stage / unlock stage) ^
  * this)`, and a Rebirth pays the difference from what has already been banked.
- * Relocated here from an inline literal in `RebirthSystem`, where it was the
- * kind of number that gets tuned a hundred times and should never have been
- * hiding inside a system file.
+ *
+ * At 1.5 the rate-optimal cash-out measured at stage 166 of a run reaching 262 -
+ * two thirds of the way in, so the best play was to stop well short of the soft
+ * stall the gear curve is built around. At 2 it moves to 260, which is the stall
+ * itself, and the payout at that depth goes from 11 Knowledge to 27. It also
+ * widens the margin over shallow rebirth-spam from 1.07x to 1.81x, which matters
+ * more than the pacing does: that margin is what keeps the exploit closed.
+ *
+ * Confluence, at 32 cumulative, now wants a run that reaches frontier 283 - one
+ * legible sentence instead of twenty-five run-wipes.
  */
-export const KNOWLEDGE_STAGE_EXPONENT = 1.5;
+export const KNOWLEDGE_STAGE_EXPONENT = 2;
