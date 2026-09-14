@@ -8,6 +8,7 @@ import { SummonSurface } from '../surfaces/SummonSurface';
 import { RebirthSurface } from '../surfaces/RebirthSurface';
 import { AttunementsSurface } from '../surfaces/AttunementsSurface';
 import { SettingsSurface } from '../surfaces/SettingsSurface';
+import { ChronicleSurface } from '../surfaces/ChronicleSurface';
 
 /**
  * Adding a feature is one entry here plus its data. No shelf change, no new
@@ -101,6 +102,19 @@ export const DESTINATIONS: RegisteredDestination[] = [
     available: (snapshot) => snapshot.canRebirth,
     badge: () => 'dot',
     Component: RebirthSurface,
+  },
+  {
+    /*
+     * The log's own home. The shelf shows the tail of it beside the vitals,
+     * which is all that fits there; the scrollback needed somewhere with room,
+     * and `record` is the group for the things the game remembers about you.
+     */
+    id: 'chronicle',
+    group: 'record',
+    label: 'Chronicle',
+    icon: 'story',
+    archetype: 'ledger',
+    Component: ChronicleSurface,
   },
   {
     id: 'settings',

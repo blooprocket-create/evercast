@@ -11,6 +11,7 @@ import type { GameEvent } from '../events/GameEvent';
 import type { EnemyState, GameState } from '../model';
 import { big } from '../numbers';
 import { SaveCodec } from '../save/SaveCodec';
+import { authoritativeSnapshot } from '../snapshot/authoritativeSnapshot';
 // prettier-ignore
 import { damageCompanion, guardReduction, isPassive, nextCompanionBeat, wizardPerHit } from './CompanionCombat';
 import { companionDamage, requireCompanion } from './CompanionCatalog';
@@ -120,7 +121,12 @@ describe('companion combat determinism', () => {
     });
     reloaded.advance(300, { presentationEvents: false });
 
-    expect(reloaded.getSnapshot()).toEqual(control.getSnapshot());
+    // Authoritative, not whole: the chronicle is this session's log, is not
+    // saved on purpose, and counts its own entries - so the reloaded run
+    // starting a fresh one is the design working, not the save losing state.
+    expect(authoritativeSnapshot(reloaded.getSnapshot())).toEqual(
+      authoritativeSnapshot(control.getSnapshot()),
+    );
   });
 
   it('catches up offline exactly as it would have played live', () => {

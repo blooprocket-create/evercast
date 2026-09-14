@@ -160,22 +160,47 @@ export function ShelfVitals() {
   );
 }
 
-/** The event line, formatted at the source rather than patched here. */
+/**
+ * How many lines the shelf renders. How many are *shown* is CSS - three on a
+ * desktop, two on a tablet, one on a phone - because the shelf's own height
+ * changes with the same breakpoints, and a count computed in JS would need a
+ * resize observer to agree with a media query.
+ */
+const SHELF_LOG_LINES = 3;
+
+/** The tail of the chronicle, formatted at the source rather than patched here. */
 export function ShelfLog() {
-  const lastEvent = useSnapshotSelector((s) => s.lastEvent);
-  /*
-   * The running commentary, and the one place the game narrates itself in
-   * words. Announced politely so a screen reader reads it between whatever the
-   * player is doing rather than interrupting them, which is what makes it
-   * usable at the rate an idle game produces events: `polite` coalesces, and a
-   * player moving through the spell tree is never cut off by a kill.
-   *
-   * It is also the accessible counterpart to the diorama, which carries no
-   * text at all - see the canvas in `AppShell`.
-   */
+  const chronicle = useSnapshotSelector((s) => s.chronicle);
+  const recent = chronicle.slice(-SHELF_LOG_LINES);
+  const newest = recent[recent.length - 1];
+
   return (
-    <span aria-live="polite" aria-atomic="true">
-      {lastEvent}
-    </span>
+    <>
+      {/*
+        One live region, carrying one line.
+
+        It used to be the visible line itself, announcing `lastEvent` - every
+        event, several a second at late game, which `polite` queues rather than
+        drops, so a screen-reader user was handed a backlog of `Direct hits for
+        9.97e47.` they could never get to the end of. The chronicle keeps the
+        events worth announcing (see `logWeight`), and only the newest is
+        spoken; the stack beside it is for the eye, and scrollback is the
+        Chronicle surface's job.
+      */}
+      <span className={styles.announcer} aria-live="polite" aria-atomic="true">
+        {newest?.text ?? ''}
+      </span>
+      <span className={styles.logLines} aria-hidden="true">
+        {recent.length === 0 ? (
+          <span className={styles.logLine}>The Evercast stirs.</span>
+        ) : (
+          recent.map((line) => (
+            <span key={line.seq} className={styles.logLine}>
+              {line.text}
+            </span>
+          ))
+        )}
+      </span>
+    </>
   );
 }

@@ -1,0 +1,61 @@
+.eyebrow {
+  font: 600 var(--text-label) / 1 var(--font-ui);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-low);
+}
+
+/*
+ * The depth is worth saying out loud. The chronicle is a ring and it is not
+ * saved, so "120 entries" is also the only place the interface admits that
+ * the oldest ones have gone and that a reload starts again.
+ */
+.count {
+  margin-left: auto;
+  font: 400 var(--text-label) / 1 var(--font-ui);
+  color: var(--ink-dim);
+}
+
+/*
+ * The Ledger's contract is fixed-height rows - that is what lets 120 of them
+ * cost what 8 do - so a long line clamps to two rather than growing the row.
+ */
+.row {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  align-items: center;
+  gap: var(--space-3);
+  height: 52px;
+  padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--line);
+}
+
+.at {
+  min-width: 4.5ch;
+  text-align: right;
+  font: 500 var(--text-label) / 1 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-dim);
+}
+
+.text {
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  font: 400 var(--text-small) / 1.35 var(--font-ui);
+  color: var(--ink-mid);
+}
+
+/* The newest entry is the one the player came here for. */
+.row:first-child .text {
+  color: var(--ink);
+}
+
+@media (max-width: 860px) {
+  .row {
+    padding: 0 max(var(--space-3), var(--safe-right)) 0 max(var(--space-3), var(--safe-left));
+  }
+}

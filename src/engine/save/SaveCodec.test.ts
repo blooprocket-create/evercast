@@ -1,14 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_ENGINE_CONFIG } from '../config';
 import { EvercastSimulation } from '../EvercastSimulation';
-import type { SimulationSnapshot } from '../types';
+import { authoritativeSnapshot } from '../snapshot/authoritativeSnapshot';
 // prettier-ignore
 import { CURRENT_SAVE_VERSION, MINIMUM_SAVE_VERSION, SaveCodec } from './SaveCodec';
-
-function authoritativeSnapshot(snapshot: SimulationSnapshot) {
-  const { lastEvent: _ephemeralPresentationText, ...authoritative } = snapshot;
-  return authoritative;
-}
 
 describe('SaveCodec', () => {
   it('round-trips authoritative state including large-number fields', () => {

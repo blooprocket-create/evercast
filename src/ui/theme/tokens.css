@@ -179,10 +179,18 @@
   text-align: right;
 }
 
-/* The shelf stacks on a phone, so the insets everything else uses grow with it. */
+/*
+ * The shelf stacks on a phone, so the insets everything else uses grow with it.
+ *
+ * 188 rather than 168 because the log is a row of the stack now. Measured
+ * rather than guessed: 12 of padding, 69 of vitals, 8, 16 of log, 8, 60 of
+ * slots, 12 of padding, and one border - 186. At 168 the stack overflowed the
+ * bar by 13px at each end, which put the vitality meter over the diorama above
+ * the shelf's own top edge and the bottom row of the nav one pixel past it.
+ */
 @media (max-width: 620px) {
   :root {
-    --shelf-height: 168px;
+    --shelf-height: 188px;
   }
 }
 

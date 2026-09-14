@@ -44,7 +44,7 @@ const snapshot = () =>
     lastSummon: null,
     nextKnowledgeStage: 1,
       rebirthKnowledgeGain: big(0),
-    lastEvent: 'Authored spell review',
+    chronicle: [],
   });
 const mode = document.querySelector<HTMLSelectElement>('#mode')!;
 for (const node of SPELL_TREE_NODES.filter((n) => ['root', 'route', 'mutation', 'fusion', 'apex'].includes(n.kind))) {

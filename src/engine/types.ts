@@ -1,4 +1,5 @@
 import type { CombatPosition } from './combat/SpellCombatState';
+import type { ChronicleLine } from './events/Chronicle';
 // prettier-ignore
 import type { CompanionAbility, CompanionClass, CompanionModelKey, CompanionRarity, FormationRow } from './companions/types';
 import type { GearSlot } from './gear/types';
@@ -191,7 +192,11 @@ export interface SimulationSnapshot {
    */
   storyFlags: readonly string[];
   lastSummon: LastSummonSnapshot | null;
-  lastEvent: string;
+  /**
+   * The session's log, oldest first. See `Chronicle`: one line was never a log,
+   * and the one line was hidden below 860px anyway.
+   */
+  chronicle: readonly ChronicleLine[];
 }
 
 export type EngineCommand =

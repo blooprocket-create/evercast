@@ -84,7 +84,9 @@ describe('ui architecture', () => {
     // `.slot-staff { top: 205px }` is why the old paperdoll could not hold a
     // ninth gear slot. Surfaces describe data; archetypes own geometry.
     const candidates = FILES.filter((file) => within(file, 'surfaces'));
-    expect(offences(candidates, /\b(top|left|right|bottom)\s*:\s*-?\d+(\.\d+)?px/)).toEqual([]);
+    // Not preceded by a hyphen: `border-bottom: 1px solid` is a rule about an
+    // edge, not a position, and the pattern used to read the tail of it as one.
+    expect(offences(candidates, /(?<![\w-])(top|left|right|bottom)\s*:\s*-?\d+(\.\d+)?px/)).toEqual([]);
   });
 
   it('keeps the shelf at three slots forever', () => {

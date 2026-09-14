@@ -89,40 +89,18 @@
   align-content: center;
 }
 
-.logLine {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font: 400 var(--text-small) / 1.35 var(--font-ui);
-  color: var(--ink-mid);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.pip {
-  width: 4px;
-  height: 4px;
-  border-radius: var(--radius-pill);
-  background: var(--accent);
-  flex: none;
-}
-
 @media (max-width: 860px) {
-  .log {
-    display: none;
-  }
-
   .vitals {
     width: 180px;
   }
 }
 
 @media (max-width: 620px) {
+  /* Three rows now rather than two, so the gap between them gives way first. */
   .shelf {
     flex-direction: column;
     justify-content: center;
-    gap: var(--space-3);
+    gap: var(--space-2);
     padding: var(--space-3) max(var(--space-3), var(--safe-right))
       calc(var(--space-3) + var(--safe-bottom)) max(var(--space-3), var(--safe-left));
   }
@@ -133,6 +111,23 @@
 
   .vitals {
     width: 100%;
+    order: -2;
+  }
+
+  /*
+   * The log exists on a phone now. It was `display: none` below 860px, which
+   * is every phone and every portrait tablet - so the one place the game
+   * narrates itself in words did not exist there, and the canvas's own
+   * `aria-label` pointed at it regardless.
+   *
+   * Ordered between the vitals and the slots rather than left where it falls
+   * in the DOM, so the nav keeps the bottom edge and the thumb reach that goes
+   * with it. Only the visible stack moves; the live region that announces the
+   * newest line has no size and no position.
+   */
+  .log {
+    width: 100%;
+    order: -1;
   }
 
   .slots {
