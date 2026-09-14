@@ -5,13 +5,12 @@ import {
   SPELL_TREE_NODE_BY_ID,
   SPELL_TREE_ROOT_ID,
 } from '../../content/spellTree';
-import { big, formatBig } from '../../engine/numbers';
+import { formatBig } from '../../engine/numbers';
 import { blockingAttunement } from '../../engine/spellTree/SpellTreeSystem';
 import type { SpellTreeState } from '../../engine/spellTree/types';
 import { Graph, type EdgeTone } from '../archetypes/Graph';
 import { Moment } from '../archetypes/Moment';
 import { NumberCell } from '../format/NumberCell';
-import { affordabilityLabel } from '../format/timeToAfford';
 import type { GraphBox } from '../graph/layoutGraph';
 import { shouldShowSearch } from '../graph/fitView';
 import { Button } from '../primitives/Button';
@@ -20,6 +19,7 @@ import { useSnapshot } from '../state/snapshot';
 import { spellNodeStatuses, spellTreeStateKey } from '../spellTree/spellNodeStatuses';
 import { LABELLED_KINDS, SPELL_TREE_LAYOUT } from '../spellTree/spellTreeGraph';
 import { projectNode } from '../spellTree/spellDps';
+import { spellPointOffer } from '../spellTree/pointPurchase';
 import { effectiveDps } from '../format/dps';
 import styles from './SpellTreeSurface.module.css';
 
@@ -123,15 +123,14 @@ export function SpellTreeSurface() {
     return 'var(--ink-dim)';
   };
 
-  const pointWait = affordabilityLabel(
-    snapshot.nextSpellPointCost.raw,
-    snapshot.essence.raw,
-    snapshot.income.essence?.raw,
-  );
-
-  const affordablePoint =
-    snapshot.spellTreeTotalPoints < snapshot.spellTreeMaxPoints &&
-    big(snapshot.essence.raw).cmp(big(snapshot.nextSpellPointCost.raw)) >= 0;
+  // One derivation for the button and the label both; see `spellPointOffer`.
+  const { affordable: affordablePoint, wait: pointWait } = spellPointOffer({
+    totalPoints: snapshot.spellTreeTotalPoints,
+    maxPoints: snapshot.spellTreeMaxPoints,
+    cost: snapshot.nextSpellPointCost.raw,
+    essence: snapshot.essence.raw,
+    essencePerSecond: snapshot.income.essence?.raw,
+  });
 
   // Which unlock would widen whatever is blocking the selected node, so the
   // inspector can name it instead of telling the player to respec in vain.

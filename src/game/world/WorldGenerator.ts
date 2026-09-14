@@ -19,7 +19,8 @@ import { createTerrainChunk, createTerrainMaterials, terrainHeight, type Terrain
 import { createGroundDetails, createContactShadow } from './WorldGroundDetails';
 import { WorldBackdrop } from './WorldBackdrop';
 import { ZONES } from '../../content/zones';
-import { WORLD_TRAVEL_SPEED, WORLD_UNITS_PER_ZONE } from './JourneyProgress';
+import { DEFAULT_ENGINE_CONFIG } from '../../engine/config';
+import { WORLD_UNITS_PER_ZONE, worldTravelSpeed } from './JourneyProgress';
 
 /**
  * The rendered biomes are the authored zones, one for one, by id.
@@ -262,6 +263,8 @@ export class WorldGenerator {
   private readonly moteMaterial: StandardMaterial;
   private distance = 0;
   private visualTime = 0;
+  /** Overwritten from the snapshot on the first sync; see `setZoneLength`. */
+  private zoneLength = DEFAULT_ENGINE_CONFIG.zoneLength;
   private lastCenterIndex = Number.NaN;
 
   constructor(
@@ -291,9 +294,18 @@ export class WorldGenerator {
     this.rebuildVisibleChunks();
   }
 
+  /**
+   * The run's zone length, so the road walks one biome per zone of stages
+   * rather than per twenty-five of them. Set from the snapshot, which is where
+   * the HUD reads the same number.
+   */
+  setZoneLength(zoneLength: number): void {
+    this.zoneLength = zoneLength;
+  }
+
   update(deltaSeconds: number, walking: boolean): void {
     this.visualTime += deltaSeconds;
-    this.distance += walking ? deltaSeconds * WORLD_TRAVEL_SPEED : 0;
+    this.distance += walking ? deltaSeconds * worldTravelSpeed(this.zoneLength) : 0;
     this.rebuildVisibleChunks();
     this.updateAtmosphere();
     this.updateMotes(deltaSeconds);

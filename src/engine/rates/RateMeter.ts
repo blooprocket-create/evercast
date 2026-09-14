@@ -85,4 +85,22 @@ export class RateMeter<Key extends string> {
     if (this.observedSeconds < WARM_SECONDS) return null;
     return this.rates.get(key) ?? big(0);
   }
+
+  /**
+   * Forgets everything, including that it was ever warm.
+   *
+   * A rebirth replaces the run the rates were measured from, and the new one
+   * earns at a wholly different order of magnitude. Decay alone will not do:
+   * the average is exponential with a 25-second constant, so coming down from
+   * a late run's gold rate to a first-stage one - fifty orders of magnitude is
+   * routine here - takes the better part of an hour, and every price in the
+   * game would read as affordable now for the whole of it. Going cold is the
+   * honest answer, and `read` already returns null while it is.
+   */
+  reset(): void {
+    this.rates.clear();
+    this.pending.clear();
+    this.sampleSeconds = 0;
+    this.observedSeconds = 0;
+  }
 }

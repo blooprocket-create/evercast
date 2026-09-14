@@ -1,4 +1,3 @@
-import { DEFAULT_ENGINE_CONFIG } from '../../engine/config';
 import type { RunMode } from '../../engine/model';
 
 // Prototype pacing: one successful stage grants one normal travel interval of visual world movement.
@@ -19,10 +18,18 @@ export const WORLD_UNITS_PER_ZONE = 120;
  * which made a zone of 25 stages 117 units of road against a biome cycle of
  * 120 - so the interface and the terrain agreed at the start of a run and
  * nowhere after it. This is the speed at which one zone of stages is exactly
- * one zone of road, whatever `zoneLength` is set to.
+ * one zone of road.
+ *
+ * A function of the *run's* zone length rather than a constant off the default
+ * config, because the drift this removes comes back the moment the two differ:
+ * the HUD names its zone from `snapshot.zoneLength` and would go on doing so
+ * while the road kept walking at 25 stages to the biome. A balance experiment
+ * that changed the one number is exactly the case that used to break, so the
+ * renderer reads the same number the interface does.
  */
-export const WORLD_TRAVEL_SPEED =
-  WORLD_UNITS_PER_ZONE / (DEFAULT_ENGINE_CONFIG.zoneLength * WORLD_TRAVEL_SECONDS_PER_STAGE);
+export function worldTravelSpeed(zoneLength: number): number {
+  return WORLD_UNITS_PER_ZONE / (Math.max(1, zoneLength) * WORLD_TRAVEL_SECONDS_PER_STAGE);
+}
 
 export interface JourneyProgressInput {
   mode: RunMode;

@@ -274,6 +274,16 @@ export class EvercastSimulation {
     this.chronicle.record(event);
     if (event.type === 'resource_gained') this.income.add(event.resource, event.amount);
     if (event.type === 'stage_advanced') this.income.add('stage', '1');
+    /*
+     * A rebirth is a new run, and the meter has to be told so.
+     *
+     * Everything it had measured belongs to the state the rebirth just spent:
+     * the same second that resets the frontier to 1 leaves a gold rate earned
+     * at stage 900 sitting in the average. Nothing else in the simulation
+     * carries a memory across this line, and a rate that did would make every
+     * price in the new run read as affordable now.
+     */
+    if (event.type === 'rebirth_performed') this.income.reset();
     if (event.type === 'mage_defeated') {
       this.defeats += 1;
       this.lastDefeat = { serial: this.defeats, stage: event.stage, enemyName: event.enemyName };

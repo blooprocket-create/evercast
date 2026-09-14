@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { createDefaultCatalog, resolveZone } from '../../content/catalog';
 import { ZONES } from '../../content/zones';
 import { DEFAULT_ENGINE_CONFIG } from '../../engine/config';
-import { WORLD_TRAVEL_SPEED, initialJourneyTravelSeconds } from './JourneyProgress';
+import { initialJourneyTravelSeconds, worldTravelSpeed } from './JourneyProgress';
 import { sampleBiome, sampleTransitionProfile } from './WorldGenerator';
 
 /** Exactly what `EvercastScene.syncJourney` walks the world to for a stage. */
-const distanceAtStage = (stage: number): number =>
-  initialJourneyTravelSeconds(stage) * WORLD_TRAVEL_SPEED;
+const distanceAtStage = (stage: number, zoneLength = DEFAULT_ENGINE_CONFIG.zoneLength): number =>
+  initialJourneyTravelSeconds(stage) * worldTravelSpeed(zoneLength);
 
 describe('procedural world biome sampling', () => {
   it('starts in Greenfields and blends gradually into Whispering Woods', () => {
@@ -55,6 +55,24 @@ describe('procedural world biome sampling', () => {
       const zone = resolveZone(catalog, stage, DEFAULT_ENGINE_CONFIG.zoneLength).zone;
       const rendered = sampleBiome(distanceAtStage(stage));
       expect(rendered.from, `stage ${stage}`).toBe(zone.id);
+    }
+  });
+
+  it('renders the named zone at a zone length the default config does not use', () => {
+    /*
+     * The same assertion, off the default. The speed used to be a module
+     * constant computed from `DEFAULT_ENGINE_CONFIG`, so a run configured with
+     * any other `zoneLength` put the interface back on one clock and the road
+     * on another - the exact drift the test above exists to prevent, reachable
+     * by changing a single number. Both are read from the run now.
+     */
+    const catalog = createDefaultCatalog();
+    for (const zoneLength of [10, 40]) {
+      for (let stage = 1; stage <= 420; stage += 1) {
+        const zone = resolveZone(catalog, stage, zoneLength).zone;
+        const rendered = sampleBiome(distanceAtStage(stage, zoneLength));
+        expect(rendered.from, `zoneLength ${zoneLength}, stage ${stage}`).toBe(zone.id);
+      }
     }
   });
 

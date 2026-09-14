@@ -63,6 +63,33 @@ describe('the rate meter', () => {
     expect(meter.read('gold')!.toNumber()).toBe(0);
   });
 
+  it('goes cold again when the run it measured is spent', () => {
+    // A rebirth replaces the state the rates came from. Decay is not enough:
+    // the average is exponential, so a late run's rate is still orders of
+    // magnitude out long after the new run has started earning.
+    const meter = new RateMeter<'gold'>();
+    run(meter, 200, '1e40');
+    expect(meter.read('gold')).not.toBeNull();
+
+    meter.reset();
+    expect(meter.read('gold')).toBeNull();
+
+    // And it warms from nothing rather than from what it used to hold.
+    run(meter, 200, '10');
+    expect(meter.read('gold')!.toNumber()).toBeGreaterThan(5);
+    expect(meter.read('gold')!.toNumber()).toBeLessThan(20);
+  });
+
+  it('drops what was banked but not yet folded', () => {
+    // Otherwise the first sample of the new run carries the old run's takings.
+    const meter = new RateMeter<'gold'>();
+    run(meter, 200, '1e40');
+    meter.add('gold', '1e40');
+    meter.reset();
+    run(meter, 200, '10');
+    expect(meter.read('gold')!.toNumber()).toBeLessThan(20);
+  });
+
   it('ignores a step that is not a length of time', () => {
     const meter = new RateMeter<'gold'>();
     run(meter, 200, '100');

@@ -638,6 +638,9 @@ export class EvercastScene {
   };
 
   private syncJourney(snapshot: SimulationSnapshot, deltaSeconds: number, walking: boolean): void {
+    // Before any travel is spent: it decides how far a second of it goes.
+    this.world.setZoneLength(snapshot.zoneLength);
+
     if (!this.journeyInitialized) {
       this.visualFrontierStage = Math.max(1, snapshot.stage);
       const initialTravel = initialJourneyTravelSeconds(this.visualFrontierStage);

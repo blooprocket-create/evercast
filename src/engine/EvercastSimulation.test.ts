@@ -158,6 +158,26 @@ describe('EvercastSimulation', () => {
     });
   });
 
+  describe('rates across a rebirth', () => {
+    it('forgets what the spent run was earning', () => {
+      /*
+       * The rates are a measurement of a run, and a rebirth ends one. Left
+       * alone the meter would go on reporting the old run's income into the
+       * new one - and every price in the game is read through it, so a fresh
+       * frontier would claim everything was affordable now.
+       */
+      const sim = new EvercastSimulation({ config: { rebirthUnlockStage: 2 } });
+      sim.advance(30, { presentationEvents: false });
+
+      const earning = sim.getSnapshot().income.gold;
+      expect(earning).not.toBeNull();
+
+      expect(sim.execute({ type: 'rebirth' })).toBe(true);
+      expect(sim.getSnapshot().income.gold).toBeNull();
+      expect(sim.getSnapshot().stagesPerHour).toBeNull();
+    });
+  });
+
   describe('advance guard', () => {
     it('still stops a loop that has run away', () => {
       const sim = new EvercastSimulation({
