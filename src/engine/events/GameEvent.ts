@@ -109,7 +109,17 @@ export type GameEvent =
       amount: string;
     }
   | { type: 'stage_advanced'; time: number; stage: number }
-  | { type: 'mode_changed'; time: number; mode: 'push' | 'farm'; reason: string }
+  /**
+   * `reason` is a closed set rather than a free string so that the one place
+   * that turns an event into a sentence can cover it exhaustively. It used to
+   * be interpolated raw, which put "Farming: frontier defeat." in the log.
+   */
+  | {
+      type: 'mode_changed';
+      time: number;
+      mode: 'push' | 'farm';
+      reason: 'frontier defeat' | 'automatic frontier retry' | 'manual frontier retry';
+    }
   | { type: 'gear_leveled'; time: number; slot: GearSlot; level: number; cost: string }
   | { type: 'gear_evolved'; time: number; slot: GearSlot; level: number; evolutionTier: number; name: string }
   | { type: 'spell_point_purchased'; time: number; purchasedPoints: number; cost: string }

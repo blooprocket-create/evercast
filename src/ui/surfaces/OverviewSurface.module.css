@@ -16,6 +16,26 @@
   color: var(--ink-mid);
 }
 
+/*
+ * Slot, name and level on one baseline, with only the name allowed to give
+ * way. `min-width: 0` on the group is what lets the name's ellipsis work
+ * inside a flex row at all.
+ */
+.identity {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.slot {
+  flex: none;
+  font: 600 var(--text-label) / 1 var(--font-ui);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-low);
+}
+
 .name {
   min-width: 0;
   overflow: hidden;
@@ -24,7 +44,9 @@
 }
 
 .level {
+  flex: none;
   color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
 }
 
 .contribution {
@@ -34,7 +56,17 @@
   flex: none;
 }
 
+/*
+ * A column of its own rather than whatever width the label happens to be.
+ * `--value-width` reserves a fixed box for the number, and then a variable
+ * -width unit after it shifted every number's right edge by the difference
+ * between "Max HP" and "Base Damage" - which is exactly the column alignment
+ * the reserve exists to buy.
+ */
 .unit {
+  flex: none;
+  min-width: 4.75rem;
+  text-align: left;
   color: var(--ink-low);
   font-size: var(--text-label);
 }

@@ -46,6 +46,7 @@ export const GOLD_BOSS_MULTIPLIER = 3;
 export const GEAR_DEFINITIONS: Record<GearSlot, GearDefinition> = {
   helm: {
     slot: 'helm',
+    slotLabel: 'Helm',
     baseName: 'Standard Helm',
     description: 'Basic head protection for a mage beginning the long road.',
     primaryStat: 'maxHp',
@@ -57,6 +58,7 @@ export const GEAR_DEFINITIONS: Record<GearSlot, GearDefinition> = {
   },
   staff: {
     slot: 'staff',
+    slotLabel: 'Staff',
     baseName: 'Standard Staff',
     description: 'A simple magical focus that strengthens the base force of the Evercast.',
     primaryStat: 'baseDamage',
@@ -68,6 +70,7 @@ export const GEAR_DEFINITIONS: Record<GearSlot, GearDefinition> = {
   },
   spellbook: {
     slot: 'spellbook',
+    slotLabel: 'Spellbook',
     baseName: 'Standard Spellbook',
     description: 'A record of the Evercast and the principles that shape how it behaves.',
     primaryStat: 'baseDamage',
@@ -79,6 +82,7 @@ export const GEAR_DEFINITIONS: Record<GearSlot, GearDefinition> = {
   },
   robe: {
     slot: 'robe',
+    slotLabel: 'Robe',
     baseName: 'Standard Robe',
     description: 'Simple traveling robes reinforced over time with increasingly powerful magic.',
     primaryStat: 'maxHp',
@@ -90,6 +94,7 @@ export const GEAR_DEFINITIONS: Record<GearSlot, GearDefinition> = {
   },
   boots: {
     slot: 'boots',
+    slotLabel: 'Boots',
     baseName: 'Standard Boots',
     description: 'Reliable road-worn boots that keep the mage standing through harder fights.',
     primaryStat: 'maxHp',
@@ -101,6 +106,7 @@ export const GEAR_DEFINITIONS: Record<GearSlot, GearDefinition> = {
   },
   necklace: {
     slot: 'necklace',
+    slotLabel: 'Necklace',
     baseName: 'Standard Necklace',
     description: 'A small magical focus worn close to the heart.',
     primaryStat: 'baseDamage',
@@ -112,6 +118,7 @@ export const GEAR_DEFINITIONS: Record<GearSlot, GearDefinition> = {
   },
   ringLeft: {
     slot: 'ringLeft',
+    slotLabel: 'Ring I',
     baseName: 'Standard Ring',
     description: 'A flexible magical focus. Its tree can eventually specialize independently from the other ring.',
     primaryStat: 'baseDamage',
@@ -123,6 +130,7 @@ export const GEAR_DEFINITIONS: Record<GearSlot, GearDefinition> = {
   },
   ringRight: {
     slot: 'ringRight',
+    slotLabel: 'Ring II',
     baseName: 'Standard Ring',
     description: 'A second independent ring slot for a separate gear-tree specialization.',
     primaryStat: 'baseDamage',

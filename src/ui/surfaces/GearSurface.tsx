@@ -14,17 +14,6 @@ import { useRepeatCommand } from '../state/CommandContext';
 import { useSnapshot } from '../state/snapshot';
 import styles from './GearSurface.module.css';
 
-const SLOT_LABELS: Record<GearSlot, string> = {
-  helm: 'Helm',
-  staff: 'Staff',
-  spellbook: 'Spellbook',
-  robe: 'Robe',
-  boots: 'Boots',
-  necklace: 'Necklace',
-  ringLeft: 'Ring I',
-  ringRight: 'Ring II',
-};
-
 /**
  * Silhouettes stand in for the paperdoll this replaces. The old one pinned
  * eight slots at hardcoded pixel offsets, so it could never hold a ninth.
@@ -92,7 +81,7 @@ export function GearSurface() {
               icon={SLOT_ICONS[piece.slot]}
               iconLive={canAfford(piece)}
               label={piece.name}
-              sub={`${SLOT_LABELS[piece.slot]} - Lv ${piece.level}`}
+              sub={`${piece.slotLabel} \u00b7 Lv ${piece.level}`}
               value={
                 <NumberCell
                   value={piece.contribution}
@@ -108,7 +97,7 @@ export function GearSurface() {
       }
     >
       <span className={styles.eyebrow}>
-        {SLOT_LABELS[selected.slot]} - Evolution {tier + 1} of {GEAR_EVOLUTION_MILESTONES.length}
+        {selected.slotLabel} &middot; Evolution {tier + 1} of {GEAR_EVOLUTION_MILESTONES.length}
       </span>
       <h2 className={styles.name}>{selected.name}</h2>
       <p className={styles.description}>{selected.description}</p>

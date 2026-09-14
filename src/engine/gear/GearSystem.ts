@@ -263,6 +263,7 @@ export function gearDisplayData(equipment: EquipmentState, slot: GearSlot) {
     evolutionTier: tier,
     name: definition.evolutionNames[tier],
     description: definition.description,
+    slotLabel: definition.slotLabel,
     primaryStatLabel: definition.primaryStatLabel,
     contribution,
     nextLevelGain: gearContribution(definition.statPerLevel, piece.level + 1).sub(contribution),

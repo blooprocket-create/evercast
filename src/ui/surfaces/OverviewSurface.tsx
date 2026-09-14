@@ -69,9 +69,19 @@ export function OverviewSurface() {
           <div className={styles.rows} key={gearSignature}>
             {gear.map((piece) => (
               <div className={styles.row} key={piece.slot}>
-                <span className={styles.name}>
-                  {piece.name}
-                  <span className={styles.level}> Lv {piece.level}</span>
+                {/*
+                  The slot leads and the level trails, both at their natural
+                  width, so only the piece name gives way when the row is
+                  narrow. Before this the name and the level shared one
+                  ellipsised span, and a phone rendered "Evercast Codex Lv
+                  15..." - truncating the one number on the row that changes.
+                  The slot is also what tells the two rings apart: they reach
+                  the same authored name at the final tier.
+                */}
+                <span className={styles.identity}>
+                  <span className={styles.slot}>{piece.slotLabel}</span>
+                  <span className={styles.name}>{piece.name}</span>
+                  <span className={styles.level}>Lv {piece.level}</span>
                 </span>
                 <span className={styles.contribution}>
                   <NumberCell value={piece.contribution} prefix="+" />

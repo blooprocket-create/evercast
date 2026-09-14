@@ -103,6 +103,14 @@
  * bottom of the screen with no way to scroll to it.
  */
 .surface {
+  /*
+   * Positioned so that an absolutely positioned descendant resolves against
+   * the pane rather than against the host. Unpositioned, the Rebirth moment's
+   * own scrim - `inset: 0` with a background and `pointer-events: auto` -
+   * took the whole host, covering the header, the Back button and the nav
+   * rail and swallowing their clicks. See `.inline` in Moment.module.css.
+   */
+  position: relative;
   flex: 1;
   min-width: 0;
   min-height: 0;
