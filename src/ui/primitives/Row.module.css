@@ -19,6 +19,21 @@
   background: var(--veil-2);
 }
 
+/*
+ * A row that wears its owner's colour. `--row-tone` comes from an ancestor -
+ * see `rarityStyle` - so nothing is named here and a row without one is
+ * untouched. Declared above `.selected` on purpose: selection still wins.
+ */
+.toned {
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--row-tone, transparent) 80%, transparent);
+}
+
+.iconToned {
+  color: var(--row-tone, var(--ink-low));
+  background: color-mix(in srgb, var(--row-tone, currentColor) 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--row-tone, currentColor) 38%, transparent);
+}
+
 .selected {
   background: color-mix(in srgb, var(--accent) 11%, transparent);
   box-shadow: inset 2px 0 0 var(--accent);

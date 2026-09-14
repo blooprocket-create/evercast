@@ -17,8 +17,10 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Rarity, handed to the row primitive without naming a colour. */
 .rowWrap {
   display: block;
+  --row-tone: var(--rarity);
 }
 
 /* The one place rarity does real work: a legendary reads down a long list. */
@@ -52,21 +54,29 @@
 }
 
 /*
- * 9rem, not 13: at 13 a 375px pane still fitted only one fact per row, which
- * is what pushed Damage and everything under it off the bottom. Two per row
- * clears the whole stat block on a phone.
+ * 11.5rem, and the two ends of a fact are allowed to stack.
+ *
+ * At 9rem two facts fitted a 375px pane - but a fact is a label plus a 10ch
+ * `NumberCell` plus padding, which needs about 11rem, so `Damage 7.12e47 /
+ * hit` overflowed its own track and was clipped by the pane to `Damage
+ * 7.12e47 /`, unit and all. At 1440 it wrapped mid-value instead, dropping
+ * `/ hit` onto a second line inside a one-line cell and leaving that column
+ * taller than its neighbours. The cell wraps deliberately now rather than
+ * accidentally: label above, value below, whenever the row is too narrow to
+ * hold both.
  */
 .facts {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 11.5rem), 1fr));
   gap: var(--space-2);
 }
 
 .fact {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  gap: var(--space-3);
+  gap: var(--space-1) var(--space-3);
   padding: var(--space-3);
   border-radius: var(--radius-chip);
   background: var(--veil-2);
@@ -135,5 +145,119 @@
 
   .ascend {
     font-size: var(--text-small);
+  }
+}
+
+/* The roster's controls, above the list it filters. */
+.controls {
+  display: grid;
+  gap: var(--space-2);
+  width: 100%;
+  min-width: 0;
+}
+
+.controlRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.search {
+  width: 100%;
+  min-width: 0;
+  height: var(--control-height);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-chip);
+  background: var(--veil-2);
+  color: var(--ink);
+  /* Safari zooms a focused input below this and never zooms back out. */
+  font-size: var(--text-input-min);
+  font-family: var(--font-ui);
+}
+
+/*
+ * Tight enough for one row wherever the list band is the full width of a
+ * phone. It wraps in the 320px column a desktop gives it, which is the one
+ * place there is height to spare. Not a scroller: a surface may not own one -
+ * see ui/architecture.test.ts - and a second axis here is exactly what that
+ * rule exists to prevent.
+ */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.chip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-height);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink-low);
+  font: 600 var(--text-label) / 1 var(--font-ui);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.chipOn {
+  border-color: var(--accent-ink);
+  color: var(--ink);
+}
+
+/* What the filter would show, before it is pressed. */
+.chipCount {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  color: var(--ink-dim);
+}
+
+.sort {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+}
+
+.sortLabel {
+  font: 600 var(--text-label) / 1 var(--font-ui);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-low);
+}
+
+.select {
+  width: 6.5rem;
+  min-width: 0;
+  height: var(--control-height);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-chip);
+  background: var(--veil-2);
+  color: var(--ink);
+  font-size: var(--text-input-min);
+  font-family: var(--font-ui);
+}
+
+/* The stars, once, at the size the roster draws them. */
+.starRow {
+  font: 500 var(--text-lead) / 1 var(--font-ui);
+  letter-spacing: 0.12em;
+  color: var(--rarity, var(--accent-ink));
+}
+
+/*
+ * The heading gives way on a phone: the chips already carry the roster's size
+ * ("All 25"), and the band the list gets is 45% of a 533px surface.
+ */
+@media (max-width: 860px) {
+  .controls > .controlRow:first-child {
+    display: none;
   }
 }
