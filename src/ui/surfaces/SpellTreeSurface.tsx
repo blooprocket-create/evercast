@@ -9,6 +9,7 @@ import { big, formatBig } from '../../engine/numbers';
 import { blockingAttunement } from '../../engine/spellTree/SpellTreeSystem';
 import type { SpellTreeState } from '../../engine/spellTree/types';
 import { Graph, type EdgeTone } from '../archetypes/Graph';
+import { Moment } from '../archetypes/Moment';
 import { NumberCell } from '../format/NumberCell';
 import type { GraphBox } from '../graph/layoutGraph';
 import { shouldShowSearch } from '../graph/fitView';
@@ -73,6 +74,7 @@ export function SpellTreeSurface() {
   const run = useCommand();
   const [selectedId, setSelectedId] = useState<string>(SPELL_TREE_ROOT_ID);
   const [query, setQuery] = useState('');
+  const [respeccing, setRespeccing] = useState(false);
   const focusRef = useRef<((box: GraphBox) => void) | null>(null);
 
   const state: SpellTreeState = {
@@ -132,177 +134,212 @@ export function SpellTreeSurface() {
   );
 
   return (
-    <Graph
-      layout={SPELL_TREE_LAYOUT}
-      focusRef={(focus) => {
-        focusRef.current = focus;
-      }}
-      edgeTone={edgeTone}
-      nodeTone={nodeTone}
-      edgeAnchor="centre"
-      renderNode={(box, view) => {
-        const node = SPELL_TREE_NODE_BY_ID.get(box.id);
-        if (!node) return null;
-        const nodeStatus = statuses.get(box.id) ?? 'unknown';
-        const classes = [styles.node, styles[nodeStatus]];
-        if (box.id === selected.id) classes.push(styles.selected);
-        if (matches.has(box.id)) classes.push(styles.match);
-        const labelled =
-          box.id === selected.id || matches.has(box.id) || labelAtZoom(node.kind, view.scale);
-        return (
-          <button
-            type="button"
-            className={classes.filter(Boolean).join(' ')}
-            onClick={() => setSelectedId(box.id)}
-            title={`${node.name} \u00b7 ${STATUS_NOTE[nodeStatus]}`}
-            aria-label={`${node.name}: ${STATUS_NOTE[nodeStatus]}`}
-            aria-pressed={box.id === selected.id}
-          >
-            {labelled && (
-              /*
-                Counter-scaled, so a label is the size it was authored at
-                whatever the zoom - it used to shrink with the graph and was
-                3-4px of noise at the fitted zoom.
-              */
-              <span
-                className={styles.name}
-                style={{ '--label-scale': 'var(--graph-inverse-scale, 1)' } as React.CSSProperties}
-              >
-                {node.name}
-              </span>
-            )}
-          </button>
-        );
-      }}
-      toolbar={
-        <>
-          <span className={`${styles.chip} ${styles.unspent}`}>
-            <span className={styles.unspentValue}>{snapshot.spellTreeUnspentPoints}</span>
-            unspent
-          </span>
-          <Button
-            variant="primary"
-            disabled={!affordablePoint}
-            onClick={() => run({ type: 'buy_spell_point' })}
-          >
-            Awaken point &middot; {snapshot.nextSpellPointCost.display}
-          </Button>
-          <Button
-            disabled={snapshot.activeSpellNodeIds.length === 0}
-            onClick={() => run({ type: 'respec_spell_tree' })}
-          >
-            Respec
-          </Button>
-          <span className={styles.spacer} />
-          {shouldShowSearch(SPELL_TREE_NODES.length) && (
-            <input
-              className={styles.search}
-              type="search"
-              value={query}
-              placeholder={`Search ${SPELL_TREE_NODES.length} nodes`}
-              onChange={(event) => {
-                const next = event.target.value;
-                setQuery(next);
-                const trimmed = next.trim().toLowerCase();
-                if (trimmed.length < 2) return;
-                const hit = SPELL_TREE_NODES.find((node) =>
-                  node.name.toLowerCase().includes(trimmed),
-                );
-                const box = hit && SPELL_TREE_LAYOUT.boxes.get(hit.id);
-                if (box) {
-                  setSelectedId(hit.id);
-                  focusRef.current?.(box);
-                }
-              }}
-            />
-          )}
-        </>
-      }
-      inspector={
-        <>
-          <span className={styles.eyebrow}>
-            {KIND_LABEL[selected.kind] ?? selected.kind} &middot; {selected.region}
-          </span>
-          <h3 className={styles.title}>{selected.name}</h3>
-          <p className={styles.description}>{selected.description}</p>
-
-          {projection && (
-            <div className={styles.impact}>
-              <span className={styles.eyebrow}>If you awaken this</span>
-              {projection.percent !== null && projection.percent !== 0 ? (
-                <>
-                  <div className={styles.impactRow}>
-                    <span>Effective DPS</span>
-                    <span>
-                      <span className={styles.before}>{formatBig(currentDps)}</span>{' '}
-                      <span className={styles.after}>{formatBig(projection.projected)}</span>
-                    </span>
-                  </div>
-                  <div className={styles.impactRow}>
-                    <span>Change</span>
-                    <span className={styles.after}>
-                      {projection.percent > 0 ? '+' : ''}
-                      {projection.percent}%
-                    </span>
-                  </div>
-                </>
-              ) : (
-                <p className={styles.note}>
-                  No change to single-target damage per second. This one is felt elsewhere.
-                </p>
+    <>
+      <Graph
+        layout={SPELL_TREE_LAYOUT}
+        focusRef={(focus) => {
+          focusRef.current = focus;
+        }}
+        edgeTone={edgeTone}
+        nodeTone={nodeTone}
+        edgeAnchor="centre"
+        renderNode={(box, view) => {
+          const node = SPELL_TREE_NODE_BY_ID.get(box.id);
+          if (!node) return null;
+          const nodeStatus = statuses.get(box.id) ?? 'unknown';
+          const classes = [styles.node, styles[nodeStatus]];
+          if (box.id === selected.id) classes.push(styles.selected);
+          if (matches.has(box.id)) classes.push(styles.match);
+          const labelled =
+            box.id === selected.id || matches.has(box.id) || labelAtZoom(node.kind, view.scale);
+          return (
+            <button
+              type="button"
+              className={classes.filter(Boolean).join(' ')}
+              onClick={() => setSelectedId(box.id)}
+              title={`${node.name} \u00b7 ${STATUS_NOTE[nodeStatus]}`}
+              aria-label={`${node.name}: ${STATUS_NOTE[nodeStatus]}`}
+              aria-pressed={box.id === selected.id}
+            >
+              {labelled && (
+                /*
+                  Counter-scaled, so a label is the size it was authored at
+                  whatever the zoom - it used to shrink with the graph and was
+                  3-4px of noise at the fitted zoom.
+                */
+                <span
+                  className={styles.name}
+                  style={{ '--label-scale': 'var(--graph-inverse-scale, 1)' } as React.CSSProperties}
+                >
+                  {node.name}
+                </span>
               )}
-              {projection.changes.length > 0 && (
-                <div className={styles.impactRow}>
-                  <span>Changes</span>
-                  <span className={styles.changes}>{projection.changes.join(', ')}</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {selected.requiresAll.length > 0 && (
-            <div className={styles.requires}>
-              <span className={styles.eyebrow} style={{ color: 'var(--ink-low)' }}>
-                Requires
-              </span>
-              {selected.requiresAll.map((id) => {
-                const met = statuses.get(id) === 'active';
-                return (
-                  <span key={id} className={styles.requirement}>
-                    <span className={met ? styles.met : undefined}>{met ? '\u2713' : '\u25cb'}</span>
-                    {SPELL_TREE_NODE_BY_ID.get(id)?.name ?? id}
-                  </span>
-                );
-              })}
-            </div>
-          )}
-
-          {status !== 'active' && (
+            </button>
+          );
+        }}
+        toolbar={
+          <>
+            <span className={`${styles.chip} ${styles.unspent}`}>
+              <span className={styles.unspentValue}>{snapshot.spellTreeUnspentPoints}</span>
+              unspent
+            </span>
             <Button
               variant="primary"
-              disabled={status !== 'available'}
-              onClick={() => run({ type: 'activate_spell_node', nodeId: selected.id })}
+              disabled={!affordablePoint}
+              onClick={() => run({ type: 'buy_spell_point' })}
             >
-              {status === 'available' ? 'Awaken - 1 point' : STATUS_NOTE[status]}
+              Awaken point &middot; {snapshot.nextSpellPointCost.display}
             </Button>
-          )}
+            <Button
+              disabled={snapshot.activeSpellNodeIds.length === 0}
+              onClick={() => setRespeccing(true)}
+            >
+              Respec
+            </Button>
+            <span className={styles.spacer} />
+            {shouldShowSearch(SPELL_TREE_NODES.length) && (
+              <input
+                className={styles.search}
+                type="search"
+                value={query}
+                placeholder={`Search ${SPELL_TREE_NODES.length} nodes`}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setQuery(next);
+                  const trimmed = next.trim().toLowerCase();
+                  if (trimmed.length < 2) return;
+                  const hit = SPELL_TREE_NODES.find((node) =>
+                    node.name.toLowerCase().includes(trimmed),
+                  );
+                  const box = hit && SPELL_TREE_LAYOUT.boxes.get(hit.id);
+                  if (box) {
+                    setSelectedId(hit.id);
+                    focusRef.current?.(box);
+                  }
+                }}
+              />
+            )}
+          </>
+        }
+        inspector={
+          <>
+            <span className={styles.eyebrow}>
+              {KIND_LABEL[selected.kind] ?? selected.kind} &middot; {selected.region}
+            </span>
+            <h3 className={styles.title}>{selected.name}</h3>
+            <p className={styles.description}>{selected.description}</p>
 
-          {blocker && (
+            {projection && (
+              <div className={styles.impact}>
+                <span className={styles.eyebrow}>If you awaken this</span>
+                {projection.percent !== null && projection.percent !== 0 ? (
+                  <>
+                    <div className={styles.impactRow}>
+                      <span>Effective DPS</span>
+                      <span>
+                        <span className={styles.before}>{formatBig(currentDps)}</span>{' '}
+                        <span className={styles.after}>{formatBig(projection.projected)}</span>
+                      </span>
+                    </div>
+                    <div className={styles.impactRow}>
+                      <span>Change</span>
+                      <span className={styles.after}>
+                        {projection.percent > 0 ? '+' : ''}
+                        {projection.percent}%
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <p className={styles.note}>
+                    No change to single-target damage per second. This one is felt elsewhere.
+                  </p>
+                )}
+                {projection.changes.length > 0 && (
+                  <div className={styles.impactRow}>
+                    <span>Changes</span>
+                    <span className={styles.changes}>{projection.changes.join(', ')}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {selected.requiresAll.length > 0 && (
+              <div className={styles.requires}>
+                <span className={styles.eyebrow} style={{ color: 'var(--ink-low)' }}>
+                  Requires
+                </span>
+                {selected.requiresAll.map((id) => {
+                  const met = statuses.get(id) === 'active';
+                  return (
+                    <span key={id} className={styles.requirement}>
+                      <span className={met ? styles.met : undefined}>{met ? '\u2713' : '\u25cb'}</span>
+                      {SPELL_TREE_NODE_BY_ID.get(id)?.name ?? id}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+
+            {status !== 'active' && (
+              <Button
+                variant="primary"
+                disabled={status !== 'available'}
+                onClick={() => run({ type: 'activate_spell_node', nodeId: selected.id })}
+              >
+                {status === 'available' ? 'Awaken - 1 point' : STATUS_NOTE[status]}
+              </Button>
+            )}
+
+            {blocker && (
+              <p className={styles.note}>
+                Respec swaps which one you hold. To hold both, attune{' '}
+                <strong>{SPELL_ATTUNEMENT_BY_ID.get(blocker)?.name ?? blocker}</strong>.
+              </p>
+            )}
+
             <p className={styles.note}>
-              Respec swaps which one you hold. To hold both, attune{' '}
-              <strong>{SPELL_ATTUNEMENT_BY_ID.get(blocker)?.name ?? blocker}</strong>.
+              <NumberCell value={String(snapshot.spellTreeTotalPoints)} inline /> of{' '}
+              {snapshot.spellTreeMaxPoints} points awakened.
+              {selected.exclusiveGroup
+                ? ' Choices in this group lock the others until you respec.'
+                : ''}
             </p>
-          )}
-
-          <p className={styles.note}>
-            <NumberCell value={String(snapshot.spellTreeTotalPoints)} inline /> of{' '}
-            {snapshot.spellTreeMaxPoints} points awakened.
-            {selected.exclusiveGroup
-              ? ' Choices in this group lock the others until you respec.'
-              : ''}
-          </p>
-        </>
-      }
-    />
+          </>
+        }
+      />
+      {/*
+        Respec sat in the toolbar as an ordinary secondary button that undid
+        every allocation the instant it was pressed, with no confirmation and no
+        undo. Late game that is 105 points of build, and the toolbar it lives in
+        scrolls sideways on a phone - so a mistimed tap while panning to the
+        search field was a plausible way to lose it. Same treatment as Rebirth
+        and Erase progress: a danger moment, itemised, opening on the safe half.
+      */}
+      {respeccing && (
+        <Moment
+          tone="danger"
+          icon="spellTree"
+          headline="Return every point?"
+          consequence="Every awakened node is returned at once - the route you committed to, and everything you built past it. The points are kept and can be spent again from anywhere in the tree. Attunements, gear and companions are untouched, and the Essence the points cost is not refunded."
+          cells={[
+            { label: 'Awakened', value: String(snapshot.activeSpellNodeIds.length) },
+            {
+              label: 'Points to spend',
+              value: `${snapshot.spellTreeUnspentPoints} to ${snapshot.spellTreeTotalPoints}`,
+            },
+          ]}
+          primary={{
+            label: 'Return them',
+            onClick: () => {
+              setRespeccing(false);
+              setSelectedId(SPELL_TREE_ROOT_ID);
+              run({ type: 'respec_spell_tree' });
+            },
+          }}
+          secondary={{ label: 'Keep this build', onClick: () => setRespeccing(false) }}
+          onDismiss={() => setRespeccing(false)}
+        />
+      )}
+    </>
   );
 }
