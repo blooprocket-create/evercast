@@ -45,6 +45,22 @@ export function PartySurface() {
 
   return (
     <Detail
+      /*
+        Pinned, so the slot's own action stays reachable while the roster
+        picker below it scrolls - that grid was clipped at the fold at every
+        viewport the audit measured.
+      */
+      action={
+        occupant ? (
+          <button
+            type="button"
+            className={styles.recall}
+            onClick={() => run({ type: 'unequip_companion', slot: selectedSlot })}
+          >
+            Recall {occupant.name}
+          </button>
+        ) : undefined
+      }
       list={
         <Ledger
           items={slots}
@@ -144,13 +160,6 @@ export function PartySurface() {
                 slim
               />
             )}
-            <button
-              type="button"
-              className={styles.recall}
-              onClick={() => run({ type: 'unequip_companion', slot: selectedSlot })}
-            >
-              Recall {occupant.name}
-            </button>
             <p className={styles.hint}>
               A companion recalled mid-fight keeps its wounds until the encounter ends.
             </p>

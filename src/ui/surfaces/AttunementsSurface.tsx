@@ -40,6 +40,21 @@ export function AttunementsSurface() {
 
   return (
     <Detail
+      action={
+        <div className={styles.buy}>
+          <Button
+            variant="primary"
+            disabled={!canBuy}
+            onClick={() => run({ type: 'buy_attunement', attunementId: selected.id })}
+          >
+            {label()}
+          </Button>
+          <p className={styles.note}>
+            Knowledge comes from Rebirth. An attunement is never refunded and a respec does not
+            touch it.
+          </p>
+        </div>
+      }
       list={
         <Ledger
           items={SPELL_ATTUNEMENTS}
@@ -88,20 +103,6 @@ export function AttunementsSurface() {
           <span>Spell points this allows</span>
           <NumberCell value={String(snapshot.spellTreeMaxPoints)} />
         </div>
-      </div>
-
-      <div className={styles.buy}>
-        <Button
-          variant="primary"
-          disabled={!canBuy}
-          onClick={() => run({ type: 'buy_attunement', attunementId: selected.id })}
-        >
-          {label()}
-        </Button>
-        <p className={styles.note}>
-          Knowledge comes from Rebirth. An attunement is never refunded and a respec does not
-          touch it.
-        </p>
       </div>
     </Detail>
   );

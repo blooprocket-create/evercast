@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { ledgerWindow, shouldVirtualize } from './LedgerWindow';
+import { scrollEdgeAttributes, useScrollEdges } from './useScrollEdges';
 import styles from './Ledger.module.css';
 
 /**
@@ -26,7 +27,7 @@ export function Ledger<T>({
   empty,
   rowHeight = LEDGER_ROW_HEIGHT,
 }: LedgerProps<T>) {
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const edges = useScrollEdges();
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(0);
 
@@ -41,8 +42,9 @@ export function Ledger<T>({
     <div className={styles.ledger}>
       {header && <div className={styles.header}>{header}</div>}
       <div
-        ref={scrollRef}
+        ref={edges.ref}
         className={styles.scroll}
+        {...scrollEdgeAttributes(edges)}
         onScroll={(event) => {
           if (!virtualize) return;
           setScrollTop(event.currentTarget.scrollTop);
