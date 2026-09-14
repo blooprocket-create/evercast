@@ -27,7 +27,38 @@ export function createInitialEquipmentState(): EquipmentState {
   };
 }
 
+/**
+ * One slot of compiled stats, keyed on the eight levels that produced them.
+ *
+ * `compileGearStats` sits in the combat hot path: `CombatSystem` compiles once
+ * per cast, `EvolvingCombat` again, and `wizardPerHit` again for each companion
+ * - so it runs several times per projectile per enemy, while gear only changes
+ * when the player buys a level. One slot is therefore effectively always warm,
+ * and a miss costs no more than the old unconditional path did.
+ *
+ * Keyed on the levels rather than on the equipment's identity, because `levelUp`
+ * mutates `piece.level` in place: the object a caller holds is the same one
+ * before and after a purchase, so identity would never invalidate.
+ */
+let memoizedLevels: number[] | null = null;
+let memoizedStats: CompiledGearStats | null = null;
+
+/**
+ * The gear's own contribution, and nothing else.
+ *
+ * This must stay a pure function of gear levels for the memo to be sound.
+ * Anything that scales the mage without being gear belongs at the sites that
+ * consume this result, not inside it - folding it in here would break the memo's
+ * key and would also silently exclude the base terms that are added alongside
+ * this result rather than to it.
+ */
 export function compileGearStats(equipment: EquipmentState): CompiledGearStats {
+  const levels = memoizedLevels;
+  const cached = memoizedStats;
+  if (levels && cached && GEAR_SLOT_ORDER.every((slot, index) => equipment.pieces[slot].level === levels[index])) {
+    return cached;
+  }
+
   let baseDamageBonus = big(0);
   let maxHpBonus = big(0);
 
@@ -40,7 +71,12 @@ export function compileGearStats(equipment: EquipmentState): CompiledGearStats {
     if (definition.primaryStat === 'maxHp') maxHpBonus = maxHpBonus.add(contribution);
   }
 
-  return { baseDamageBonus, maxHpBonus };
+  // Frozen because every caller now shares one instance: the memo would turn an
+  // accidental mutation from a local bug into a global one.
+  const stats = Object.freeze({ baseDamageBonus, maxHpBonus });
+  memoizedLevels = GEAR_SLOT_ORDER.map((slot) => equipment.pieces[slot].level);
+  memoizedStats = stats;
+  return stats;
 }
 
 export function gearLevelCost(slot: GearSlot, currentLevel: number) {

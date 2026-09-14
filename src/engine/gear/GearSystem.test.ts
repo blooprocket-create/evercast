@@ -33,6 +33,39 @@ describe('GearSystem', () => {
     expect(events).toHaveLength(1);
   });
 
+  /**
+   * `compileGearStats` is memoized on the eight gear levels because it runs
+   * several times per projectile per enemy. The memo is module-level shared
+   * state, so these guard the two ways that can go wrong: a stale hit after the
+   * levels move, and one equipment's stats leaking into another's.
+   */
+  describe('memoization', () => {
+    it('invalidates when a level changes on the same equipment object', () => {
+      const state = createInitialGameState(DEFAULT_ENGINE_CONFIG);
+      const before = compileGearStats(state.equipment).baseDamageBonus.toString();
+
+      // levelUp mutates the piece in place, so the object identity is unchanged.
+      state.equipment.pieces.staff.level = 50;
+      const after = compileGearStats(state.equipment).baseDamageBonus.toString();
+
+      expect(after).not.toBe(before);
+    });
+
+    it('recomputes the same stats after another equipment has evicted the slot', () => {
+      const first = createInitialGameState(DEFAULT_ENGINE_CONFIG);
+      first.equipment.pieces.staff.level = 10;
+      const other = createInitialGameState(DEFAULT_ENGINE_CONFIG);
+      other.equipment.pieces.staff.level = 25;
+
+      const cold = compileGearStats(first.equipment).baseDamageBonus.toString();
+      const evicting = compileGearStats(other.equipment).baseDamageBonus.toString();
+      const warm = compileGearStats(first.equipment).baseDamageBonus.toString();
+
+      expect(warm).toBe(cold);
+      expect(evicting).not.toBe(cold);
+    });
+  });
+
   it('uses the agreed evolution milestone scaffold', () => {
     expect(evolutionTierForLevel(1)).toBe(0);
     expect(evolutionTierForLevel(49)).toBe(0);
