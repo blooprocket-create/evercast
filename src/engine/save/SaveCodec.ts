@@ -128,7 +128,11 @@ interface SerializedCompanions {
   pityCounter: number;
 }
 
-type SerializedMeta = Omit<GameState['meta'], 'knowledge'> & { knowledge: string };
+type SerializedMeta = Omit<GameState['meta'], 'knowledge' | 'lifetimeKnowledge'> & {
+  knowledge: string;
+  /** Added in v9. Older saves reconstruct it; see `deserializeMeta`. */
+  lifetimeKnowledge?: string;
+};
 
 interface SerializedEquipment {
   gold: string;
@@ -196,6 +200,7 @@ export class SaveCodec {
         storyFlags: [...state.meta.storyFlags],
         unlockedSystems: [...state.meta.unlockedSystems],
         knowledge: state.meta.knowledge.toString(),
+        lifetimeKnowledge: state.meta.lifetimeKnowledge.toString(),
       },
       equipment: {
         gold: state.equipment.gold.toString(),
@@ -265,7 +270,7 @@ export class SaveCodec {
     const spellTree = deserializeSpellTree(serialized.spellTree, version === 5);
     const state: GameState = {
       run: deserializeRun(serialized.run, this.config),
-      meta: deserializeMeta(serialized.meta),
+      meta: deserializeMeta(serialized.meta, spellTree.attunements),
       equipment: deserializeEquipment(serialized.equipment, version),
       spellTree,
       // v5 and v6 predate companions: those saves arrive with the feature
@@ -661,11 +666,37 @@ function deserializeRun(raw: unknown, config: EngineConfig): GameState['run'] {
   return run;
 }
 
-function deserializeMeta(raw: unknown): GameState['meta'] {
+/**
+ * `attunements` is the *granted* list `deserializeSpellTree` has already filtered
+ * down to what the prerequisites allow, not the raw blob - an attunement the save
+ * claims but cannot hold was never paid for and must not be counted as spent.
+ */
+function deserializeMeta(raw: unknown, attunements: readonly string[]): GameState['meta'] {
   const source = guardedObject(raw);
+  const knowledge = guardedDecimal(source.knowledge, 0);
   return {
     rebirths: guardedCount(source.rebirths, 0, LIMITS.counter),
-    knowledge: guardedDecimal(source.knowledge, 0),
+    knowledge,
+    /**
+     * Reconstructed rather than defaulted on a save written before v9, and the
+     * reconstruction is exact: attunements are the only thing that has ever
+     * subtracted Knowledge, so everything ever earned is what is banked plus
+     * what was spent.
+     *
+     * Keyed on the field being absent rather than on the version, because the
+     * codec is routinely handed a current save relabelled as an older one - and
+     * reconstructing on top of a value that is already correct would add the
+     * spend a second time on every load.
+     *
+     * Clamped to the balance because the high-water mark cannot be below it.
+     */
+    lifetimeKnowledge:
+      source.lifetimeKnowledge === undefined
+        ? attunements.reduce(
+            (total, id) => total.add(SPELL_ATTUNEMENT_BY_ID.get(id)?.cost ?? 0),
+            knowledge,
+          )
+        : guardedDecimal(source.lifetimeKnowledge, 0).max(knowledge),
     highestStageEver: guardedCount(source.highestStageEver, 1, LIMITS.counter) || 1,
     lifetimeKills: guardedCount(source.lifetimeKills, 0, LIMITS.counter),
     // Flags and unlocks are authored elsewhere and only ever compared for

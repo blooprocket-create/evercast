@@ -27,6 +27,10 @@ export class RebirthSystem {
 
     const elapsed = state.run.elapsedSeconds;
     state.meta.knowledge = state.meta.knowledge.add(gain);
+    // The balance is spendable and the high-water mark is not. Anything that
+    // rewards how far an account has come has to read the second, or buying an
+    // attunement would quietly cost the player whatever it rewards.
+    state.meta.lifetimeKnowledge = state.meta.lifetimeKnowledge.add(gain);
     state.meta.rebirths += 1;
     state.run = createInitialRunState(this.config);
 
