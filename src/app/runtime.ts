@@ -171,7 +171,28 @@ function stampFor(): Date {
   return new Date(Date.now() - awayDebtSeconds * 1000);
 }
 
+/**
+ * Set once the stored save has been deliberately replaced or removed. It is
+ * never cleared, because the only thing that follows it is a reload.
+ *
+ * `window.location.reload()` schedules a navigation; it does not perform one.
+ * Everything holding this session goes on running until it lands - the autosave
+ * interval, a visibility change, and above all the loop's `beforeunload`
+ * handler, which exists precisely to write one last save on the way out. So
+ * erasing used to be: remove the key, ask for a reload, and then have the
+ * outgoing save put the whole run back under it. The player pressed Erase,
+ * watched the page reload, and arrived back in the run they had just deleted -
+ * and import lost the file it had just accepted the same way.
+ *
+ * Every write to the save goes through `saveGame`, so one latch in front of it
+ * closes all of them at once. That is why it lives here rather than as a
+ * `removeEventListener` in the loop: a handler taken off can only cover the
+ * writers that exist today, and the autosave interval would still have fired.
+ */
+let persistenceHalted = false;
+
 export function saveGame(): void {
+  if (persistenceHalted) return;
   saveStore.save(simulation.getState(), stampFor());
 }
 
@@ -197,11 +218,18 @@ export function exportSaveFile(): string {
  * the one code path already guaranteed to build everything consistently.
  */
 export function importSaveFile(json: string): void {
+  // Decoded first, and the latch dropped only after it returns: a file the
+  // codec refuses throws out of here with storage untouched, and that session
+  // has to go on saving exactly as though nothing had been attempted.
   saveStore.importSave(json);
+  persistenceHalted = true;
   window.location.reload();
 }
 
 export function eraseSave(): void {
+  // Latched before the key is removed, not after: an autosave landing between
+  // the two would write the run straight back.
+  persistenceHalted = true;
   saveStore.clear();
   window.location.reload();
 }
