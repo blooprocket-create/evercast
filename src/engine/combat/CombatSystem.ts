@@ -1,3 +1,4 @@
+import type Decimal from 'break_eternity.js';
 import type { EngineConfig } from '../config';
 import type { GameEvent, ProjectileHitSource } from '../events/GameEvent';
 import { compileGearStats } from '../gear/GearSystem';
@@ -27,12 +28,12 @@ export class CombatSystem {
     this.evolving = new EvolvingCombat(config, emit);
   }
 
-  cast(run: RunState, equipment: EquipmentState): CombatResult {
+  cast(run: RunState, equipment: EquipmentState, mastery: Decimal): CombatResult {
     if (run.spell.mechanics)
-      return { killedEnemyIds: this.evolving.cast(run, equipment), mageDefeated: false };
+      return { killedEnemyIds: this.evolving.cast(run, equipment, mastery), mageDefeated: false };
     const spell = compileSpell(run.spell);
     const gear = compileGearStats(equipment);
-    const baseDamage = big(spell.damage).add(gear.baseDamageBonus).toString();
+    const baseDamage = big(spell.damage).add(gear.baseDamageBonus).mul(mastery).toString();
     const castId = run.stats.casts + 1;
     run.stats.casts = castId;
     this.emit({

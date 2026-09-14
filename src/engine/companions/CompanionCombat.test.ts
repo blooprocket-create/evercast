@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { NO_MASTERY } from '../prestige/Mastery';
 import { createDefaultCatalog } from '../../content/catalog';
 import { DEFAULT_ENGINE_CONFIG } from '../config';
 import { EncounterSystem } from '../encounters/EncounterSystem';
@@ -434,7 +435,7 @@ describe('companion damage', () => {
     const actual = companionDamage(
       definition,
       shown.stars,
-      wizardPerHit(state.run, state.equipment),
+      wizardPerHit(state.run, state.equipment, NO_MASTERY),
     );
     expect(actual.toString()).toBe(shown.damage.raw);
   });
@@ -456,7 +457,7 @@ describe('companion damage', () => {
     const actual = companionDamage(
       requireCompanion(shown.definitionId),
       shown.stars,
-      wizardPerHit(state.run, state.equipment),
+      wizardPerHit(state.run, state.equipment, NO_MASTERY),
     );
     expect(actual.toString()).toBe(shown.damage.raw);
   });
@@ -544,12 +545,12 @@ describe('wizardPerHit', () => {
     const state = createInitialGameState(DEFAULT_ENGINE_CONFIG);
     const mechanics = { ...SPELL_MECHANIC_DEFAULTS };
     state.run.spell = { ...state.run.spell, mechanics };
-    const plain = Number(wizardPerHit(state.run, state.equipment).toString());
+    const plain = Number(wizardPerHit(state.run, state.equipment, NO_MASTERY).toString());
     expect(plain).toBeGreaterThan(0);
 
     // Charged alone: the multiplier the companions surface already relied on.
     state.run.spell = { ...state.run.spell, mechanics: { ...mechanics, chargedCast: true } };
-    expect(Number(wizardPerHit(state.run, state.equipment).toString())).toBeCloseTo(
+    expect(Number(wizardPerHit(state.run, state.equipment, NO_MASTERY).toString())).toBeCloseTo(
       plain * mechanics.chargedDamage,
     );
 
@@ -559,7 +560,7 @@ describe('wizardPerHit', () => {
       ...state.run.spell,
       mechanics: { ...mechanics, twinCast: true, piercingCast: true },
     };
-    expect(Number(wizardPerHit(state.run, state.equipment).toString())).toBeCloseTo(
+    expect(Number(wizardPerHit(state.run, state.equipment, NO_MASTERY).toString())).toBeCloseTo(
       plain * mechanics.routeBlendScale,
     );
 
@@ -567,7 +568,7 @@ describe('wizardPerHit', () => {
       ...state.run.spell,
       mechanics: { ...mechanics, twinCast: true, piercingCast: true, chargedCast: true },
     };
-    expect(Number(wizardPerHit(state.run, state.equipment).toString())).toBeCloseTo(
+    expect(Number(wizardPerHit(state.run, state.equipment, NO_MASTERY).toString())).toBeCloseTo(
       plain * mechanics.chargedDamage * Math.pow(mechanics.routeBlendScale, 2),
     );
   });

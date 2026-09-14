@@ -1,4 +1,5 @@
 import { EvercastScene } from '../../src/game/EvercastScene';
+import { NO_MASTERY } from '../../src/engine/prestige/Mastery';
 import { CombatSystem } from '../../src/engine/combat/CombatSystem';
 import {
   clearSpellCombat,
@@ -41,7 +42,8 @@ const snapshot = () =>
     catalog,
     canRebirth: false,
     lastSummon: null,
-    rebirthKnowledgeGain: big(0),
+    nextKnowledgeStage: 1,
+      rebirthKnowledgeGain: big(0),
     lastEvent: 'Authored spell review',
   });
 const mode = document.querySelector<HTMLSelectElement>('#mode')!;
@@ -132,7 +134,7 @@ function collectDead(ids: number[]) {
 function cast(lethal = false) {
   const old = state.run.spell.baseDamage;
   if (lethal) state.run.spell.baseDamage = '1e20';
-  collectDead(combat.cast(state.run, state.equipment).killedEnemyIds);
+  collectDead(combat.cast(state.run, state.equipment, NO_MASTERY).killedEnemyIds);
   state.run.spell.baseDamage = old;
   state.run.castCooldown = effectiveCastInterval(state.run);
   flush();

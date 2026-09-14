@@ -16,6 +16,7 @@ import {
 import type { LastSummonSnapshot, SimulationSnapshot } from '../types';
 import { buildCompanionSnapshots } from './CompanionSnapshotBuilder';
 import { wizardPerHit } from '../companions/CompanionCombat';
+import { masteryMultiplier, previewMastery } from '../prestige/Mastery';
 // prettier-ignore
 import { effectiveCastInterval, hasArrived, livingByDistance } from '../combat/SpellCombatState';
 
@@ -25,6 +26,7 @@ export interface SimulationSnapshotBuildContext {
   catalog: ContentCatalog;
   canRebirth: boolean;
   rebirthKnowledgeGain: Decimal;
+  nextKnowledgeStage: number;
   lastSummon: LastSummonSnapshot | null;
   lastEvent: string;
 }
@@ -35,6 +37,7 @@ export function buildSimulationSnapshot({
   catalog,
   canRebirth,
   rebirthKnowledgeGain,
+  nextKnowledgeStage,
   lastSummon,
   lastEvent,
 }: SimulationSnapshotBuildContext): SimulationSnapshot {
@@ -46,7 +49,7 @@ export function buildSimulationSnapshot({
   const gearStats = compileGearStats(state.equipment);
   // One definition, shared with combat, so what a companion hits for and what
   // this surface reports cannot drift apart again.
-  const finalDamage = wizardPerHit(run, state.equipment);
+  const finalDamage = wizardPerHit(run, state.equipment, masteryMultiplier(state.meta));
   const enemyHpPercent =
     target && target.maxHp.cmp(0) > 0 ? percent(target.hp.div(target.maxHp).toNumber()) : 0;
   const mageHpPercent = run.mage.maxHp.cmp(0) > 0 ? percent(run.mage.hp.div(run.mage.maxHp).toNumber()) : 0;
@@ -127,11 +130,16 @@ export function buildSimulationSnapshot({
     storyFlags: [...state.meta.storyFlags],
     canRebirth,
     rebirthKnowledgeGain: quantity(rebirthKnowledgeGain),
+    lifetimeKnowledge: quantity(state.meta.lifetimeKnowledge),
+    mastery: quantity(masteryMultiplier(state.meta)),
+    masteryAfterRebirth: quantity(previewMastery(state.meta, rebirthKnowledgeGain)),
+    nextKnowledgeStage,
     gear: GEAR_SLOT_ORDER.map((slot) => {
       const data = gearDisplayData(state.equipment, slot);
       return {
         ...data,
         contribution: quantity(data.contribution),
+        nextLevelGain: quantity(data.nextLevelGain),
         nextLevelCost: quantity(data.nextLevelCost),
       };
     }),

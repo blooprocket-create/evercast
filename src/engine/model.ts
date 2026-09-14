@@ -125,6 +125,16 @@ export interface RunState {
 export interface MetaState {
   rebirths: number;
   knowledge: Decimal;
+  /**
+   * Every point of Knowledge ever earned, never spent down.
+   *
+   * `knowledge` is a balance and `buyAttunement` subtracts from it, so it cannot
+   * describe how far an account has come - a player who spent it looks like one
+   * who never earned it. This is the high-water mark, which is what a permanent
+   * reward has to be measured against if buying an attunement is not to cost the
+   * player power.
+   */
+  lifetimeKnowledge: Decimal;
   highestStageEver: number;
   lifetimeKills: number;
   storyFlags: string[];

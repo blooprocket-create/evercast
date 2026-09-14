@@ -1,5 +1,48 @@
 import type { GearDefinition, GearSlot } from '../engine/gear/types';
 
+/**
+ * PLAYTEST defaults, not final balance. Centralized here for the same reason
+ * `spellTreeTuning.ts` and `companionTuning.ts` are.
+ *
+ * Enemy health compounds with the stage and always did; player power used to be
+ * a straight `statPerLevel x paidLevels`, which is a line losing to a curve. A
+ * level now multiplies rather than adds, so both sides of the fight grow in the
+ * same shape.
+ *
+ * `statPerLevel` keeps its meaning at the bottom of the curve: the geometric sum
+ * is anchored so level 1 still contributes nothing and level 2 still contributes
+ * exactly `statPerLevel`. Only the far end changes.
+ */
+export const GEAR_POWER_GROWTH = 1.07;
+
+/**
+ * Price per level, compounding slightly faster than power on purpose.
+ *
+ * If price grew slower the player would outrun enemy health and the game would
+ * trivialize instead of ending. The half-point gap means damage-per-gold decays
+ * slowly, so a run finishes in a soft stall rather than against a wall - and
+ * that stall is what a Rebirth is for. This gap is the most load-bearing number
+ * in the file: it sets how long a session lasts.
+ */
+export const GEAR_COST_GROWTH = 1.075;
+
+/**
+ * Gold per kill, as a fraction of the dead enemy's maximum health.
+ *
+ * Income used to be `stage x 1` - linear, against health that compounds - so
+ * farming could never catch up with the wall it was farming below. Paying out of
+ * the enemy's own health coupled income to difficulty by construction, and means
+ * the boss and world-tier multipliers are inherited for free instead of needing
+ * income rules of their own.
+ *
+ * Tuned against the cost curve above rather than independently: moving one
+ * without the other changes how many kills a level costs.
+ */
+export const GOLD_HP_FRACTION = 0.06;
+
+/** What a boss pays on top of the larger health pool it already carries. */
+export const GOLD_BOSS_MULTIPLIER = 3;
+
 export const GEAR_DEFINITIONS: Record<GearSlot, GearDefinition> = {
   helm: {
     slot: 'helm',

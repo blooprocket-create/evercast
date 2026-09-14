@@ -47,8 +47,20 @@ describe('gearBulkPurchase', () => {
     expect(gearBulkPurchase('staff', 1, 3, RICH).levels).toBe(3);
   });
 
-  it('terminates on Max even with effectively unbounded gold', () => {
+  /**
+   * Two ways the loop can stop, and both have to work. The cost curve compounds,
+   * so gold runs out after a number of levels that grows only with log(gold) -
+   * which is what keeps this cheap enough to call from a render - and the hard
+   * limit is there for the case where even that is not enough.
+   */
+  it('lets gold bound the purchase long before the limit does', () => {
     const { levels } = gearBulkPurchase('staff', 1, GEAR_BULK_LIMIT, big('1e300'));
+    expect(levels).toBeGreaterThan(0);
+    expect(levels).toBeLessThan(GEAR_BULK_LIMIT);
+  });
+
+  it('terminates on Max even with effectively unbounded gold', () => {
+    const { levels } = gearBulkPurchase('staff', 1, GEAR_BULK_LIMIT, big('1e10000'));
     expect(levels).toBe(GEAR_BULK_LIMIT);
   });
 

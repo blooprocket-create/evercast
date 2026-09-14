@@ -1,4 +1,10 @@
 import { requireEnemy, resolveZone } from '../../content/catalog';
+import {
+  BOSS_ATTACK_MULTIPLIER,
+  BOSS_HEALTH_MULTIPLIER,
+  WORLD_TIER_ATTACK,
+  WORLD_TIER_HEALTH,
+} from '../../content/zones';
 import type { ContentCatalog } from '../../content/types';
 import type { EngineConfig } from '../config';
 import type { EncounterState, EnemyState, RunState } from '../model';
@@ -72,17 +78,16 @@ export class EncounterSystem {
     const frontlineOffset = hasLivingFrontline(run) ? this.config.frontlineStandoff : 0;
     const reach = (definition.attackRange ?? this.config.enemyAttackRange) + frontlineOffset;
     const stageExponent = Math.max(0, encounter.stage - 1);
-    const worldTierMultiplier = big(1.75).pow(resolvedZone.worldTier);
-    const bossHealthMultiplier = isBoss ? big(4.5) : big(1);
-    const bossAttackMultiplier = isBoss ? big(1.8) : big(1);
+    const bossHealthMultiplier = isBoss ? big(BOSS_HEALTH_MULTIPLIER) : big(1);
+    const bossAttackMultiplier = isBoss ? big(BOSS_ATTACK_MULTIPLIER) : big(1);
 
     const maxHp = big(definition.baseHealth)
       .mul(big(definition.healthGrowth).pow(stageExponent))
-      .mul(worldTierMultiplier)
+      .mul(big(WORLD_TIER_HEALTH).pow(resolvedZone.worldTier))
       .mul(bossHealthMultiplier);
     const attackDamage = big(definition.baseAttack)
       .mul(big(definition.attackGrowth).pow(stageExponent))
-      .mul(big(1.35).pow(resolvedZone.worldTier))
+      .mul(big(WORLD_TIER_ATTACK).pow(resolvedZone.worldTier))
       .mul(bossAttackMultiplier);
 
     const enemy: EnemyState = {

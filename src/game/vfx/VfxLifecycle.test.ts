@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { NO_MASTERY } from '../../engine/prestige/Mastery';
 import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { AssetContainer, LoadAssetContainerAsync, NullEngine, Scene, Vector3 } from '@babylonjs/core';
@@ -70,7 +71,7 @@ describe('VFX resource ownership', () => {
     const combat = new CombatSystem(DEFAULT_ENGINE_CONFIG, (e) => events.push(e));
     let maxPending = 0;
     for (let i = 0; i < 200; i++) {
-      combat.cast(state.run, state.equipment);
+      combat.cast(state.run, state.equipment, NO_MASTERY);
       state.run.elapsedSeconds += 0.02;
       combat.evolving.effects.advance(state.run);
       maxPending = Math.max(maxPending, state.run.combatState!.meteors.length);
@@ -224,7 +225,7 @@ describe('VFX resource ownership', () => {
       const combat = new CombatSystem(DEFAULT_ENGINE_CONFIG, (e) => events.push(e));
       let warmMeshes = 0;
       for (let frame = 0; frame < 800; frame++) {
-        combat.cast(state.run, state.equipment);
+        combat.cast(state.run, state.equipment, NO_MASTERY);
         presenter.ingest({ castInterval: 0.01, activeSpellNodeIds: [] }, events.splice(0));
         presenter.update(0.01);
         expect(presenter.stats.jobs).toBeLessThanOrEqual(VFX_BUDGETS[quality].jobs);

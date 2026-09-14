@@ -13,7 +13,13 @@ export interface GearSnapshot {
   description: string;
   primaryStatLabel: string;
   contribution: QuantitySnapshot;
-  perLevel: number;
+  /**
+   * What the *next* level adds, not what every level adds. A level used to be
+   * worth a flat `statPerLevel` and the interface said so; levels compound now,
+   * so a standing figure would be true only of the step from 1 to 2. A quantity
+   * rather than a number because by level 100 it no longer fits in one.
+   */
+  nextLevelGain: QuantitySnapshot;
   nextLevelCost: QuantitySnapshot;
   nextEvolutionLevel: number | null;
   unlockedTreeTier: number;
@@ -150,6 +156,17 @@ export interface SimulationSnapshot {
   rebirths: number;
   rebirthKnowledgeGain: QuantitySnapshot;
   canRebirth: boolean;
+  /** Every point of Knowledge ever earned; what Mastery is read from. */
+  lifetimeKnowledge: QuantitySnapshot;
+  /** What every Rebirth so far is worth, as a multiplier on the mage. */
+  mastery: QuantitySnapshot;
+  /** What Mastery would become if the run cashed out now. */
+  masteryAfterRebirth: QuantitySnapshot;
+  /**
+   * The frontier the next point of Knowledge is waiting for, so a disabled
+   * Rebirth can say what it is waiting on rather than only greying out.
+   */
+  nextKnowledgeStage: number;
   gear: GearSnapshot[];
   starlight: QuantitySnapshot;
   summonCost: QuantitySnapshot;

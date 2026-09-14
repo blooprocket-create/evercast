@@ -46,6 +46,7 @@ export function createInitialMetaState(): MetaState {
   return {
     rebirths: 0,
     knowledge: big(0),
+    lifetimeKnowledge: big(0),
     highestStageEver: 1,
     lifetimeKills: 0,
     storyFlags: [],

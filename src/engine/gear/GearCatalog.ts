@@ -1,7 +1,13 @@
-import { GEAR_DEFINITIONS } from '../../content/gear';
+import {
+  GEAR_COST_GROWTH,
+  GEAR_DEFINITIONS,
+  GEAR_POWER_GROWTH,
+  GOLD_BOSS_MULTIPLIER,
+  GOLD_HP_FRACTION,
+} from '../../content/gear';
 import type { GearSlot } from './types';
 
-export { GEAR_DEFINITIONS };
+export { GEAR_COST_GROWTH, GEAR_DEFINITIONS, GEAR_POWER_GROWTH, GOLD_BOSS_MULTIPLIER, GOLD_HP_FRACTION };
 
 export const GEAR_EVOLUTION_MILESTONES = [1, 50, 100, 200, 500, 1000] as const;
 

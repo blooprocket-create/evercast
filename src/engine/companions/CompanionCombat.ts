@@ -37,6 +37,8 @@ export function isPassive(ability: CompanionAbilityId): boolean {
 export interface CompanionBeatContext {
   run: RunState;
   equipment: EquipmentState;
+  /** Required, not optional. See the note on `wizardPerHit`. */
+  mastery: Decimal;
   emit: (event: GameEvent) => void;
 }
 
@@ -50,9 +52,9 @@ export interface CompanionBeatContext {
  * and not the other, so companions quietly hit for less than the interface
  * said. Anything that scales off the mage's damage belongs here.
  */
-export function wizardPerHit(run: RunState, equipment: EquipmentState): Decimal {
+export function wizardPerHit(run: RunState, equipment: EquipmentState, mastery: Decimal): Decimal {
   const spell = compileSpell(run.spell);
-  const base = big(spell.damage).add(compileGearStats(equipment).baseDamageBonus);
+  const base = big(spell.damage).add(compileGearStats(equipment).baseDamageBonus).mul(mastery);
   return base.mul(routeDamageScale(spell.mechanics));
 }
 
@@ -115,11 +117,11 @@ export function tickCompanionCooldowns(run: RunState, consumed: number): void {
  * they killed so the caller can collect them the way it collects the mage's.
  */
 export function resolveCompanionBeats(context: CompanionBeatContext): number[] {
-  const { run, equipment, emit } = context;
+  const { run, equipment, mastery, emit } = context;
   if (run.companions.length === 0) return [];
 
   const reach = thresholds(run);
-  const perHit = wizardPerHit(run, equipment);
+  const perHit = wizardPerHit(run, equipment, mastery);
   const killed = new Set<number>();
 
   for (const companion of run.companions) {

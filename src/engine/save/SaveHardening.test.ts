@@ -3,7 +3,7 @@ import { DEFAULT_ENGINE_CONFIG } from '../config';
 import { EvercastSimulation } from '../EvercastSimulation';
 import { isFiniteDecimal, parseSaveJson } from './SaveGuards';
 import { COMPANION_BY_ID } from '../companions/CompanionCatalog';
-import { SaveCodec, type SaveEnvelopeV8 } from './SaveCodec';
+import { SaveCodec, type SaveEnvelope } from './SaveCodec';
 import { saveDigest, verifySaveDigest } from './SaveIntegrity';
 
 /**
@@ -20,7 +20,7 @@ import { saveDigest, verifySaveDigest } from './SaveIntegrity';
 const codec = new SaveCodec(DEFAULT_ENGINE_CONFIG);
 
 /** A real save, from a real run, as the starting point for each attack. */
-function realSave(): SaveEnvelopeV8 {
+function realSave(): SaveEnvelope {
   const sim = new EvercastSimulation();
   sim.advance(120, { presentationEvents: false });
   return codec.encode(sim.getState(), new Date('2026-01-01T00:00:00Z'));

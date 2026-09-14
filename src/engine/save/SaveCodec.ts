@@ -1,6 +1,6 @@
 import type { EngineConfig } from '../config';
 import { GEAR_SLOT_ORDER } from '../gear/GearCatalog';
-import { createInitialEquipmentState } from '../gear/GearSystem';
+import { createInitialEquipmentState, equivalentGearLevel, mageMaxHealth } from '../gear/GearSystem';
 import type { EquipmentState, GearPieceState, GearSlot } from '../gear/types';
 import { COMPANION_BY_ID } from '../companions/CompanionCatalog';
 import { createInitialCompanionsState } from '../companions/CompanionSystem';
@@ -50,7 +50,7 @@ import {
 } from './SaveGuards';
 import { saveDigest, verifySaveDigest, type IntegrityVerdict } from './SaveIntegrity';
 
-export const CURRENT_SAVE_VERSION = 8;
+export const CURRENT_SAVE_VERSION = 9;
 
 /**
  * The oldest save still brought forward.
@@ -128,7 +128,11 @@ interface SerializedCompanions {
   pityCounter: number;
 }
 
-type SerializedMeta = Omit<GameState['meta'], 'knowledge'> & { knowledge: string };
+type SerializedMeta = Omit<GameState['meta'], 'knowledge' | 'lifetimeKnowledge'> & {
+  knowledge: string;
+  /** Added in v9. Older saves reconstruct it; see `deserializeMeta`. */
+  lifetimeKnowledge?: string;
+};
 
 interface SerializedEquipment {
   gold: string;
@@ -150,8 +154,8 @@ interface SerializedState {
   companions: SerializedCompanions;
 }
 
-export interface SaveEnvelopeV8 {
-  version: 8;
+export interface SaveEnvelope {
+  version: 9;
   savedAt: string;
   /**
    * A digest of `state` and `savedAt`. Tamper-evident, not tamper-proof, and
@@ -173,7 +177,7 @@ export interface DecodedSave {
 export class SaveCodec {
   constructor(private readonly config: EngineConfig) {}
 
-  encode(state: GameState, savedAt = new Date()): SaveEnvelopeV8 {
+  encode(state: GameState, savedAt = new Date()): SaveEnvelope {
     const stamp = Number.isFinite(savedAt.getTime()) ? savedAt : new Date();
     const serialized: SerializedState = {
       run: {
@@ -196,6 +200,7 @@ export class SaveCodec {
         storyFlags: [...state.meta.storyFlags],
         unlockedSystems: [...state.meta.unlockedSystems],
         knowledge: state.meta.knowledge.toString(),
+        lifetimeKnowledge: state.meta.lifetimeKnowledge.toString(),
       },
       equipment: {
         gold: state.equipment.gold.toString(),
@@ -265,8 +270,8 @@ export class SaveCodec {
     const spellTree = deserializeSpellTree(serialized.spellTree, version === 5);
     const state: GameState = {
       run: deserializeRun(serialized.run, this.config),
-      meta: deserializeMeta(serialized.meta),
-      equipment: deserializeEquipment(serialized.equipment),
+      meta: deserializeMeta(serialized.meta, spellTree.attunements),
+      equipment: deserializeEquipment(serialized.equipment, version),
       spellTree,
       // v5 and v6 predate companions: those saves arrive with the feature
       // simply not started, rather than losing anything they had.
@@ -280,6 +285,13 @@ export class SaveCodec {
     reconcileCompanions(state);
     // Allocations decide the spell; the blob's copy of it is never read.
     state.run.spell = buildSpellFromTree(state.spellTree);
+    // Gear decides the mage's maximum, for the same reason: the blob's copy is a
+    // cache of a derived value, and a v9 conversion has just moved what it was
+    // derived from. Re-deriving it costs nothing on a save that already agreed,
+    // and stops a migrated one from loading two health bars out of step with its
+    // own equipment until the next purchase happened to resync them.
+    state.run.mage.maxHp = mageMaxHealth(state, this.config.baseMageHealth);
+    state.run.mage.hp = state.run.mage.hp.min(state.run.mage.maxHp);
     // A run cannot have got further than the account's own record of it.
     state.meta.highestStageEver = Math.max(
       state.meta.highestStageEver,
@@ -652,11 +664,37 @@ function deserializeRun(raw: unknown, config: EngineConfig): GameState['run'] {
   return run;
 }
 
-function deserializeMeta(raw: unknown): GameState['meta'] {
+/**
+ * `attunements` is the *granted* list `deserializeSpellTree` has already filtered
+ * down to what the prerequisites allow, not the raw blob - an attunement the save
+ * claims but cannot hold was never paid for and must not be counted as spent.
+ */
+function deserializeMeta(raw: unknown, attunements: readonly string[]): GameState['meta'] {
   const source = guardedObject(raw);
+  const knowledge = guardedDecimal(source.knowledge, 0);
   return {
     rebirths: guardedCount(source.rebirths, 0, LIMITS.counter),
-    knowledge: guardedDecimal(source.knowledge, 0),
+    knowledge,
+    /**
+     * Reconstructed rather than defaulted on a save written before v9, and the
+     * reconstruction is exact: attunements are the only thing that has ever
+     * subtracted Knowledge, so everything ever earned is what is banked plus
+     * what was spent.
+     *
+     * Keyed on the field being absent rather than on the version, because the
+     * codec is routinely handed a current save relabelled as an older one - and
+     * reconstructing on top of a value that is already correct would add the
+     * spend a second time on every load.
+     *
+     * Clamped to the balance because the high-water mark cannot be below it.
+     */
+    lifetimeKnowledge:
+      source.lifetimeKnowledge === undefined
+        ? attunements.reduce(
+            (total, id) => total.add(SPELL_ATTUNEMENT_BY_ID.get(id)?.cost ?? 0),
+            knowledge,
+          )
+        : guardedDecimal(source.lifetimeKnowledge, 0).max(knowledge),
     highestStageEver: guardedCount(source.highestStageEver, 1, LIMITS.counter) || 1,
     lifetimeKills: guardedCount(source.lifetimeKills, 0, LIMITS.counter),
     // Flags and unlocks are authored elsewhere and only ever compared for
@@ -667,7 +705,7 @@ function deserializeMeta(raw: unknown): GameState['meta'] {
   };
 }
 
-function deserializeEquipment(raw: unknown): EquipmentState {
+function deserializeEquipment(raw: unknown, version: number): EquipmentState {
   const equipment = createInitialEquipmentState();
   if (raw === undefined || raw === null) return equipment;
   const serialized = guardedObject(raw);
@@ -677,9 +715,20 @@ function deserializeEquipment(raw: unknown): EquipmentState {
   for (const slot of GEAR_SLOT_ORDER) {
     const saved = guardedObject(pieces[slot]);
     if (Object.keys(saved).length === 0) continue;
+    // Guarded first, so the conversion below works on a finite integer already
+    // inside the level bounds rather than on whatever the file happened to hold.
+    const level = guardedNumber(saved.level, 1, { min: 1, max: LIMITS.gearLevel, integer: true });
     equipment.pieces[slot] = {
       slot,
-      level: guardedNumber(saved.level, 1, { min: 1, max: LIMITS.gearLevel, integer: true }),
+      // v9 made a gear level multiply rather than add. Reading an old level
+      // through the new curve would not rebalance it, it would detonate it: a
+      // level-201 staff was worth 200 damage, and the same level under the new
+      // curve is worth ten million. Converting to the level that preserves the
+      // power the player actually had means they keep their damage and see a
+      // smaller number printed beside it - which is worth saying out loud in
+      // the patch notes, because 201 becoming 41 reads as a loss until you
+      // check the damage.
+      level: version < 9 ? equivalentGearLevel(level) : level,
       treeNodes: guardedIdList(saved.treeNodes, () => true, MAX_SAVE_ARRAY),
     };
   }

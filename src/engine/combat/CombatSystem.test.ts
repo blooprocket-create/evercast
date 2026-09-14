@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { NO_MASTERY } from '../prestige/Mastery';
 import { DEFAULT_ENGINE_CONFIG } from '../config';
 import type { GameEvent } from '../events/GameEvent';
 import { big } from '../numbers';
@@ -15,13 +16,13 @@ describe('CombatSystem', () => {
     ]};
     state.run.enemies=[{instanceId:1,definitionId:'target',name:'target',stage:1,boss:false,hp:big(100),maxHp:big(100),attackDamage:big(0),attackInterval:1,attackCooldown:1}];
     const combat=new CombatSystem(DEFAULT_ENGINE_CONFIG,e=>events.push(e));
-    combat.cast(state.run,state.equipment);
+    combat.cast(state.run, state.equipment, NO_MASTERY);
     let hit=events.find(e=>e.type==='projectile_hit')!;
     expect(Number(hit.healing)).toBeCloseTo(.05);expect(hit.controlDelaySeconds).toBe(.25);
     expect(state.run.enemies[0].attackCooldown).toBe(1.25);
-    events.length=0;combat.cast(state.run,state.equipment);
+    events.length=0;combat.cast(state.run, state.equipment, NO_MASTERY);
     hit=events.find(e=>e.type==='projectile_hit')!;expect(hit.healing).toBe('0');
-    state.run.enemies[0].hp=big(1);events.length=0;combat.cast(state.run,state.equipment);
+    state.run.enemies[0].hp=big(1);events.length=0;combat.cast(state.run, state.equipment, NO_MASTERY);
     hit=events.find(e=>e.type==='projectile_hit')!;expect(hit.controlDelaySeconds).toBe(0);
     expect(state.run.enemies[0].attackCooldown).toBe(1.5);
   });
@@ -49,7 +50,7 @@ describe('CombatSystem', () => {
 
     const events: GameEvent[]=[];
     const combat = new CombatSystem(DEFAULT_ENGINE_CONFIG, e=>events.push(e));
-    combat.cast(state.run, state.equipment);
+    combat.cast(state.run, state.equipment, NO_MASTERY);
 
     expect(state.run.enemies[0].hp.toNumber()).toBe(0);
     expect(state.run.mage.hp.toNumber()).toBeCloseTo(1.1);
@@ -83,7 +84,7 @@ describe('CombatSystem', () => {
 
     const events: GameEvent[] = [];
     const combat = new CombatSystem(DEFAULT_ENGINE_CONFIG, (event) => events.push(event));
-    combat.cast(state.run, state.equipment);
+    combat.cast(state.run, state.equipment, NO_MASTERY);
 
     const hits = events.filter((event): event is Extract<GameEvent, { type: 'projectile_hit' }> => event.type === 'projectile_hit');
     expect(hits.map((event) => event.source)).toEqual(['direct', 'pierce', 'chain', 'chain', 'splash']);

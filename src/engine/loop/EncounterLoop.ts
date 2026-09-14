@@ -4,6 +4,7 @@ import { advanceApproach, anyInRange, effectiveCastInterval, soonestRangeChange 
 import { nextEnemyBeat, resolveEnemyBeats, tickEnemyCooldowns } from '../combat/EnemyTurns';
 // prettier-ignore
 import { nextCompanionBeat, resolveCompanionBeats, tickCompanionCooldowns } from '../companions/CompanionCombat';
+import { masteryMultiplier } from '../prestige/Mastery';
 import { partyThresholds } from '../companions/Formation';
 import type { EngineConfig } from '../config';
 import type { EncounterSystem } from '../encounters/EncounterSystem';
@@ -136,7 +137,7 @@ export class EncounterLoop {
 
     // Player wins ties. A cast can kill the first target and subsequent projectiles retarget.
     if (anyInRange(run, this.config.spellRange) && run.castCooldown <= EPSILON) {
-      const result = this.systems.combat.cast(run, state.equipment);
+      const result = this.systems.combat.cast(run, state.equipment, masteryMultiplier(state.meta));
       run.castCooldown += effectiveCastInterval(run);
       this.collectDeadEnemies(state, result.killedEnemyIds);
     }
@@ -145,7 +146,12 @@ export class EncounterLoop {
     // lets them retarget in the same instant her own projectiles already do.
     this.collectDeadEnemies(
       state,
-      resolveCompanionBeats({ run, equipment: state.equipment, emit: this.emit }),
+      resolveCompanionBeats({
+        run,
+        equipment: state.equipment,
+        mastery: masteryMultiplier(state.meta),
+        emit: this.emit,
+      }),
     );
 
     if (

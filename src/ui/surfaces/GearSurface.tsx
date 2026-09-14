@@ -123,8 +123,12 @@ export function GearSurface() {
           <NumberCell value={selected.contribution} prefix="+" suffix={` ${selected.primaryStatLabel}`} />
         </div>
         <div className={styles.fact}>
-          <span>Each level</span>
-          <NumberCell value={String(selected.perLevel)} prefix="+" suffix={` ${selected.primaryStatLabel}`} />
+          <span>Next level</span>
+          <NumberCell
+            value={selected.nextLevelGain}
+            prefix="+"
+            suffix={` ${selected.primaryStatLabel}`}
+          />
         </div>
       </div>
 

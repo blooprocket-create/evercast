@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { NO_MASTERY } from '../prestige/Mastery';
 import { SPELL_MECHANIC_DEFAULTS as defaults } from '../../content/spellTreeTuning';
 import { DEFAULT_ENGINE_CONFIG } from '../config';
 import type { GameEvent } from '../events/GameEvent';
@@ -54,7 +55,7 @@ function fixture(
   const combat = new CombatSystem(DEFAULT_ENGINE_CONFIG, (event) => events.push(event));
   const cast = () => {
     events.length = 0;
-    combat.cast(state.run, state.equipment);
+    combat.cast(state.run, state.equipment, NO_MASTERY);
     return events.filter((e) => e.type === 'projectile_hit');
   };
   const advance = (time: number) => {

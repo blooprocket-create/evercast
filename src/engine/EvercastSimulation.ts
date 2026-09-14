@@ -115,8 +115,17 @@ export class EvercastSimulation {
    * Offline progress samples a window at full fidelity and credits the rest from
    * the rate it measured, so this is the one way currency enters the world
    * without a kill behind it. It is deliberately narrow: Gold and Starlight are
-   * repeatable kill rewards and scale with nothing but the stage the sample ran
-   * at, so a rate holds. Essence and stage are not here on purpose - Essence is
+   * repeatable kill rewards, so a measured rate holds across the sample.
+   *
+   * Gold is the one to watch. It used to scale with nothing but the stage; it is
+   * now a fraction of enemy health, which compounds and carries the world-tier
+   * and boss multipliers with it. A flat rate still holds inside a ten-minute
+   * sample, but a long absence extrapolated from one taken just below a
+   * world-tier boundary will under-credit more sharply than it used to. That is
+   * a conservative error rather than a wrong one, and it is why the progressor
+   * measures the rate instead of deriving it.
+   *
+   * Essence and stage are not here on purpose - Essence is
    * a first-clear reward and the stage is the record of where the run actually
    * reached, and inventing either would put the save at odds with
    * `totalFirstClearEssenceEarned`, which treats the highest stage as the
@@ -219,6 +228,7 @@ export class EvercastSimulation {
       catalog: this.catalog,
       canRebirth: this.rebirthSystem.canRebirth(this.state),
       rebirthKnowledgeGain: this.rebirthSystem.previewKnowledgeGain(this.state),
+      nextKnowledgeStage: this.rebirthSystem.nextKnowledgeStage(this.state),
       lastSummon: this.lastSummon,
       lastEvent: this.lastEvent ? describeGameEvent(this.lastEvent) : 'The Evercast stirs.',
     });
