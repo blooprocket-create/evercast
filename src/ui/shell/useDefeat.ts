@@ -1,17 +1,24 @@
-import { useEffect, useRef, useState } from 'react';
 import { useSnapshotSelector } from '../state/snapshot';
 
 /**
  * The moment the mage falls, as a value the interface can react to.
  *
- * Read from the snapshot rather than from the event stream because the
- * interface is built on snapshots and the engine already counts deaths. The
- * enemy that did it has to be captured a tick early: the encounter resets with
- * the defeat, so by the time `deaths` has moved, `enemyName` is whatever comes
- * next.
+ * This used to derive it: watch the death counter, and name whichever enemy
+ * was on screen the tick before it moved. That is wrong wherever the
+ * simulation runs faster than it publishes - and it always does at the one
+ * moment that matters most. A catch-up settles the whole absence in a single
+ * call before publishing one snapshot, so the enemy held from the previous
+ * tick is the one from *before* the absence, and a defeat that happened while
+ * nobody was watching had no enemy on screen at all. The toast would then name
+ * something that had nothing to do with it.
+ *
+ * The engine carries the killer on `mage_defeated` now and the snapshot
+ * reports the last one, so this reads a fact instead of reconstructing one.
+ * `farmStage` is deliberately still live: it is where the run has dropped back
+ * to, which is a statement about now rather than about the defeat.
  */
 export interface Defeat {
-  /** The death's ordinal, which is also what makes each one distinct. */
+  /** The death's ordinal in this session, which is what makes each distinct. */
   serial: number;
   stage: number;
   farmStage: number;
@@ -19,26 +26,14 @@ export interface Defeat {
 }
 
 export function useDefeat(): Defeat | null {
-  const deaths = useSnapshotSelector((s) => s.deaths);
-  const stage = useSnapshotSelector((s) => s.stage);
+  const lastDefeat = useSnapshotSelector((s) => s.lastDefeat);
   const farmStage = useSnapshotSelector((s) => s.farmStage);
-  const enemyName = useSnapshotSelector((s) => s.enemyName);
 
-  // One tick behind, on purpose: see above.
-  const previousEnemy = useRef(enemyName);
-  const seen = useRef(deaths);
-  const [defeat, setDefeat] = useState<Defeat | null>(null);
-
-  useEffect(() => {
-    if (deaths > seen.current) {
-      setDefeat({ serial: deaths, stage, farmStage, enemy: previousEnemy.current });
-    }
-    seen.current = deaths;
-  }, [deaths, stage, farmStage]);
-
-  useEffect(() => {
-    previousEnemy.current = enemyName;
-  }, [enemyName]);
-
-  return defeat;
+  if (lastDefeat === null) return null;
+  return {
+    serial: lastDefeat.serial,
+    stage: lastDefeat.stage,
+    farmStage,
+    enemy: lastDefeat.enemyName,
+  };
 }

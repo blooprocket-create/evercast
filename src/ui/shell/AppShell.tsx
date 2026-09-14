@@ -235,9 +235,18 @@ function DefeatGate({
   const first = defeat !== null && !explained;
 
   useEffect(() => {
-    if (defeat === null || first) return;
+    if (defeat === null) return;
     if (announced.current === defeat.serial) return;
+    /*
+     * Claimed before the `first` check, not after it.
+     *
+     * Dismissing the moment writes the flag, which makes `first` false while
+     * `defeat` still names the same fall - so an effect that had skipped
+     * without claiming the serial would come straight back and toast the death
+     * it had just spent a full screen explaining.
+     */
     announced.current = defeat.serial;
+    if (first) return;
     onToast({
       id: `defeat-${defeat.serial}`,
       tone: 'defeat',

@@ -13,7 +13,7 @@ import {
   totalSpellPoints,
   unspentSpellPoints,
 } from '../spellTree/SpellTreeSystem';
-import type { LastSummonSnapshot, ResourceKind, SimulationSnapshot } from '../types';
+import type { DefeatSnapshot, LastSummonSnapshot, ResourceKind, SimulationSnapshot } from '../types';
 import type { ChronicleLine } from '../events/Chronicle';
 import { buildCompanionSnapshots } from './CompanionSnapshotBuilder';
 import { wizardPerHit } from '../companions/CompanionCombat';
@@ -32,6 +32,7 @@ export interface SimulationSnapshotBuildContext {
   chronicle: readonly ChronicleLine[];
   income: Readonly<Record<ResourceKind, Decimal | null>>;
   stagesPerSecond: Decimal | null;
+  lastDefeat: DefeatSnapshot | null;
 }
 
 export function buildSimulationSnapshot({
@@ -45,6 +46,7 @@ export function buildSimulationSnapshot({
   chronicle,
   income,
   stagesPerSecond,
+  lastDefeat,
 }: SimulationSnapshotBuildContext): SimulationSnapshot {
   const run = state.run;
   // The same enemy the spell is aimed at, or the readout names one thing while
@@ -167,6 +169,7 @@ export function buildSimulationSnapshot({
      * second is a number nobody can hold, and 14 an hour is a pace.
      */
     stagesPerHour: stagesPerSecond === null ? null : stagesPerSecond.mul(3600).toNumber(),
+    lastDefeat,
   };
 }
 

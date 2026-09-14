@@ -168,7 +168,7 @@ export class EncounterLoop {
       enemy.attackCooldown += enemy.attackInterval;
       enemy.telegraphed = false;
       if (result.mageDefeated) {
-        this.systems.progression.handleDefeat(state);
+        this.systems.progression.handleDefeat(state, enemy);
         break;
       }
     }

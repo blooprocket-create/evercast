@@ -79,7 +79,7 @@ export function describeGameEvent(event: GameEvent): string {
     case 'enemy_killed':
       return `Enemy falls. +${n(event.gold)} Gold.`;
     case 'mage_defeated':
-      return `The mage falls at stage ${event.stage}.`;
+      return `${event.enemyName} brings the mage down at stage ${event.stage}.`;
     case 'resource_gained':
       return `+${n(event.amount)} ${resourceLabel(event.resource)}.`;
     case 'stage_advanced':

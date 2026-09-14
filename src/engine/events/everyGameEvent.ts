@@ -39,7 +39,7 @@ export const EVERY_EVENT: GameEvent[] = [
   { type: 'enemy_windup', time: 1, instanceId: 1, durationSeconds: 0.6 },
   { type: 'enemy_attack', time: 1, instanceId: 1, damage: '12' },
   { type: 'enemy_killed', time: 1, stage: 4, instanceId: 1, enemyId: 'moss_slime', gold: '30' },
-  { type: 'mage_defeated', time: 1, stage: 9 },
+  { type: 'mage_defeated', time: 1, stage: 9, enemyId: 'ash_beetle', enemyName: 'Ash Beetle' },
   ...(['essence', 'knowledge', 'gold', 'starlight'] as const).map((resource): GameEvent => ({
     type: 'resource_gained', time: 1, resource, amount: '5',
   })),

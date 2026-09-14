@@ -5,19 +5,23 @@ import type { SimulationSnapshot } from '../types';
  * state.
  *
  * Two simulations that hold identical state can legitimately disagree about
- * the chronicle and the income rates: both are session measurements rather
- * than state, neither is saved, and a run resumed from a save therefore starts
- * them cold while the run that never stopped carries what came before.
- * Comparing full snapshots to prove a save round-trip lost nothing would be
- * asserting that it *did* carry them - which is the opposite of the design.
+ * the chronicle, the income rates and the last defeat: all three are session
+ * measurements rather than state, none is saved, and a run resumed from a save
+ * therefore starts them cold while the run that never stopped carries what came
+ * before. Comparing full snapshots to prove a save round-trip lost nothing
+ * would be asserting that it *did* carry them - which is the opposite of the
+ * design.
  *
  * Lives here rather than in a test file because it is a fact about the read
  * model, and the next ephemeral field added to it needs one obvious place to
  * be declared rather than two test files to be remembered in.
  */
-export type AuthoritativeSnapshot = Omit<SimulationSnapshot, 'chronicle' | 'income' | 'stagesPerHour'>;
+// prettier-ignore
+export type AuthoritativeSnapshot =
+  Omit<SimulationSnapshot, 'chronicle' | 'income' | 'stagesPerHour' | 'lastDefeat'>;
 
 export function authoritativeSnapshot(snapshot: SimulationSnapshot): AuthoritativeSnapshot {
-  const { chronicle: _log, income: _rates, stagesPerHour: _pace, ...authoritative } = snapshot;
+  const { chronicle: _log, income: _rates, stagesPerHour: _pace, lastDefeat: _fall, ...authoritative } =
+    snapshot;
   return authoritative;
 }

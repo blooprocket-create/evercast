@@ -360,6 +360,26 @@
 }
 
 /*
+ * Between the phone layout and a window wide enough to hold three things on
+ * one row, the enemy card goes to the foot of the diorama.
+ *
+ * Measured: the place block ends at x = 320, the card is 420 wide and centred
+ * on the viewport, and the wallet strip wants about 330 on the right - so all
+ * three share the row only from about 1100px up. Below that the card covered
+ * `Best 766` at 880px and the Gold wallet at 1059. That used to be rare
+ * because the card was drawn only for a boss; it is drawn for every encounter
+ * now, so this was most of the game rather than an edge of it.
+ *
+ * The foot is where the phone layout and the landscape rule already put it.
+ */
+@media (min-width: 861px) and (max-width: 1100px) {
+  .enemy {
+    top: auto;
+    bottom: var(--space-3);
+  }
+}
+
+/*
  * Three 10ch reserves, three labels and the slab's own spacing come to 305px,
  * and the narrowest phone still in use offers 296 between its margins. The
  * numbers keep their reserve - they tick several times a second, and a value

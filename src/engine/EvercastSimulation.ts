@@ -14,7 +14,7 @@ import { EventBus } from './events/EventBus';
 import type { GameEvent } from './events/GameEvent';
 import { Chronicle } from './events/Chronicle';
 import { RateMeter } from './rates/RateMeter';
-import type { ResourceKind } from './types';
+import type { DefeatSnapshot, ResourceKind } from './types';
 import { GearSystem } from './gear/GearSystem';
 import { EPSILON, EncounterLoop } from './loop/EncounterLoop';
 import type { GameState } from './model';
@@ -53,6 +53,12 @@ export class EvercastSimulation {
    * - and the audit found the interface answering neither.
    */
   private readonly income = new RateMeter<ResourceKind | 'stage'>();
+  /**
+   * The last defeat, kept from the event rather than reconstructed later. See
+   * `DefeatSnapshot` for why the interface cannot work it out for itself.
+   */
+  private lastDefeat: DefeatSnapshot | null = null;
+  private defeats = 0;
   private lastSummon: LastSummonSnapshot | null = null;
 
   constructor(options: SimulationOptions = {}) {
@@ -250,6 +256,7 @@ export class EvercastSimulation {
         starlight: this.income.read('starlight'),
       },
       stagesPerSecond: this.income.read('stage'),
+      lastDefeat: this.lastDefeat,
     });
   }
 
@@ -267,6 +274,10 @@ export class EvercastSimulation {
     this.chronicle.record(event);
     if (event.type === 'resource_gained') this.income.add(event.resource, event.amount);
     if (event.type === 'stage_advanced') this.income.add('stage', '1');
+    if (event.type === 'mage_defeated') {
+      this.defeats += 1;
+      this.lastDefeat = { serial: this.defeats, stage: event.stage, enemyName: event.enemyName };
+    }
     if (this.recordPresentationEvents) this.presentationEvents.push(event);
   }
 }

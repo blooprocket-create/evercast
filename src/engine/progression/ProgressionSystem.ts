@@ -88,13 +88,16 @@ export class ProgressionSystem {
     this.resetAfterEncounter(run);
   }
 
-  handleDefeat(state: GameState): void {
+  /** `killer` is the enemy whose blow took the last of the mage's health. */
+  handleDefeat(state: GameState, killer: EnemyState): void {
     const { run } = state;
     run.stats.deaths += 1;
     this.emit({
       type: 'mage_defeated',
       time: run.elapsedSeconds,
       stage: run.encounterStage,
+      enemyId: killer.definitionId,
+      enemyName: killer.name,
     });
 
     if (run.mode === 'push') {

@@ -102,7 +102,14 @@ export type GameEvent =
       targetSlot?: number;
     }
   | { type: 'enemy_killed'; time: number; stage: number; instanceId: number; enemyId: string; gold: string }
-  | { type: 'mage_defeated'; time: number; stage: number }
+  /**
+   * `enemyId` and `enemyName` are the enemy that landed the blow. Carried on
+   * the event rather than read off a later snapshot because a catch-up settles
+   * the whole absence before publishing one: whatever is on screen afterwards
+   * is not what did this, and for a defeat mid-absence there is nothing on
+   * screen at all.
+   */
+  | { type: 'mage_defeated'; time: number; stage: number; enemyId: string; enemyName: string }
   | {
       type: 'resource_gained';
       time: number;
