@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_ENGINE_CONFIG } from '../config';
 import { createInitialGameState } from '../state';
 import { GEAR_DEFINITIONS, GEAR_POWER_GROWTH, evolutionTierForLevel, nextEvolutionLevel } from './GearCatalog';
-import { GearSystem, compileGearStats, gearLevelCost } from './GearSystem';
+import { GearSystem, compileGearStats, gearDisplayData, gearLevelCost } from './GearSystem';
 
 describe('GearSystem', () => {
   it('starts standard gear with zero paid-level bonuses', () => {
@@ -91,6 +91,42 @@ describe('GearSystem', () => {
 
       expect(warm).toBe(cold);
       expect(evicting).not.toBe(cold);
+    });
+  });
+
+  /**
+   * `gearDisplayData` used to compute the contribution longhand, and kept the
+   * additive formula when the curve went geometric - so the screen reported a
+   * level-100 staff as contributing 99 damage rather than 11,571, and derived a
+   * next-level gain by subtracting one curve from the other. These pin the two
+   * displayed values against the engine that actually pays them out, so a second
+   * copy of the formula cannot drift from the first again.
+   */
+  describe('what the gear screen reports', () => {
+    it('agrees with the stats combat actually uses', () => {
+      for (const level of [1, 2, 10, 50, 100, 500]) {
+        const state = createInitialGameState(DEFAULT_ENGINE_CONFIG);
+        state.equipment.pieces.staff.level = level;
+        const shown = gearDisplayData(state.equipment, 'staff').contribution;
+        expect(shown.toString()).toBe(compileGearStats(state.equipment).baseDamageBonus.toString());
+      }
+    });
+
+    it('reports the next level as what that one level actually adds', () => {
+      for (const level of [1, 2, 10, 50, 100]) {
+        const state = createInitialGameState(DEFAULT_ENGINE_CONFIG);
+        state.equipment.pieces.staff.level = level;
+        const before = compileGearStats(state.equipment).baseDamageBonus;
+        const claimed = gearDisplayData(state.equipment, 'staff').nextLevelGain;
+
+        state.equipment.pieces.staff.level = level + 1;
+        const after = compileGearStats(state.equipment).baseDamageBonus;
+
+        expect(claimed.toString()).toBe(after.sub(before).toString());
+        // And it must stay a small fraction of the total, not approach it -
+        // the symptom the old subtraction produced.
+        if (level >= 10) expect(claimed.cmp(before)).toBeLessThan(0);
+      }
     });
   });
 

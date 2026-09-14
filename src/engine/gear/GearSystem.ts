@@ -251,7 +251,12 @@ export function gearDisplayData(equipment: EquipmentState, slot: GearSlot) {
   const piece = equipment.pieces[slot];
   const definition = GEAR_DEFINITIONS[slot];
   const tier = evolutionTierForLevel(piece.level);
-  const contribution = big(definition.statPerLevel).mul(Math.max(0, piece.level - 1));
+  // Through `gearContribution`, never longhand. This had its own copy of the
+  // additive formula and kept it when the curve went geometric, so the screen
+  // reported a level-100 staff as contributing 99 damage instead of 11,571 - and
+  // derived a next-level gain of 12,283 instead of 811 by subtracting one curve
+  // from the other. The same drift `wizardPerHit` documents, for the same reason.
+  const contribution = gearContribution(definition.statPerLevel, piece.level);
   return {
     slot,
     level: piece.level,
