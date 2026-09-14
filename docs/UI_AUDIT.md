@@ -1364,12 +1364,17 @@ Ordered by (player impact ÷ effort), not by section order.
 
 ## 14. Regression tests worth adding
 
-The existing suites — `ui/architecture.test.ts`, `ui/mobile.test.ts`,
-`ui/accessibility.test.ts` — are regex passes over source text. That is a
-deliberate and effective choice for the rules they encode, and it is also why
-every finding in sections 4-8 survived them: **nothing in the repository ever
-renders a screen**. Three of the S1 defects would have been caught by a single
-rendered assertion.
+The existing suites split two ways. `ui/architecture.test.ts`,
+`ui/mobile.test.ts` and `ui/accessibility.test.ts` are regex passes over source
+text; `Shelf`, `Ledger`, `Moment`, `BootGate` and `SummonReveal` each have a
+`.test.tsx` that renders through `renderToStaticMarkup` and asserts over the
+resulting **string**. Both are deliberate, well-judged choices for the rules
+they encode — and between them they are why every finding in sections 4-8
+survived: a regex cannot see geometry, and neither can markup with no DOM, no
+CSS and no layout. **Nothing in the repository ever lays out a screen**, so
+nothing can observe an overlay covering a button, a control below the fold, or
+a 6px hit target. Three of the four S1 defects would fall to a single
+laid-out assertion.
 
 Worth adding, in order of value per line:
 
@@ -1401,9 +1406,11 @@ Worth adding, in order of value per line:
 7. **Unit-test the away-time formatter** with the table in
    [TXT-2](#txt-2-the-welcome-back-clock-is-wrong).
 
-`@testing-library/react` plus `jsdom` covers 1, 2, 6 and 7. Playwright against
-the dev server — which is how this audit was produced — covers 3 and 5 and
-gives screenshot diffs for free.
+Items 4, 6 and 7 are pure unit tests and need nothing new. Items 1 and 2 need
+a real layout engine — `jsdom` reports zero for every box, so this is
+`@testing-library/react` under `happy-dom` at best, and Playwright properly.
+Items 3 and 5 need Playwright outright, which is how this audit was produced,
+and which gives screenshot diffs for free.
 
 ---
 
