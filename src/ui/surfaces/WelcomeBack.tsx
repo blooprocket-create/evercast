@@ -1,5 +1,6 @@
 import type { OfflineSummary } from '../../engine/offline/OfflineProgressor';
 import { Moment } from '../archetypes/Moment';
+import { formatAwayTime } from '../format/awayTime';
 import { NumberCell } from '../format/NumberCell';
 
 /**
@@ -13,9 +14,7 @@ export function WelcomeBack({
   summary: OfflineSummary;
   onDismiss: () => void;
 }) {
-  const hours = Math.floor(summary.secondsApplied / 3600);
-  const minutes = Math.round((summary.secondsApplied % 3600) / 60);
-  const away = hours > 0 ? `${hours}h ${minutes}m` : `${minutes} minutes`;
+  const away = formatAwayTime(summary.secondsApplied);
 
   return (
     <Moment

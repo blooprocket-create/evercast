@@ -219,24 +219,45 @@ describe('mobile layout', () => {
     }
   });
 
-  it('hides the wallet labels while there are still three wallets to fit', () => {
+  it('takes the wallet labels out of the line, but not out of the page', () => {
     /*
      * The threshold was 360px when the header carried two wallets. Starlight
      * made it three, and between 361 and 420 the third was pushed clean off
      * the right edge - label, value and all - because `.wallets` is `flex:
      * none` and widens the header rather than shrinking. Every phone in
-     * portrait is inside that band.
+     * portrait is inside that band, so the labels have to stop taking width.
+     *
+     * This used to assert `display: none`, and that was the wrong rule: it
+     * left three currencies told apart by a 7px dot in each one's own colour,
+     * which is WCAG 1.4.1 on the number every purchase is judged against - and
+     * `display: none` took the word from assistive technology as well, so a
+     * screen reader got three bare numbers. The label is clipped instead, and
+     * a glyph carries the meaning on screen.
      */
     const host = sheet('shell/SurfaceHost.module.css');
-    const query = /@media \(max-width: (\d+)px\)\s*\{[^}]*\.walletLabel\s*\{[^}]*display:\s*none/.exec(
+    const query = /@media \(max-width: (\d+)px\)\s*\{\s*\.walletLabel\s*\{([^}]*)\}/.exec(
       declarations(host),
     );
-    expect(query, 'no rule hides .walletLabel at a narrow width').not.toBeNull();
+    expect(query, 'no rule takes .walletLabel out of the line at a narrow width').not.toBeNull();
     expect(Number(query?.[1])).toBeGreaterThanOrEqual(430);
+
+    const rule = query?.[2] ?? '';
+    expect(rule, 'the label must still reach a screen reader').not.toMatch(/display:\s*none/);
+    expect(rule).toMatch(/clip-path:\s*inset\(/);
+    expect(rule).toMatch(/position:\s*absolute/);
 
     // And if a fourth ever arrives it clips rather than dragging the host wide.
     const hostRule = /\.header\s*\{[^}]*\}/.exec(host)?.[0] ?? '';
     expect(hostRule).toMatch(/overflow:\s*hidden/);
+  });
+
+  it('never leaves a wallet told apart by colour alone', () => {
+    /*
+     * The sub-560px fallback was a `::before` dot filled with `currentColor`.
+     * Shape, not hue, is what makes three numbers distinguishable.
+     */
+    const host = sheet('shell/SurfaceHost.module.css');
+    expect(declarations(host)).not.toMatch(/\.walletItem::before/);
   });
 
   it('gives the summon overlay a definite column to measure against', () => {

@@ -1,20 +1,69 @@
 import { COMPANION_BY_ID } from '../companions/CompanionCatalog';
+import { GEAR_DEFINITIONS } from '../gear/GearCatalog';
+import type { GearSlot } from '../gear/types';
 import type { GameEvent } from './GameEvent';
 import { big, formatBig } from '../numbers';
 
 /** Event payloads carry raw `Decimal.toString()` values; never show those. */
 const n = (value: string): string => formatBig(big(value));
 
+/*
+ * Everything below turns an engine identifier into the word the game already
+ * uses for it elsewhere. Without these the log printed the enum: "dot deals
+ * 9.97e47.", "supercharge: 3.", "ringLeft reached gear level 5." Each map is
+ * keyed by the event's own union, so adding a variant fails the build here
+ * rather than shipping its identifier to the player.
+ *
+ * The words are the spell tree's own - DoT, Weakness, Ruin, Momentum,
+ * Overdrive, Supercharge, Terminal Velocity, Necrosis - so a line in the log
+ * names the thing the player bought.
+ */
+type EffectKind = Extract<GameEvent, { type: 'effect_hit' }>['effect'];
+const EFFECT_LABEL: Record<EffectKind, string> = {
+  explosion: 'Explosion',
+  meteor: 'Meteor',
+  dot: 'DoT',
+  necrosis: 'Necrosis',
+};
+
+type StatusKind = Extract<GameEvent, { type: 'status_applied' }>['status'];
+const STATUS_LABEL: Record<StatusKind, string> = {
+  dot: 'DoT',
+  weakness: 'Weakness',
+  ruin: 'Ruin',
+};
+
+type CombatStateKind = Extract<GameEvent, { type: 'combat_state' }>['state'];
+const COMBAT_STATE_LABEL: Record<CombatStateKind, string> = {
+  momentum: 'Momentum',
+  overdrive: 'Overdrive',
+  focus: 'Focus',
+  supercharge: 'Supercharge',
+  velocity: 'Terminal Velocity',
+};
+
+type ModeReason = Extract<GameEvent, { type: 'mode_changed' }>['reason'];
+const MODE_SENTENCE: Record<ModeReason, string> = {
+  'frontier defeat': 'The frontier held. Farming the stage below it.',
+  'automatic frontier retry': 'Strong enough again. Pushing the frontier.',
+  'manual frontier retry': 'Back to the frontier.',
+};
+
+/** The slot's authored short name - "Ring I", not "ringLeft". */
+const slotLabel = (slot: GearSlot): string => GEAR_DEFINITIONS[slot].slotLabel;
+
 export function describeGameEvent(event: GameEvent): string {
   switch (event.type) {
     case 'meteor_queued':
       return 'A meteor gathers above the battlefield.';
     case 'effect_hit':
-      return `${event.effect} deals ${n(event.damage)}.`;
+      return `${EFFECT_LABEL[event.effect]} deals ${n(event.damage)}.`;
     case 'status_applied':
-      return `${event.status} applied (${event.stacks}).`;
+      return event.stacks > 1
+        ? `${STATUS_LABEL[event.status]} applied (x${event.stacks}).`
+        : `${STATUS_LABEL[event.status]} applied.`;
     case 'combat_state':
-      return `${event.state}: ${event.stacks}.`;
+      return `${COMBAT_STATE_LABEL[event.state]} at ${event.stacks}.`;
     case 'encounter_started':
       return `Stage ${event.stage}: ${event.totalEnemies} incoming.`;
     case 'enemy_spawned':
@@ -36,9 +85,9 @@ export function describeGameEvent(event: GameEvent): string {
     case 'stage_advanced':
       return `Frontier advanced to stage ${event.stage}.`;
     case 'mode_changed':
-      return `${event.mode === 'farm' ? 'Farming' : 'Pushing'}: ${event.reason}.`;
+      return MODE_SENTENCE[event.reason];
     case 'gear_leveled':
-      return `${event.slot} reached gear level ${event.level}.`;
+      return `${slotLabel(event.slot)} reached level ${event.level}.`;
     case 'gear_evolved':
       return `${event.name} evolved at gear level ${event.level}.`;
     case 'spell_point_purchased':

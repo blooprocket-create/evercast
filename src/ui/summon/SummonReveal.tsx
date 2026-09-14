@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { COMPANION_RARITIES } from '../../engine/companions/types';
 import type { CompanionRarity } from '../../engine/companions/types';
 import type { SummonResultSnapshot } from '../../engine/types';
@@ -77,7 +78,7 @@ export function SummonReveal({ results, immediate = false, onDone }: SummonRevea
   );
   const dialog = useDialog<HTMLDivElement>(dismiss);
 
-  return (
+  const overlay = (
     <div
       ref={dialog}
       className={styles.scrim}
@@ -135,6 +136,24 @@ export function SummonReveal({ results, immediate = false, onDone }: SummonRevea
       </p>
     </div>
   );
+
+  /*
+   * Portalled to the body, and that is what makes `position: fixed` mean the
+   * viewport.
+   *
+   * The reveal renders inside `SurfaceHost`, and `.host` sets
+   * `backdrop-filter: blur(18px)` - which makes it a containing block for
+   * fixed descendants. So the scrim measured 1440x768 on a 900px viewport,
+   * stopping exactly at `--shelf-inset`: an `aria-modal` overlay with the nav
+   * bar lit and clickable underneath it. `useDialog` traps Tab, so it was a
+   * pointer-only hole, and the same one `inert` was added to close on the boot
+   * gate.
+   *
+   * Guarded because the component is also rendered by `renderToStaticMarkup`
+   * in its own test, where there is no document to portal into and the markup
+   * is the whole point. Same shape as the `matchMedia` guard above.
+   */
+  return typeof document === 'undefined' ? overlay : createPortal(overlay, document.body);
 }
 
 /** One line about what the batch was actually worth. */

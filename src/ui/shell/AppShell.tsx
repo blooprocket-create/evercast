@@ -22,6 +22,17 @@ import { useSnapshot, useSnapshotSelector } from '../state/snapshot';
 import type { OfflineSummary } from '../../engine/offline/OfflineProgressor';
 import styles from './AppShell.module.css';
 
+/**
+ * How long an absence has to be before it is worth a full-screen moment.
+ *
+ * It was five seconds, and the visibility handler credits time spent in a
+ * background tab - so alt-tabbing for six seconds came back to a modal
+ * reporting, in the old formatter's words, "0 minutes". A minute is the point
+ * at which there is something to report; below it the run simply carries on,
+ * which is the whole promise of the game.
+ */
+const WELCOME_BACK_SECONDS = 60;
+
 interface AppShellProps {
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
   bootPhase: BootPhase;
@@ -55,7 +66,7 @@ export function AppShell({
   const playing = bootPhase === 'playing';
   // The threshold is the away report's own, not a second guess at it: a moment
   // that is not drawn must not silence the onboarding standing behind it.
-  const welcoming = awayProgress !== null && awayProgress.secondsApplied >= 5;
+  const welcoming = awayProgress !== null && awayProgress.secondsApplied >= WELCOME_BACK_SECONDS;
 
   return (
     <main

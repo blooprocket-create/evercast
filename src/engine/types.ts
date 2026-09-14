@@ -7,6 +7,8 @@ import type { RunMode } from './model';
 
 export interface GearSnapshot {
   slot: GearSlot;
+  /** The slot's own name. Two pieces can share a name; slots cannot. */
+  slotLabel: string;
   name: string;
   level: number;
   evolutionTier: number;

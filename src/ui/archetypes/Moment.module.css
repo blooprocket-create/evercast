@@ -31,6 +31,31 @@
   pointer-events: auto;
 }
 
+/*
+ * A moment rendered as a destination rather than over one.
+ *
+ * `Moment` is archetype 5 of 5, so Rebirth - whose whole content is one
+ * decision - renders as a surface with the rail and the Back button beside it.
+ * It was still painting the overlay's scrim: `position: absolute; inset: 0`
+ * with a 72%-opaque background and `pointer-events: auto`. `.surface` was not
+ * positioned, so that box resolved against the surface host and covered the
+ * header, the Back button and the whole nav rail - visibly washing them out,
+ * and swallowing every click on them. Escape still closed the surface, so a
+ * keyboard player could leave and a touch player could not.
+ *
+ * Two things fix it and both are wanted: `.surface` is now positioned, so
+ * nothing a surface draws can escape its own pane again, and a non-modal
+ * moment gives up the parts that only belong to an overlay. It keeps the
+ * centring and the scroll, which are about the card, not about covering
+ * anything.
+ */
+.inline {
+  position: static;
+  flex: 1;
+  min-height: 0;
+  background: none;
+}
+
 .card {
   width: min(560px, 100%);
   padding: var(--space-6);

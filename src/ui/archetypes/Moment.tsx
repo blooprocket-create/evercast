@@ -85,7 +85,13 @@ export function Moment({
   return (
     <div
       ref={modal ? dialog : undefined}
-      className={styles.scrim}
+      /*
+        A non-modal moment is its surface's own content, not something covering
+        it, and the two must not look or behave alike. `.inline` gives up the
+        wash and the absolute box; see the rule in Moment.module.css for the
+        navigation trap that came of sharing them.
+      */
+      className={modal ? styles.scrim : `${styles.scrim} ${styles.inline}`}
       role={modal ? 'dialog' : 'group'}
       aria-modal={modal ? 'true' : undefined}
       aria-label={headline}

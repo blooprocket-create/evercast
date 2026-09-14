@@ -1,6 +1,17 @@
+/*
+ * One piece per row, at any width.
+ *
+ * A row carries a slot, a name, a level and a contribution with a unit, and
+ * every one of those but the name is `flex: none` - so a track narrower than
+ * their sum does not shrink them, it pushes them past the end of the row. At
+ * 280px the grid asked for more than a 320px phone has (262 between the
+ * panel's own padding), and the level and the contribution ran into each
+ * other; on a 1920 screen it found four columns and dropped the piece names
+ * entirely. A list of eight is a list.
+ */
 .rows {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-2);
 }
 
@@ -16,6 +27,26 @@
   color: var(--ink-mid);
 }
 
+/*
+ * Slot, name and level on one baseline, with only the name allowed to give
+ * way. `min-width: 0` on the group is what lets the name's ellipsis work
+ * inside a flex row at all.
+ */
+.identity {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.slot {
+  flex: none;
+  font: 600 var(--text-label) / 1 var(--font-ui);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-low);
+}
+
 .name {
   min-width: 0;
   overflow: hidden;
@@ -24,7 +55,9 @@
 }
 
 .level {
+  flex: none;
   color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
 }
 
 .contribution {
@@ -34,7 +67,17 @@
   flex: none;
 }
 
+/*
+ * A column of its own rather than whatever width the label happens to be.
+ * `--value-width` reserves a fixed box for the number, and then a variable
+ * -width unit after it shifted every number's right edge by the difference
+ * between "Max HP" and "Base Damage" - which is exactly the column alignment
+ * the reserve exists to buy.
+ */
 .unit {
+  flex: none;
+  min-width: 4.75rem;
+  text-align: left;
   color: var(--ink-low);
   font-size: var(--text-label);
 }
@@ -57,4 +100,30 @@
   gap: var(--space-2);
   font: 500 var(--text-small) / 1 var(--font-ui);
   color: var(--ink-num);
+}
+
+/*
+ * Narrow enough that a row cannot hold all four of its parts on one line.
+ *
+ * A 320px phone leaves the row 238px inside its own padding, and the
+ * contribution alone - a 10ch reserve plus a 4.75rem unit - takes 160 of them.
+ * That leaves 66 for a slot, a name and a level whose slot and level are
+ * `flex: none` and come to 78 between them, so the level ran into the
+ * contribution however far the name was ellipsised. Two lines rather than one
+ * squeezed: what the piece is, and then what it is worth.
+ */
+@media (max-width: 400px) {
+  .row {
+    flex-wrap: wrap;
+    row-gap: var(--space-1);
+  }
+
+  .identity {
+    flex: 1 1 100%;
+  }
+
+  .contribution {
+    flex: 1 1 100%;
+    justify-content: space-between;
+  }
 }

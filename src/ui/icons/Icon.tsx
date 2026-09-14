@@ -211,6 +211,28 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <path d="M12 20.5S4.5 15.8 4.5 10.4A4.2 4.2 0 0 1 12 7.8a4.2 4.2 0 0 1 7.5 2.6c0 5.4-7.5 10.1-7.5 10.1Z" />
     </>
   ),
+  /* A struck coin: a disc with a rim and a mark. */
+  gold: (
+    <>
+      <circle cx="12" cy="12" r="8" />
+      <circle cx="12" cy="12" r="3.4" />
+    </>
+  ),
+  /* A stoppered flask - Arcane Essence is decanted, not minted. */
+  essence: (
+    <>
+      <path d="M10 3.5h4" />
+      <path d="M10.8 3.5v5.2L6.6 16a3.2 3.2 0 0 0 2.8 4.8h5.2a3.2 3.2 0 0 0 2.8-4.8l-4.2-7.3V3.5" />
+      <path d="M8.2 14.6h7.6" />
+    </>
+  ),
+  /* A four-pointed spark, distinct from the five-pointed summon star. */
+  starlight: (
+    <>
+      <path d="M12 3.5c0 4.7 1.8 6.5 6.5 6.5-4.7 0-6.5 1.8-6.5 6.5 0-4.7-1.8-6.5-6.5-6.5 4.7 0 6.5-1.8 6.5-6.5Z" />
+      <path d="M17.5 16.2v4M15.5 18.2h4" />
+    </>
+  ),
 };
 
 interface IconProps {
