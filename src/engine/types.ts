@@ -1,5 +1,12 @@
 import type { CombatPosition } from './combat/SpellCombatState';
 import type { ChronicleLine } from './events/Chronicle';
+
+/**
+ * The four currencies, as one closed set. Named here rather than repeated as a
+ * union in every place that has to hold one of each.
+ */
+export const RESOURCE_KINDS = ['gold', 'essence', 'knowledge', 'starlight'] as const;
+export type ResourceKind = (typeof RESOURCE_KINDS)[number];
 // prettier-ignore
 import type { CompanionAbility, CompanionClass, CompanionModelKey, CompanionRarity, FormationRow } from './companions/types';
 import type { GearSlot } from './gear/types';
@@ -108,6 +115,9 @@ export interface SimulationSnapshot {
   encounterStage: number;
   zone: number;
   zoneName: string;
+  /** Where in the zone the run is, 1-based, and how long a zone runs. */
+  zoneStage: number;
+  zoneLength: number;
   mode: RunMode;
   farmStage: number;
   farmKillsSinceFailure: number;
@@ -197,6 +207,18 @@ export interface SimulationSnapshot {
    * and the one line was hidden below 860px anyway.
    */
   chronicle: readonly ChronicleLine[];
+  /**
+   * What the run is earning, per second of simulated time, or null for a
+   * currency the meter has not watched long enough to speak about. See
+   * `RateMeter`: an incremental game is a set of rates and this one showed
+   * none of them.
+   */
+  income: Readonly<Record<ResourceKind, QuantitySnapshot | null>>;
+  /**
+   * How fast the frontier is actually climbing, or null while the meter is
+   * cold. Farming reads as zero, which is the honest answer.
+   */
+  stagesPerHour: number | null;
 }
 
 export type EngineCommand =

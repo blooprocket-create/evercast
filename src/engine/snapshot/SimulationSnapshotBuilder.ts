@@ -13,7 +13,7 @@ import {
   totalSpellPoints,
   unspentSpellPoints,
 } from '../spellTree/SpellTreeSystem';
-import type { LastSummonSnapshot, SimulationSnapshot } from '../types';
+import type { LastSummonSnapshot, ResourceKind, SimulationSnapshot } from '../types';
 import type { ChronicleLine } from '../events/Chronicle';
 import { buildCompanionSnapshots } from './CompanionSnapshotBuilder';
 import { wizardPerHit } from '../companions/CompanionCombat';
@@ -30,6 +30,8 @@ export interface SimulationSnapshotBuildContext {
   nextKnowledgeStage: number;
   lastSummon: LastSummonSnapshot | null;
   chronicle: readonly ChronicleLine[];
+  income: Readonly<Record<ResourceKind, Decimal | null>>;
+  stagesPerSecond: Decimal | null;
 }
 
 export function buildSimulationSnapshot({
@@ -41,6 +43,8 @@ export function buildSimulationSnapshot({
   nextKnowledgeStage,
   lastSummon,
   chronicle,
+  income,
+  stagesPerSecond,
 }: SimulationSnapshotBuildContext): SimulationSnapshot {
   const run = state.run;
   // The same enemy the spell is aimed at, or the readout names one thing while
@@ -68,6 +72,13 @@ export function buildSimulationSnapshot({
     encounterStage: run.encounterStage,
     zone: run.zoneNumber,
     zoneName: run.zoneName,
+    /*
+     * How far into the zone the run is. The same arithmetic `resolveZone` does
+     * for the name, on the same stage it does it for, so the two can never
+     * disagree about which zone they are describing.
+     */
+    zoneStage: ((Math.max(1, run.mode === 'push' ? run.frontierStage : run.farmStage) - 1) % config.zoneLength) + 1,
+    zoneLength: config.zoneLength,
     mode: run.mode,
     farmStage: run.farmStage,
     farmKillsSinceFailure: run.farmKillsSinceFailure,
@@ -145,6 +156,17 @@ export function buildSimulationSnapshot({
       };
     }),
     chronicle,
+    income: {
+      gold: income.gold && quantity(income.gold),
+      essence: income.essence && quantity(income.essence),
+      knowledge: income.knowledge && quantity(income.knowledge),
+      starlight: income.starlight && quantity(income.starlight),
+    },
+    /*
+     * An hour rather than a second, because a stage takes minutes: 0.004 a
+     * second is a number nobody can hold, and 14 an hour is a pace.
+     */
+    stagesPerHour: stagesPerSecond === null ? null : stagesPerSecond.mul(3600).toNumber(),
   };
 }
 

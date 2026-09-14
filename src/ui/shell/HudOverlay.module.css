@@ -124,7 +124,7 @@
  */
 .walletItem {
   display: grid;
-  gap: var(--space-1);
+  gap: 2px;
   justify-items: end;
   font: 500 var(--text-lead) / 1 var(--font-display);
 }
@@ -134,6 +134,52 @@
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--ink-low);
+}
+
+/*
+ * The rate under the balance, at label size and in the dimmest ink the sheet
+ * has: it is context for the number above it, not a second number competing
+ * with it. Empty while the meter is cold, and the row keeps its height so the
+ * strip does not jump when the first rate lands.
+ */
+.walletRate {
+  min-height: 1em;
+  font: 500 var(--text-label) / 1 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-dim);
+}
+
+.modeRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+/* Where in the zone the road has got to; the pill beside it says what it is doing. */
+.zoneProgress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font: 600 var(--text-label) / 1 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
+  color: var(--ink-low);
+}
+
+.zoneTrack {
+  width: 56px;
+  height: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--track);
+  overflow: hidden;
+}
+
+.zoneFill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
 }
 
 .gold {

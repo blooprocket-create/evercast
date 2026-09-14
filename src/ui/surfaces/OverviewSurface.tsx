@@ -1,11 +1,19 @@
 import { formatBig } from '../../engine/numbers';
 import { Dashboard } from '../archetypes/Dashboard';
 import { NumberCell } from '../format/NumberCell';
+import { formatWait, timeToAfford } from '../format/timeToAfford';
 import { effectiveDps } from '../format/dps';
 import { Panel } from '../primitives/Panel';
 import { Stat } from '../primitives/Stat';
 import { useSnapshotSelector } from '../state/snapshot';
 import styles from './OverviewSurface.module.css';
+
+/** Knowledge is left out: it is paid at a Rebirth, not earned per second. */
+const INCOME_ROWS = [
+  { id: 'gold', label: 'Gold' },
+  { id: 'essence', label: 'Essence' },
+  { id: 'starlight', label: 'Starlight' },
+] as const;
 
 export function OverviewSurface() {
   const dps = useSnapshotSelector((s) => formatBig(effectiveDps(s)));
@@ -22,6 +30,12 @@ export function OverviewSurface() {
   const unspent = useSnapshotSelector((s) => s.spellTreeUnspentPoints);
   const nextPointCost = useSnapshotSelector((s) => s.nextSpellPointCost.display);
   const essence = useSnapshotSelector((s) => s.essence.display);
+  const income = useSnapshotSelector((s) => s.income);
+  const pointWait = useSnapshotSelector((s) => {
+    const answer = timeToAfford(s.nextSpellPointCost.raw, s.essence.raw, s.income.essence?.raw);
+    return answer.now ? 'now' : answer.seconds === null ? null : formatWait(answer.seconds);
+  });
+  const stagesPerHour = useSnapshotSelector((s) => s.stagesPerHour);
   const kills = useSnapshotSelector((s) => s.kills);
   const deaths = useSnapshotSelector((s) => s.deaths);
 
@@ -107,8 +121,52 @@ export function OverviewSurface() {
                 <NumberCell value={essence} />
               </span>
             </div>
+            {/*
+              The panel named a price and a balance and left the subtraction,
+              in `e`-notation, to the player. This is the answer they were
+              doing it for. Absent while the meter is cold rather than guessed.
+            */}
+            {pointWait !== null && (
+              <div className={styles.upcoming}>
+                <span className={styles.upcomingLabel}>Affordable</span>
+                <span className={styles.upcomingValue}>{pointWait}</span>
+              </div>
+            )}
+          </Panel>
+          {/*
+            What the run earns, which is the number every decision in the game
+            is actually made against - and which nothing anywhere showed.
+          */}
+          <Panel title="Per second" note="Averaged over the last half minute">
+            {INCOME_ROWS.map(({ id, label }) => (
+              <div key={id} className={styles.upcoming}>
+                <span className={styles.upcomingLabel}>{label}</span>
+                <span className={styles.upcomingValue}>
+                  {income[id] === null ? (
+                    <span className={styles.pending}>measuring</span>
+                  ) : (
+                    <NumberCell value={income[id].display} />
+                  )}
+                </span>
+              </div>
+            ))}
           </Panel>
           <Panel title="This run">
+            {/*
+              How fast the frontier is climbing, which is the other rate the
+              interface never carried. Farming reads as zero, and that is the
+              honest answer rather than a gap.
+            */}
+            <div className={styles.upcoming}>
+              <span className={styles.upcomingLabel}>Frontier pace</span>
+              <span className={styles.upcomingValue}>
+                {stagesPerHour === null ? (
+                  <span className={styles.pending}>measuring</span>
+                ) : (
+                  `${stagesPerHour < 10 ? stagesPerHour.toFixed(1) : Math.round(stagesPerHour)} stages/h`
+                )}
+              </span>
+            </div>
             <div className={styles.upcoming}>
               <span className={styles.upcomingLabel}>Enemies felled</span>
               <span className={styles.upcomingValue}>

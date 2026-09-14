@@ -90,3 +90,11 @@
   font: 500 var(--text-small) / 1 var(--font-ui);
   color: var(--ink-num);
 }
+
+/* A meter that has not watched long enough to speak. See `RateMeter`. */
+.pending {
+  font: 500 var(--text-label) / 1 var(--font-ui);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}

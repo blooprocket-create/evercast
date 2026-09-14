@@ -11,6 +11,7 @@ import type { SpellTreeState } from '../../engine/spellTree/types';
 import { Graph, type EdgeTone } from '../archetypes/Graph';
 import { Moment } from '../archetypes/Moment';
 import { NumberCell } from '../format/NumberCell';
+import { affordabilityLabel } from '../format/timeToAfford';
 import type { GraphBox } from '../graph/layoutGraph';
 import { shouldShowSearch } from '../graph/fitView';
 import { Button } from '../primitives/Button';
@@ -122,6 +123,12 @@ export function SpellTreeSurface() {
     return 'var(--ink-dim)';
   };
 
+  const pointWait = affordabilityLabel(
+    snapshot.nextSpellPointCost.raw,
+    snapshot.essence.raw,
+    snapshot.income.essence?.raw,
+  );
+
   const affordablePoint =
     snapshot.spellTreeTotalPoints < snapshot.spellTreeMaxPoints &&
     big(snapshot.essence.raw).cmp(big(snapshot.nextSpellPointCost.raw)) >= 0;
@@ -189,6 +196,8 @@ export function SpellTreeSurface() {
               onClick={() => run({ type: 'buy_spell_point' })}
             >
               Awaken point &middot; {snapshot.nextSpellPointCost.display}
+              {/* What the price costs in time; nothing while the meter is cold. */}
+              {pointWait !== null && <span className={styles.wait}>{pointWait}</span>}
             </Button>
             <Button
               disabled={snapshot.activeSpellNodeIds.length === 0}

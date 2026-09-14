@@ -16,6 +16,9 @@ export function HudOverlay() {
   const gold = useSnapshotSelector((s) => s.gold.display);
   const essence = useSnapshotSelector((s) => s.essence.display);
   const starlight = useSnapshotSelector((s) => s.starlight.display);
+  const income = useSnapshotSelector((s) => s.income);
+  const zoneStage = useSnapshotSelector((s) => s.zoneStage);
+  const zoneLength = useSnapshotSelector((s) => s.zoneLength);
   const phase = useSnapshotSelector((s) => s.phase);
   const enemyName = useSnapshotSelector((s) => s.enemyName);
   const enemyHp = useSnapshotSelector((s) => s.enemyHp.display);
@@ -25,6 +28,12 @@ export function HudOverlay() {
   const alive = useSnapshotSelector((s) => s.encounterAliveEnemies);
   const spawned = useSnapshotSelector((s) => s.encounterSpawnedEnemies);
   const total = useSnapshotSelector((s) => s.encounterTotalEnemies);
+
+  const WALLETS = [
+    { id: 'gold', label: 'Gold', value: gold, rate: income.gold },
+    { id: 'essence', label: 'Essence', value: essence, rate: income.essence },
+    { id: 'starlight', label: 'Starlight', value: starlight, rate: income.starlight },
+  ] as const;
 
   return (
     <div className={styles.chrome}>
@@ -39,29 +48,42 @@ export function HudOverlay() {
           <span className={styles.frontierValue}>{stage}</span>
           <span className={styles.best}>Best {best}</span>
         </div>
-        <span className={styles.mode}>{mode === 'push' ? 'Pushing' : `Farming ${farmStage}`}</span>
+        <div className={styles.modeRow}>
+          <span className={styles.mode}>{mode === 'push' ? 'Pushing' : `Farming ${farmStage}`}</span>
+          {/*
+            How far through the zone the road has come. The HUD named the zone
+            and said nothing about progress through it, so "Gravehollow" was a
+            label rather than a place on a journey.
+          */}
+          <span className={styles.zoneProgress} title={`Stage ${zoneStage} of ${zoneLength} in ${zoneName}`}>
+            <span className={styles.zoneTrack}>
+              <span className={styles.zoneFill} style={{ width: `${(zoneStage / zoneLength) * 100}%` }} />
+            </span>
+            {zoneStage}/{zoneLength}
+          </span>
+        </div>
       </div>
 
       <div className={styles.wallets}>
+        {/*
+          The balance and what is filling it. An incremental game is a set of
+          rates and the HUD showed none of them, so a player could read
+          `1.21e47` of gold against a `5.92e50` price with no way to tell
+          whether that gap was ten seconds or ten hours. The rate is omitted
+          rather than zeroed while the meter is cold - see `RateMeter`.
+        */}
         <div className={styles.wallet}>
-          <div className={styles.walletItem}>
-            <span className={styles.walletLabel}>Gold</span>
-            <span className={styles.gold}>
-              <NumberCell value={gold} />
-            </span>
-          </div>
-          <div className={styles.walletItem}>
-            <span className={styles.walletLabel}>Essence</span>
-            <span className={styles.essence}>
-              <NumberCell value={essence} />
-            </span>
-          </div>
-          <div className={styles.walletItem}>
-            <span className={styles.walletLabel}>Starlight</span>
-            <span className={styles.starlight}>
-              <NumberCell value={starlight} />
-            </span>
-          </div>
+          {WALLETS.map(({ id, label, value, rate }) => (
+            <div key={id} className={styles.walletItem}>
+              <span className={styles.walletLabel}>{label}</span>
+              <span className={styles[id]}>
+                <NumberCell value={value} />
+              </span>
+              <span className={styles.walletRate}>
+                {rate === null ? '' : <><NumberCell value={rate.display} inline />/s</>}
+              </span>
+            </div>
+          ))}
         </div>
         {mode === 'farm' && (
           <Button variant="primary" onClick={() => run({ type: 'retry_frontier' })}>

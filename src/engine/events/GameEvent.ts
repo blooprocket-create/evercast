@@ -1,6 +1,7 @@
 import type { CompanionAbilityId, CompanionRarity } from '../companions/types';
 import type { GearSlot } from '../gear/types';
 import type { CombatPosition } from '../combat/SpellCombatState';
+import type { ResourceKind } from '../types';
 
 export type ProjectileHitSource = 'direct' | 'pierce' | 'chain' | 'splash' | 'repeat';
 
@@ -105,7 +106,7 @@ export type GameEvent =
   | {
       type: 'resource_gained';
       time: number;
-      resource: 'essence' | 'knowledge' | 'gold' | 'starlight';
+      resource: ResourceKind;
       amount: string;
     }
   | { type: 'stage_advanced'; time: number; stage: number }

@@ -240,3 +240,16 @@
     font-size: var(--text-label);
   }
 }
+
+/*
+ * The time half of a price, inside the button that charges it. Dimmer and
+ * smaller than the price itself: it is what the price means, not a second
+ * price.
+ */
+.wait {
+  margin-left: var(--space-2);
+  font: 500 var(--text-label) / 1 var(--font-ui);
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--ink-dim);
+}

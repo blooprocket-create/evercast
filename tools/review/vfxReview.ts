@@ -45,6 +45,8 @@ const snapshot = () =>
     nextKnowledgeStage: 1,
       rebirthKnowledgeGain: big(0),
     chronicle: [],
+    income: { gold: null, essence: null, knowledge: null, starlight: null },
+    stagesPerSecond: null,
   });
 const mode = document.querySelector<HTMLSelectElement>('#mode')!;
 for (const node of SPELL_TREE_NODES.filter((n) => ['root', 'route', 'mutation', 'fusion', 'apex'].includes(n.kind))) {

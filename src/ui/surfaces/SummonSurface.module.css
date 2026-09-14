@@ -148,3 +148,12 @@
     font-size: var(--text-label);
   }
 }
+
+/* The price in time, under the price in Starlight. */
+.drawWait {
+  display: block;
+  font: 500 var(--text-label) / 1.2 var(--font-ui);
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--ink-dim);
+}

@@ -4,6 +4,7 @@ import { COMPANION_RARITIES } from '../../engine/companions/types';
 import { Dashboard } from '../archetypes/Dashboard';
 import { RARITY_LABEL, rarityStyle } from '../companions/rarity';
 import { NumberCell } from '../format/NumberCell';
+import { affordabilityLabel } from '../format/timeToAfford';
 import { Field, Toggle } from '../primitives/Field';
 import { Meter } from '../primitives/Meter';
 import { Panel } from '../primitives/Panel';
@@ -52,6 +53,10 @@ export function SummonSurface() {
     setRevealing((serial) => (serial === null ? 0 : serial + 1));
   };
 
+  const starlightRate = snapshot.income.starlight?.raw;
+  const singleWait = affordabilityLabel(snapshot.summonCost.raw, snapshot.starlight.raw, starlightRate);
+  const tenWait = affordabilityLabel(snapshot.summonCostTen.raw, snapshot.starlight.raw, starlightRate);
+
   // Pity is shown as progress toward the guarantee, because the published
   // rate is not the experienced one and a bare percentage would mislead.
   const toGuarantee = Math.max(0, snapshot.pityHard - snapshot.pityCounter);
@@ -88,6 +93,8 @@ export function SummonSurface() {
                 <span className={styles.drawLabel}>Summon</span>
                 <span className={styles.drawPrice}>
                   <NumberCell value={snapshot.summonCost} inline />
+                  {/* The price in time, for the same reason Gear carries one. */}
+                  {singleWait !== null && <span className={styles.drawWait}>{singleWait}</span>}
                 </span>
               </button>
               <button
@@ -102,6 +109,7 @@ export function SummonSurface() {
                 </span>
                 <span className={styles.drawPrice}>
                   <NumberCell value={snapshot.summonCostTen} inline />
+                  {tenWait !== null && <span className={styles.drawWait}>{tenWait}</span>}
                 </span>
               </button>
             </div>
