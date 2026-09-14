@@ -112,10 +112,21 @@
   backdrop-filter: blur(10px);
 }
 
+/*
+ * The face lives here rather than on the three colour classes below.
+ *
+ * It used to be on `.gold` and `.essence`, and `.starlight` - added later -
+ * only ever set a colour, so the third wallet inherited the body font and drew
+ * its number in 16px Inter beside two in 17px Georgia. A `ch` resolves against
+ * the element's own font, so it also reserved 102px where the others reserved
+ * 85, making the odd one out the widest item in the strip. One declaration on
+ * the item they share, and a wallet added tomorrow is right without knowing it.
+ */
 .walletItem {
   display: grid;
   gap: var(--space-1);
   justify-items: end;
+  font: 500 var(--text-lead) / 1 var(--font-display);
 }
 
 .walletLabel {
@@ -126,12 +137,10 @@
 }
 
 .gold {
-  font: 500 var(--text-lead) / 1 var(--font-display);
   color: var(--gold);
 }
 
 .essence {
-  font: 500 var(--text-lead) / 1 var(--font-display);
   color: var(--essence);
 }
 
@@ -188,11 +197,53 @@
 }
 
 @media (max-width: 860px) {
-  /* The wallet strip takes the top row on a phone; the place block sits under it. */
+  /*
+   * The two top corners become one column on a phone.
+   *
+   * They were both absolutely positioned, and neither could see the other. The
+   * wallet strip was pinned by its right edge with nothing bounding its left,
+   * so it grew leftward off the screen the moment anything joined it: Retry
+   * Frontier appears beside the wallets for the whole of a farming run, and
+   * with it there the strip measured 455px on a 390px phone and Gold - the
+   * first item - was drawn at x = -65. The player's own gold, off the side of
+   * the display, for as long as they were farming.
+   *
+   * And `.place` cleared the strip by a hardcoded 62px, which is a guess at its
+   * height rather than a measurement of it - so anything that made the strip
+   * taller, wrapping included, put the wordmark straight through it.
+   *
+   * In flow, neither is possible: the strip is bounded by the column, what does
+   * not fit on its row wraps to the next, and `.place` follows whatever height
+   * that came to.
+   */
+  .chrome {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  /*
+   * Margins rather than padding on `.chrome`: an absolutely positioned child
+   * resolves against its containing block's padding box, so padding here would
+   * inset the gradient with them and leave a bare strip down each side of it.
+   */
+  .place,
+  .wallets {
+    position: static;
+    margin: 0 max(var(--space-3), var(--safe-right)) 0 max(var(--space-3), var(--safe-left));
+  }
+
   .place {
     width: auto;
-    left: max(var(--space-3), var(--safe-left));
-    top: calc(max(var(--space-3), var(--safe-top)) + 62px);
+  }
+
+  /* The strip still takes the top row; `.place` is first in the DOM. */
+  .wallets {
+    order: -1;
+    margin-top: max(var(--space-3), var(--safe-top));
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--space-2);
   }
 
   .chrome::before {
@@ -216,14 +267,18 @@
     margin-left: 0;
   }
 
-  .wallets {
-    right: max(var(--space-3), var(--safe-right));
-    top: max(var(--space-3), var(--safe-top));
-  }
-
+  /*
+   * The strip wraps between the slab and Retry Frontier; this is the same
+   * permission one level down, so a slab that cannot fit the width on its own
+   * takes a second line rather than an edge of the screen. It should not come
+   * to that - the rule below is what keeps it fitting - but the guard costs a
+   * declaration and the failure it prevents costs a wallet.
+   */
   .wallet {
     gap: var(--space-3);
     padding: var(--space-2) var(--space-3);
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 
   .enemy {
@@ -233,6 +288,20 @@
     right: max(var(--space-3), var(--safe-right));
     width: auto;
     transform: none;
+  }
+}
+
+/*
+ * Three 10ch reserves, three labels and the slab's own spacing come to 305px,
+ * and the narrowest phone still in use offers 296 between its margins. The
+ * numbers keep their reserve - they tick several times a second, and a value
+ * that resizes as it grows is the jitter the reserve exists to stop - so the
+ * spacing around them gives way instead: 289px, and Gold stays on the screen.
+ */
+@media (max-width: 360px) {
+  .wallet {
+    gap: var(--space-2);
+    padding: var(--space-2);
   }
 }
 
@@ -247,13 +316,43 @@
     height: 110px;
   }
 
+  /*
+   * The same column, turned on its side. A landscape phone is the one shape
+   * with width to spare and no height at all, so stacking the strip over the
+   * place block - which is what the portrait rule above does - would spend a
+   * third of a 390px screen on chrome. Both stay in flow, so neither can run
+   * off an edge; they simply take the two ends of one row, and the strip wraps
+   * within whatever the place block leaves it.
+   *
+   * Stated in full rather than as a delta on the 860px rule, because the two do
+   * not always arrive together: a 932x430 phone held sideways is a landscape
+   * phone that is *wider* than 860, and inheriting half a layout there left the
+   * chrome pinned at the portrait offset on the shortest screen there is.
+   */
+  .chrome {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--space-3);
+  }
+
+  .place,
+  .wallets {
+    position: static;
+    margin: max(var(--space-2), var(--safe-top)) max(var(--space-3), var(--safe-right)) 0
+      max(var(--space-3), var(--safe-left));
+    min-width: 0;
+  }
+
   .place {
-    top: max(var(--space-2), var(--safe-top));
+    width: auto;
     gap: var(--space-1);
   }
 
+  /* Undoes the portrait rule's swap; sideways they read left to right. */
   .wallets {
-    top: max(var(--space-2), var(--safe-top));
+    order: 0;
   }
 
   .wordmark {

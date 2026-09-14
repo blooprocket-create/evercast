@@ -59,6 +59,33 @@ function offences(files: SourceFile[], pattern: RegExp): string[] {
 const declarations = (css: string): string =>
   css.replace(/\/\*[\s\S]*?\*\//g, '');
 
+/**
+ * The body of the first `@media` whose query contains `query`, braces matched
+ * rather than guessed - a media block holds rules, so the lazy `[^}]*` the
+ * single-rule helpers use stops at the first nested `}`.
+ */
+function mediaBlock(css: string, query: string): string {
+  const start = css.indexOf(`@media ${query}`);
+  if (start === -1) throw new Error(`no @media ${query}`);
+  const open = css.indexOf('{', start);
+  let depth = 0;
+  for (let i = open; i < css.length; i += 1) {
+    if (css[i] === '{') depth += 1;
+    else if (css[i] === '}') {
+      depth -= 1;
+      if (depth === 0) return css.slice(open + 1, i);
+    }
+  }
+  throw new Error(`unterminated @media ${query}`);
+}
+
+/** The body of the first rule whose selector is exactly `selector`. */
+function rule(css: string, selector: string): string {
+  const found = new RegExp(`(^|\\n)\\s*${selector.replace('.', '\\.')}\\s*\\{([^}]*)\\}`).exec(css);
+  if (!found) throw new Error(`no rule for ${selector}`);
+  return found[2];
+}
+
 describe('mobile layout', () => {
   it('has stylesheets to check', () => {
     expect(STYLESHEETS.length).toBeGreaterThan(0);
@@ -238,6 +265,56 @@ describe('mobile layout', () => {
     const candidates = STYLESHEETS.filter((file) => file.relativePath !== 'theme/tokens.css');
     const bare = offences(candidates, /minmax\(\s*\d+(\.\d+)?rem/);
     expect(bare).toEqual([]);
+  });
+
+  it('lays the top chrome out in flow on a phone', () => {
+    /*
+     * `.place` and `.wallets` are the two top corners, and absolutely
+     * positioned neither could see the other. The strip was pinned by its right
+     * edge with nothing bounding its left, so it grew off the side of the
+     * screen the moment anything joined it: Retry Frontier stands beside the
+     * wallets for the whole of a farming run, and with it there the strip
+     * measured 455px on a 390px phone, drawing Gold at x = -65.
+     *
+     * `.place` then cleared it by a hardcoded 62px - a guess at the strip's
+     * height rather than a measurement - so a strip that wrapped went straight
+     * through the wordmark.
+     */
+    const phone = mediaBlock(sheet('shell/HudOverlay.module.css'), '(max-width: 860px)');
+    expect(declarations(phone)).toMatch(/\.place,\s*\n\s*\.wallets\s*\{[^}]*position:\s*static/);
+    // No offset reserving room for a box whose height nobody measured.
+    for (const selector of ['.place', '.wallets'])
+      expect(declarations(rule(phone, selector))).not.toMatch(/(^|\s)(top|left|right):/);
+  });
+
+  it('gives every wallet in the strip the same face', () => {
+    /*
+     * The font was on `.gold` and `.essence`; `.starlight` arrived later and
+     * set only a colour, so the third wallet drew its number in the inherited
+     * 16px Inter beside two in 17px Georgia. A `ch` resolves against the
+     * element's own font, so it also reserved 102px where the others reserved
+     * 85 - the odd one out was the widest item in a strip that did not fit.
+     */
+    const hud = declarations(sheet('shell/HudOverlay.module.css'));
+    expect(rule(hud, '.walletItem')).toMatch(/font:\s*\d+\s+var\(--text-[a-z]+\)/);
+    for (const selector of ['.gold', '.essence', '.starlight'])
+      expect(`${selector} ${rule(hud, selector)}`).not.toMatch(/font/);
+  });
+
+  it('lets a moment scroll rather than cutting its card off', () => {
+    /*
+     * The premise is the first thing a new player sees and it measures 582px on
+     * a 320x568 phone. The scrim centred it and clipped it: the last 38px were
+     * off the bottom of the display with nothing to scroll to them.
+     *
+     * `safe` rather than plain `center`, or a card that overflows is stranded
+     * above the scroll origin instead - the same trap SummonReveal's scrim
+     * already names. On the base rule, not a media query: a short viewport is
+     * not a landscape-only condition.
+     */
+    const scrim = rule(declarations(sheet('archetypes/Moment.module.css')), '.scrim');
+    expect(scrim).toMatch(/overflow-y:\s*auto/);
+    expect(scrim).toMatch(/align-content:\s*safe center/);
   });
 
   it('treats a tap as a tap', () => {
