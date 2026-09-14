@@ -104,6 +104,26 @@ export function gearContribution(statPerLevel: number, level: number): Decimal {
 }
 
 /**
+ * The level under the compounding curve worth what `oldLevel` was worth under
+ * the additive one it replaced.
+ *
+ * Inverts `gearContribution`. `statPerLevel` cancels on the way through - old
+ * power is `statPerLevel x paidLevels` and new power is
+ * `statPerLevel x (G^n - 1) / (G - 1)`, so the ratio the logarithm sees is the
+ * same for every slot and one map serves all eight.
+ *
+ * Lives here rather than in the save codec so it cannot drift from the curve it
+ * inverts: the two are only correct as a pair.
+ */
+export function equivalentGearLevel(oldLevel: number): number {
+  const paidLevels = Math.max(0, oldLevel - 1);
+  if (paidLevels === 0) return 1;
+  const converted =
+    Math.log(paidLevels * (GEAR_POWER_GROWTH - 1) + 1) / Math.log(GEAR_POWER_GROWTH) + 1;
+  return Math.max(1, Math.round(converted));
+}
+
+/**
  * Built as a Decimal before it is exponentiated, never with `Math.pow`. A double
  * saturates to Infinity somewhere past level 4,000 on this curve, and gold is a
  * Decimal precisely because the player gets that far.

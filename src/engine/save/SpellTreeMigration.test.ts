@@ -4,7 +4,9 @@ import { DEFAULT_ENGINE_CONFIG } from '../config';
 import { big } from '../numbers';
 import { OfflineProgressor } from '../offline/OfflineProgressor';
 import { SPELL_TREE_NODES, SPELL_TREE_NODE_BY_ID } from '../../content/spellTree';
-import { SaveCodec } from './SaveCodec';
+import { CURRENT_SAVE_VERSION, SaveCodec } from './SaveCodec';
+import { GEAR_DEFINITIONS } from '../gear/GearCatalog';
+import { compileGearStats } from '../gear/GearSystem';
 import { createInitialGameState } from '../state';
 import { combatState } from '../combat/SpellCombatState';
 import { spellNodeStatus } from '../spellTree/SpellTreeSystem';
@@ -44,7 +46,7 @@ function normalized(sim: EvercastSimulation) {
   );
 }
 describe('spell tree save migration and authoritative clock', () => {
-  it('refunds all v5 allocations without changing purchased points, Essence, Gold, gear or meta, once', () => {
+  it('refunds all v5 allocations without changing purchased points, Essence, Gold, gear power or meta, once', () => {
     const sim = build('plaguefall');
     const state = sim.getState();
     state.run.essence = big(1234);
@@ -62,7 +64,20 @@ describe('spell tree save migration and authoritative clock', () => {
     expect(migrated.spellTree).toEqual({ purchasedPoints: 20, activatedNodeIds: [], attunements: [] });
     expect(migrated.run.essence.toString()).toBe('1234');
     expect(migrated.equipment.gold.toString()).toBe('1e35');
-    expect(migrated.equipment.pieces).toEqual(state.equipment.pieces);
+    // v9 converts a gear level into the one worth the same under the compounding
+    // curve, so on a pre-v9 save the level is expected to move and the power is
+    // not. Asserting the level here is what would be wrong: it would be asserting
+    // that a level means the same thing in both curves, which is the one thing
+    // the migration exists because it does not.
+    const oldAdditivePower = (slot: 'robe' | 'staff') =>
+      GEAR_DEFINITIONS[slot].statPerLevel * (state.equipment.pieces[slot].level - 1);
+    const migratedStats = compileGearStats(migrated.equipment);
+    expect(migrated.equipment.pieces.robe.level).toBeLessThan(state.equipment.pieces.robe.level);
+    expect(migrated.equipment.pieces.staff.level).toBeLessThan(state.equipment.pieces.staff.level);
+    // Within a rounding step of the level it landed on - the converted level has
+    // to be an integer, and a level is worth 7% more than the one below it.
+    expect(migratedStats.maxHpBonus.toNumber() / oldAdditivePower('robe')).toBeCloseTo(1, 1);
+    expect(migratedStats.baseDamageBonus.toNumber() / oldAdditivePower('staff')).toBeCloseTo(1, 1);
     expect(migrated.meta).toEqual(state.meta);
     expect(migrated.run.spell.mechanics?.route).toBe('base');
     expect(migrated.run.combatState?.meteors).toEqual([]);
@@ -143,7 +158,7 @@ describe('version 8 attunements', () => {
     expect(sim.execute({ type: 'buy_attunement', attunementId: 'second_route' })).toBe(true);
 
     const encoded = codec.encode(sim.getState());
-    expect(encoded.version).toBe(8);
+    expect(encoded.version).toBe(CURRENT_SAVE_VERSION);
     expect(encoded.state.spellTree.attunements).toEqual(['third_identity', 'second_route']);
 
     const restored = codec.decode(JSON.parse(JSON.stringify(encoded))).state;
