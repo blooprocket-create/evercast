@@ -38,6 +38,7 @@ import { BossTracker } from './BossTracker';
 import { CombatFeel } from './render/CombatFeel';
 import { watchContextLoss } from './render/ContextLoss';
 import { type CameraPose, applyPose, capturePose, titlePose } from './title/TitleFraming';
+import { BASE_BETA, BASE_FOV, BASE_TARGET_X, CAMERA_RADIUS, framingFor } from './render/Framing';
 import { TitleSigil } from './title/TitleSigil';
 
 /** Roughly head height above an enemy's feet. */
@@ -45,12 +46,6 @@ const HEALTH_BAR_OFFSET = new Vector3(0, 1.55, 0);
 
 /** Matches DEFAULT_UI_SETTINGS.display.depthOfField; the store is the authority. */
 const DEFAULT_DEPTH_OF_FIELD = 0.75;
-
-/**
- * The framing everything else is calibrated against: the camera radius, the
- * depth-of-field aperture and CombatFeel's shake were all measured here.
- */
-const BASE_FOV = 0.68;
 
 /**
  * Sky, sun, rim, and up to two landmark lanterns already exceed Babylon's
@@ -137,16 +132,16 @@ export class EvercastScene {
     const camera = new ArcRotateCamera(
       'camera',
       -Math.PI / 2,
-      1.31,
-      17.5,
-      new Vector3(0.9, 1.15, 1),
+      BASE_BETA,
+      CAMERA_RADIUS,
+      new Vector3(BASE_TARGET_X, 1.15, 1),
       this.scene,
     );
-    // Pinned, and depended upon elsewhere: resize() below derives its portrait
-    // fov from `2 * radius`, and CombatFeel's shake is calibrated against the
-    // 12.4 units of visible height this radius and fov produce.
-    camera.lowerRadiusLimit = 17.5;
-    camera.upperRadiusLimit = 17.5;
+    // Pinned, and depended upon elsewhere: `Framing` derives every shot from
+    // this radius, and CombatFeel's shake is calibrated against the 12.4 units
+    // of visible height this radius and the base fov produce.
+    camera.lowerRadiusLimit = CAMERA_RADIUS;
+    camera.upperRadiusLimit = CAMERA_RADIUS;
     camera.fov = BASE_FOV;
     camera.minZ = 0.2;
     camera.maxZ = 180;
@@ -587,10 +582,33 @@ export class EvercastScene {
   private readonly resize = (): void => {
     this.engine.resize();
     const aspect = this.engine.getRenderWidth() / Math.max(1, this.engine.getRenderHeight());
-    // Keep both combat formations in frame on portrait screens. Through
-    // CombatFeel rather than straight onto the camera: it is shaking the fov
-    // around this value, and writing underneath it corrupts the base.
-    this.feel.setBaseFov(Math.max(BASE_FOV, 2 * Math.atan(11 / (35 * aspect))));
+    const framing = framingFor(aspect);
+
+    // Through CombatFeel rather than straight onto the camera: it is shaking
+    // the fov around this value, and writing underneath it corrupts the base.
+    this.feel.setBaseFov(framing.fov);
+    this.camera.beta = framing.beta;
+
+    /*
+     * The aim is the one part of the shot the title screen is also using - it
+     * is the same camera, lifted 400 units - so while the sigil is up the new
+     * aim goes into the pose the camera will come back to, and the lift is
+     * re-applied over it. Writing the live target there instead would leave
+     * `hideTitle` restoring the aim from before the rotation.
+     */
+    if (this.gamePose) {
+      this.gamePose.target.x = framing.targetX;
+      this.gamePose.beta = framing.beta;
+      applyPose(this.camera, titlePose(this.gamePose));
+      if (this.title) this.title.root.position.copyFrom(this.camera.target);
+    } else if (this.camera.target.x !== framing.targetX) {
+      const target = this.camera.target.clone();
+      target.x = framing.targetX;
+      // `false` for cloneAlphaBetaRadius: see applyPose. A plain assignment
+      // swings the camera instead of translating it.
+      this.camera.setTarget(target, false, false, true);
+    }
+
     // The aperture is calibrated against the base framing, so it moves with it.
     this.applyDepthOfField();
   };
