@@ -228,12 +228,12 @@ function runPush(label: string, hours: number): { simulation: EvercastSimulation
  * well short of the soft stall; this locates it from measured play instead of
  * from the closed form.
  */
-function reportKnowledgeRate(records: StageRecord[]): void {
+function reportKnowledgeRate(records: StageRecord[]): number {
   const viable = records.filter((r) => r.knowledgeIfRebirth > 0 && r.elapsed > 0);
   if (viable.length === 0) {
     log('\nThe run never became rebirth-viable, so there is no Knowledge rate to');
     log('report: prestige is unreachable inside the budget, not merely slow.');
-    return;
+    return 0;
   }
   log('\nKnowledge per hour, if the run cashed out at that stage:');
   log('  stage |  reached at | Knowledge | K/hr');
@@ -249,6 +249,7 @@ function reportKnowledgeRate(records: StageRecord[]): void {
   }
   const bestRate = best.knowledgeIfRebirth / (best.elapsed / 3600);
   log(`  -> rate-optimal cash-out at stage ${best.stage} (${bestRate.toFixed(2)} K/hr)`);
+  return bestRate;
 }
 
 /**
@@ -260,32 +261,41 @@ function reportKnowledgeRate(records: StageRecord[]): void {
 function reportRebirthSpam(simulation: EvercastSimulation, deepRate: number): void {
   log('\nRebirth-spam check (same save, gear and gold retained):');
   const state = { wantHp: false };
+
+  if (!simulation.getSnapshot().canRebirth) {
+    log('  never became rebirth-viable');
+    return;
+  }
+  // Cash the deep run out first. That payout was earned by the push, so counting
+  // it here would credit spam with the depth it is avoiding.
+  simulation.execute({ type: 'rebirth' });
+
   const cycles: { seconds: number; knowledge: number }[] = [];
-
   for (let cycle = 0; cycle < 3; cycle += 1) {
-    const before = simulation.getState().run.elapsedSeconds;
-    const snapshot = simulation.getSnapshot();
-    if (!snapshot.canRebirth) break;
-    const gained = Number(snapshot.rebirthKnowledgeGain.raw);
-    if (!simulation.execute({ type: 'rebirth' })) break;
-
     // Climb back to wherever a rebirth becomes possible again. Building a
-    // snapshot is far more expensive than a tick, so poll it every few sim
-    // seconds rather than every tick; the answer only has to be accurate to
-    // within that window.
+    // snapshot is far more expensive than a tick, so poll every few sim seconds
+    // rather than every tick; the answer only has to be accurate to that window.
     const POLL_TICKS = 40;
     let guard = 0;
     while (guard < 2_000_000) {
+      if (simulation.getSnapshot().canRebirth) break;
       for (let tick = 0; tick < POLL_TICKS; tick += 1) play(simulation, state);
       guard += POLL_TICKS;
-      if (simulation.getSnapshot().canRebirth) break;
     }
-    const seconds = simulation.getState().run.elapsedSeconds - before;
-    cycles.push({ seconds, knowledge: gained });
+    const snapshot = simulation.getSnapshot();
+    if (!snapshot.canRebirth) break;
+
+    // `elapsedSeconds` belongs to the run, and a rebirth starts a new one - so
+    // the clock now reads the re-climb on its own. Differencing it across the
+    // rebirth would subtract the whole previous run and go negative.
+    const seconds = simulation.getState().run.elapsedSeconds;
+    const knowledge = Number(snapshot.rebirthKnowledgeGain.raw);
+    cycles.push({ seconds, knowledge });
     log(
-      `  cycle ${cycle + 1}: paid ${gained} Knowledge, re-climbed to the unlock stage in ` +
-        `${(seconds / 60).toFixed(1)} min`,
+      `  cycle ${cycle + 1}: re-climbed to the unlock stage in ${(seconds / 60).toFixed(1)} min` +
+        `, then cashed out ${knowledge} Knowledge`,
     );
+    simulation.execute({ type: 'rebirth' });
   }
 
   if (cycles.length === 0) {
@@ -312,13 +322,11 @@ describe('balance sweep', () => {
     log('='.repeat(72));
 
     const { simulation, records } = runPush('current build', SIM_HOURS);
-    reportKnowledgeRate(records);
 
-    const viable = records.filter((r) => r.knowledgeIfRebirth > 0 && r.elapsed > 0);
-    const deepest = viable[viable.length - 1];
-    if (deepest) {
-      reportRebirthSpam(simulation, deepest.knowledgeIfRebirth / (deepest.elapsed / 3600));
-    }
+    // Compare spam against the *best* rate a deep push can reach, not the rate it
+    // happened to end on - the exploit only matters if it beats the best play.
+    const bestDeepRate = reportKnowledgeRate(records);
+    if (bestDeepRate > 0) reportRebirthSpam(simulation, bestDeepRate);
 
     log('');
     flush();
