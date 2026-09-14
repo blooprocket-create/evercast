@@ -42,6 +42,24 @@ export const BIOME_PROP_POOLS: Record<BiomeId, readonly PropChoice[]> = {
     { id: 'bone_pile_rubble', weight: 16, scale: 0.9, background: false },
     { id: 'vigil_lantern', weight: 8, scale: 0.95, background: true },
   ],
+  /*
+   * Everything here already exists; the place is new. Ashen Road is the road
+   * after the fire, so it borrows the dead trees and broken fences from
+   * Gravehollow and the bare rock and fallen timber from Greenfields, and
+   * leaves out anything that is still growing. It reads as its own zone
+   * because the ground, the fog and the light under it are - see `ashen_road`
+   * in WorldGenerator.
+   */
+  ashen_road: [
+    ...variants('dead_tree', 3, 30, 0.95, true),
+    ...variants('rock', 3, 20, 0.6),
+    { id: 'fallen_log', weight: 16, scale: 0.85, background: false },
+    { id: 'bone_pile_rubble', weight: 13, scale: 0.85, background: false },
+    { id: 'broken_fence_segment', weight: 11, scale: 0.85, background: true },
+    { id: 'small_ruin_stone', weight: 10, scale: 0.75, background: false },
+    { id: 'ruined_arch', weight: 6, scale: 0.9, background: true },
+    { id: 'vigil_lantern', weight: 6, scale: 0.9, background: true },
+  ],
 };
 
 export const LANDMARK_ASSETS = [

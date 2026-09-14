@@ -141,8 +141,17 @@ describe('environment prop coverage', () => {
   it('places every exported asset in a biome pool or landmark', () => {
     const placed = new Set([...Object.values(BIOME_PROP_POOLS).flat().map((entry) => entry.id), ...LANDMARK_ASSETS]);
     expect([...placed].sort()).toEqual(manifest.assets.map((asset) => asset.id).sort());
+    /*
+     * Every entry names an asset that exists. Not one that was authored *for*
+     * this biome: the manifest's `biome` records which folder the art lives
+     * in, and the props carry their own materials, so Ashen Road is built
+     * from the dead trees, fences and bare rock the road already owns rather
+     * than from a second copy of them under a new name.
+     */
     for (const [biome, pool] of Object.entries(BIOME_PROP_POOLS)) {
-      for (const entry of pool) expect(manifest.assets.find((asset) => asset.id === entry.id)?.biome).toBe(biome);
+      for (const entry of pool) {
+        expect(manifest.assets.some((asset) => asset.id === entry.id), `${biome}: ${entry.id}`).toBe(true);
+      }
     }
   });
 
