@@ -42,6 +42,9 @@ export function PartySurface() {
     slot,
     member: party[slot] ?? null,
   }));
+  // A slot with nobody in it has no rank, because a rank comes from whoever
+  // stands there - so the diagram carries them in a row of their own.
+  const emptySlots = slots.filter((entry) => entry.member === null).map((entry) => entry.slot);
 
   return (
     <Detail
@@ -57,7 +60,7 @@ export function PartySurface() {
             className={styles.recall}
             onClick={() => run({ type: 'unequip_companion', slot: selectedSlot })}
           >
-            Recall {occupant.name}
+            Send {occupant.name} to the bench
           </button>
         ) : undefined
       }
@@ -106,15 +109,32 @@ export function PartySurface() {
         {fielded === 0 ? 'Nobody deployed' : `${fielded} of ${PARTY_SIZE} fielded`}
       </h2>
       <p className={styles.description}>
-        Any companion fits any slot. Where it stands is decided by what it is — a vanguard holds the
-        front whichever slot you put it in.
+        Any companion fits any slot, and a slot is a place in the party rather than a place on the
+        field. Where one stands is decided by what it is — a vanguard holds the front whichever slot
+        you put it in. Press a name below to work on that slot.
       </p>
 
-      {/* The field itself, front rank at the top, nearest the wave. */}
+      {/*
+        The field itself, front rank at the top, nearest the wave - and every
+        name in it a way in.
+
+        It used to be a picture: three rows of chips that could not be touched,
+        with the actual assignment happening in a separate grid below. A
+        formation screen that draws a formation and lets you move nothing in it
+        is the wrong affordance, and the audit said so. Pressing a name selects
+        that companion's slot, which is what the list beside it does - so the
+        diagram is navigation now rather than decoration.
+
+        What it still will not do is let a companion be dragged between ranks,
+        because a rank is not a place a player puts anyone: it is derived from
+        what the companion is. The line under the heading says so, and the
+        empty-slot chip is where the two models meet.
+      */}
       <div className={styles.formation}>
         {ROWS.map((row) => {
-          const members = party.filter(
-            (entry): entry is CompanionSnapshot => entry?.row === row,
+          const members = slots.filter(
+            (entry): entry is { slot: number; member: CompanionSnapshot } =>
+              entry.member?.row === row,
           );
           return (
             <div className={styles.formationRow} key={row}>
@@ -125,22 +145,53 @@ export function PartySurface() {
                 {members.length === 0 ? (
                   <span className={styles.rowEmpty}>nobody</span>
                 ) : (
-                  members.map((entry) => (
-                    <span
-                      key={entry.definitionId}
-                      style={rarityStyle(entry.rarity)}
-                      className={entry.downed ? `${styles.chip} ${styles.chipDown}` : styles.chip}
-                      title={entry.downed ? `${entry.name} — down` : entry.name}
+                  members.map(({ slot, member }) => (
+                    <button
+                      key={member.definitionId}
+                      type="button"
+                      style={rarityStyle(member.rarity)}
+                      className={[
+                        styles.chip,
+                        member.downed && styles.chipDown,
+                        slot === selectedSlot && styles.chipOn,
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      aria-pressed={slot === selectedSlot}
+                      title={`Slot ${slot + 1}${member.downed ? ' - down' : ''}`}
+                      onClick={() => setSelectedSlot(slot)}
                     >
-                      <Icon name={CLASS_ICON[entry.companionClass]} size={13} />
-                      {entry.name}
-                    </span>
+                      <Icon name={CLASS_ICON[member.companionClass]} size={13} />
+                      {member.name}
+                    </button>
                   ))
                 )}
               </span>
             </div>
           );
         })}
+        {emptySlots.length > 0 && (
+          <div className={styles.formationRow}>
+            <span className={styles.rowLabel} title="A slot nobody is standing in yet.">
+              Empty
+            </span>
+            <span className={styles.rowMembers}>
+              {emptySlots.map((slot) => (
+                <button
+                  key={slot}
+                  type="button"
+                  className={
+                    slot === selectedSlot ? `${styles.chip} ${styles.chipOn}` : styles.chip
+                  }
+                  aria-pressed={slot === selectedSlot}
+                  onClick={() => setSelectedSlot(slot)}
+                >
+                  Slot {slot + 1}
+                </button>
+              ))}
+            </span>
+          </div>
+        )}
       </div>
 
       <Panel title={`Slot ${selectedSlot + 1}`} note={occupant ? ROW_LABEL[occupant.row] : 'Empty'}>
@@ -161,7 +212,7 @@ export function PartySurface() {
               />
             )}
             <p className={styles.hint}>
-              A companion recalled mid-fight keeps its wounds until the encounter ends.
+              A companion sent to the bench mid-fight keeps its wounds until the encounter ends.
             </p>
           </>
         ) : (
