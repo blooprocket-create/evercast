@@ -1,0 +1,126 @@
+.prompt {
+  position: absolute;
+  left: 50%;
+  bottom: 22%;
+  transform: translateX(-50%);
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+  /* The chrome around it is inert; this is the one thing here that is pressed. */
+  pointer-events: auto;
+}
+
+.button {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  /*
+   * Comfortably past the 44px the smallest target in this interface is allowed
+   * to be. A control that exists for two seconds and is aimed at under time
+   * pressure is the wrong place to be economical about it.
+   */
+  min-height: 72px;
+  min-width: min(280px, calc(100vw - 48px));
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--crit);
+  border-radius: var(--radius-card);
+  background: var(--glass-strong);
+  backdrop-filter: blur(8px);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  cursor: pointer;
+}
+
+.button:disabled {
+  border-color: var(--line-strong);
+  color: var(--ink-low);
+  cursor: default;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: var(--text-lead);
+  letter-spacing: 0.04em;
+}
+
+.subtitle {
+  font-size: var(--text-label);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-mid);
+}
+
+.button:disabled .subtitle {
+  color: var(--ink-low);
+}
+
+/* The window closing. Driven by state rather than by a CSS animation, so it is
+   the truth about the simulation and not a decoration timed to look like it. */
+.track {
+  width: 100%;
+  height: 3px;
+  margin-top: var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--track);
+  overflow: hidden;
+}
+
+.fill {
+  display: block;
+  height: 100%;
+  background: var(--crit);
+  transform-origin: left center;
+}
+
+.charges {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.pip {
+  width: 18px;
+  height: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--track);
+}
+
+.pipFull {
+  background: var(--crit);
+}
+
+/* The charge being earned back, filling left to right. */
+.pip:not(.pipFull) {
+  background: linear-gradient(
+    to right,
+    var(--crit) 0,
+    var(--crit) var(--earned, 0%),
+    var(--track) var(--earned, 0%)
+  );
+}
+
+.announcer {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/*
+ * A phone in landscape has almost no vertical room, and the prompt would land
+ * on top of the enemy card. Sit it just above the shelf instead.
+ */
+@media (max-height: 460px) {
+  .prompt {
+    bottom: var(--space-3);
+  }
+
+  .button {
+    min-height: 56px;
+    padding: var(--space-2) var(--space-3);
+  }
+}

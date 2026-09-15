@@ -68,6 +68,8 @@ const HEALTH_BAR_OFFSET = new Vector3(0, 1.55, 0);
 const CAST_RECOIL = new Vector3(-1, 0, 0);
 /** Scratch for the blow the mage takes; a busy frame allocates nothing. */
 const MAGE_SHOVE = new Vector3();
+/** Scratch for throwing a countered boss back off its own gather. */
+const SURGE_RECOIL = new Vector3();
 
 /** Matches DEFAULT_UI_SETTINGS.display.depthOfField; the store is the authority. */
 const DEFAULT_DEPTH_OF_FIELD = 0.75;
@@ -578,6 +580,28 @@ export class EvercastScene {
       // animating a hit the mage has already taken.
       if (event.type === 'enemy_windup')
         this.enemyMeshes.get(event.instanceId)?.play('attack', event.durationSeconds);
+      /*
+       * A broken Surge has to be visible on the body, not only in the HUD.
+       *
+       * The swing was played from the windup and stretched across it, so
+       * without this the boss would finish the slow gather and follow through
+       * on a blow the simulation has already cancelled - the picture telling
+       * the player their press did nothing. `shove` is the right instrument
+       * rather than a clip: it rides the hinge layer no clip writes to, which
+       * is precisely why it reads during an attack that `play('hit')` is
+       * forbidden from interrupting.
+       */
+      if (event.type === 'surge_broken') {
+        const actor = this.enemyActor(event.instanceId);
+        if (actor) {
+          SURGE_RECOIL.copyFrom(actor.root.position).subtractInPlace(this.mage.root.position);
+          SURGE_RECOIL.y = 0;
+          actor.interrupt();
+          actor.shove(SURGE_RECOIL, impulseStrength({ critical: true, boss: true }), 0.42);
+          actor.flash(true);
+          this.vfx.combat.burst(actor.root.position.add(new Vector3(0, 0.9, 0)), 'arcane');
+        }
+      }
       if (event.type === 'enemy_attack') {
         this.mage.play('hit');
         const attacker = this.enemyActor(event.instanceId)?.root.position;

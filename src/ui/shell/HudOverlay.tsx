@@ -3,6 +3,7 @@ import { Button } from '../primitives/Button';
 import { Meter } from '../primitives/Meter';
 import { useCommand } from '../state/CommandContext';
 import { useSnapshotSelector } from '../state/snapshot';
+import { SurgePrompt } from './SurgePrompt';
 import styles from './HudOverlay.module.css';
 
 /** Always-on chrome over the diorama. The shelf is rendered by the shell. */
@@ -122,6 +123,8 @@ export function HudOverlay() {
         </div>
       )}
 
+      {/* The one moment the game asks for the player rather than their build. */}
+      <SurgePrompt />
     </div>
   );
 }
