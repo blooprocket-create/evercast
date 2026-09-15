@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
   Color3,
+  MeshBuilder,
   MultiMaterial,
   NullEngine,
   PBRMaterial,
   Scene,
   StandardMaterial,
+  type MaterialDefines,
+  type UniformBuffer,
 } from '@babylonjs/core';
-import { AtmosphereState, breatheOn } from './Atmosphere';
+import { AtmospherePlugin, AtmosphereState, breatheOn, burnAway } from './Atmosphere';
 import { environmentResponse } from '../world/EnvironmentMaterials';
 import { isLuminousMaterial, isLuminousSurface } from './LuminousGlow';
 
@@ -85,6 +88,75 @@ describe('installing the air on a material', () => {
     // dissolved completely is a road with no horizon on it.
     expect(air.ceiling).toBeGreaterThan(0.5);
     expect(air.sun.length()).toBeCloseTo(1, 5);
+  });
+});
+
+describe('a body coming apart', () => {
+  it('compiles the burn only into the surfaces that can burn', () => {
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const air = new AtmosphereState();
+    const body = new PBRMaterial('Cast / lavender fold', scene);
+    const bark = new PBRMaterial('Bark / umber', scene);
+    breatheOn(body, air, { burn: true });
+    breatheOn(bark, air, { wind: 0.02 });
+    const mesh = MeshBuilder.CreateBox('probe', {}, scene);
+
+    const defines = (material: PBRMaterial) => {
+      const flags = {} as MaterialDefines;
+      material.pluginManager!.getPlugin<AtmospherePlugin>('Atmosphere')!.prepareDefines(flags, scene, mesh);
+      return flags;
+    };
+    expect(defines(body).ATMO_BURN).toBe(true);
+    expect(defines(bark).ATMO_BURN).toBe(false);
+    // A tree still sways; the flags are independent.
+    expect(defines(bark).ATMO_WIND).toBe(true);
+    scene.dispose();
+    engine.dispose();
+  });
+
+  it('holds the amount per mesh, because the bodies share a material', () => {
+    // Four briarlings on the road are one material between them. A burn set on
+    // that material would take all four the moment any one of them died, so
+    // the amount rides the draw instead - which is what `hardBindForSubMesh`
+    // is for, and why it is not `bindForSubMesh`: that one is skipped entirely
+    // for the second body, the material having already been bound for the first.
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const air = new AtmosphereState();
+    const shared = new PBRMaterial('Cast / lavender fold', scene);
+    breatheOn(shared, air, { burn: true });
+    const plugin = shared.pluginManager!.getPlugin<AtmospherePlugin>('Atmosphere')!;
+    const dying = MeshBuilder.CreateBox('dying', {}, scene);
+    const standing = MeshBuilder.CreateBox('standing', {}, scene);
+    dying.material = standing.material = shared;
+    burnAway(dying, 0.4);
+
+    const written: number[][] = [];
+    const ubo = {
+      updateFloat4: (name: string, x: number, y: number, z: number, w: number) => {
+        if (name === 'vAtmoBurn') written.push([x, y, z, w]);
+      },
+    } as unknown as UniformBuffer;
+    plugin.hardBindForSubMesh(ubo, scene, engine, dying.subMeshes[0]);
+    plugin.hardBindForSubMesh(ubo, scene, engine, standing.subMeshes[0]);
+    expect(written.map((v) => v[0])).toEqual([0.4, 0]);
+    // The ember rides along, and it is over one on purpose: the image
+    // processing is a post-process, so this is unclamped light and the bloom
+    // threshold is what decides whether an edge glows.
+    expect(written[0][1]).toBeGreaterThan(1);
+
+    // Clamped, so a caller that overshoots cannot push the cut past its own
+    // range and leave a body that never finishes going.
+    burnAway(dying, 4);
+    plugin.hardBindForSubMesh(ubo, scene, engine, dying.subMeshes[0]);
+    expect(written[2][0]).toBe(1);
+
+    burnAway(dying, 0);
+    plugin.hardBindForSubMesh(ubo, scene, engine, dying.subMeshes[0]);
+    expect(written[3][0]).toBe(0);
+    scene.dispose();
+    engine.dispose();
   });
 });
 

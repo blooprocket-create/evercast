@@ -94,7 +94,15 @@ export class ProcVfxPresenter {
         const position =
           this.anchors.target(event.instanceId)?.clone() ??
           new Vector3(event.position.x, 0.65, event.position.z);
-        this.combat.effect(event, position, this.anchors.actor(event.instanceId));
+        // Area effects have no single point of origin, so the stagger is away
+        // from the mage - which is the direction everything here comes from.
+        this.combat.effect(
+          event,
+          position,
+          this.anchors.actor(event.instanceId),
+          this.anchors.mage(),
+          this.anchors.boss(event.instanceId),
+        );
         if (!bursts.has(event.effectId) && event.effect !== 'dot') {
           bursts.add(event.effectId);
           this.combat.burst(

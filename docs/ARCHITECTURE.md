@@ -328,14 +328,25 @@ The architecture exposes seams for all of them without pretending their designs 
 `ActorAssets` caches Blender GLB templates. Each combatant has independent transform
 targets and animation groups while repeated parts share geometry and materials.
 `ActorVisual` advances named idle, walk, attack, hit, and death clips on a presentation
-clock, restoring the rest pose between states. Spell casts originate at the staff
-socket. Cast animation duration adapts to the spell interval without delaying damage.
-Enemy deaths briefly retain their visual, then release its animation groups and meshes.
-The mage recovers from the defeat pose while the simulation resumes its existing flow.
+clock, cross-fading between them out of the pose that was actually on screen rather than
+through the rest pose. The channels it blends are collected from the clips themselves, so
+whatever a model animates is what gets blended. `PoseBlend` holds the two curves this
+needs - the fade weight and the recoil shape - as pure functions with no renderer behind
+them. A landed blow also throws the body away from where it came from, on a hinge node
+inserted under the actor's root that no clip writes to: that layer reads during a swing,
+which the flinch clip cannot, because `play('hit')` refuses to interrupt an attack. The
+mage recoils the same way when it casts. Spell casts originate at the staff socket. Cast
+animation duration adapts to the spell interval without delaying damage. Enemy deaths
+briefly retain their visual, then come apart along a noise front with a lit edge before
+their animation groups and meshes are released. The mage recovers from the defeat pose
+while the simulation resumes its existing flow.
 
 Snapshots expose the content catalog's enemy `modelKey`; no renderer imports enter the
 engine. Gear slots expose five cumulative modeled upgrades for the six existing tiers.
-Changing equipment never scales anatomy or mutates shared material state.
+Changing equipment never scales anatomy or mutates shared material state. Actor materials
+clear the `transparencyMode` the glTF loader writes from each asset's `alphaMode`: a
+Babylon material that carries one stops consulting `mesh.visibility` altogether, which is
+the channel every fade in the scene is written through.
 
 `WorldTerrain` generates matching world-space chunk edges and a level combat lane.
 `WorldBackdrop` owns the sky and distant hills independently of chunk lifetime.

@@ -41,7 +41,28 @@ export function stylizeActorMaterial(material: PBRMaterial, atmosphere?: Atmosph
   const family = familyOf(material.name);
   // The same air as the scenery stands in. An actor left out of it is a
   // cut-out: crisp at forty units where the treeline beside him has gone soft.
-  if (atmosphere) breatheOn(material, atmosphere);
+  // `burn` is what lets a body come apart rather than fade out; it is a
+  // capability here and an amount per body, so one briarling can go while the
+  // three beside it, sharing this very material, stand there.
+  if (atmosphere) breatheOn(material, atmosphere, { burn: true });
+  /*
+   * Hands the blend decision back to the mesh.
+   *
+   * The glTF loader writes `transparencyMode` from the asset's `alphaMode`, and
+   * every one of these models is authored OPAQUE - which in Babylon is not a
+   * default but an *answer*: a material that has one stops consulting
+   * `mesh.visibility` at all. So the arrival veil, the departure and everything
+   * else that fades a body were being computed, written to the mesh, and then
+   * dropped on the floor, and an enemy simply appeared and simply vanished.
+   *
+   * Null is the question rather than the answer, and Babylon then falls back to
+   * `visibility < 1`: solid bodies stay in the opaque pass and cost nothing,
+   * and one that is arriving or coming apart moves to the transparent pass for
+   * as long as that lasts. Safe here because none of these materials has a
+   * texture of any kind, so there is no alpha channel for the mode to have been
+   * describing.
+   */
+  material.transparencyMode = null;
   // No environment texture is loaded, so image-based lighting would only wash
   // the palette out. All of the shaping below comes from the three real lights.
   material.environmentIntensity = 0;

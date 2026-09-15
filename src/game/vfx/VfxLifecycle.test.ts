@@ -67,6 +67,7 @@ describe('VFX resource ownership', () => {
       mage: () => new Vector3(-3, 1, 0),
       target: (id) => new Vector3(2 + (id - 1) * 0.4, 0.65, 0),
       actor: () => undefined,
+      boss: () => false,
     });
     const combat = new CombatSystem(DEFAULT_ENGINE_CONFIG, (e) => events.push(e));
     let maxPending = 0;
@@ -141,6 +142,7 @@ describe('VFX resource ownership', () => {
       mage: () => staff.clone(),
       target: () => target,
       actor: () => undefined,
+      boss: () => false,
     });
     presenter.ingest({ castInterval: 1, activeSpellNodeIds: [] }, [
       {
@@ -185,6 +187,7 @@ describe('VFX resource ownership', () => {
         mage: () => new Vector3(-3, 0.8, 0),
         target: (id) => positions.get(id),
         actor: () => undefined,
+        boss: () => false,
       });
       const state = createInitialGameState(DEFAULT_ENGINE_CONFIG);
       state.run.mage.maxHp = big('1e12');

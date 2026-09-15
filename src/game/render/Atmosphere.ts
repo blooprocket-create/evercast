@@ -6,7 +6,9 @@ import {
   ShaderLanguage,
   type AbstractMesh,
   type Material,
+  type AbstractEngine,
   type MaterialDefines,
+  type SubMesh,
   type UniformBuffer,
   Vector3,
 } from '@babylonjs/core';
@@ -103,6 +105,14 @@ export interface AtmosphereResponse {
    */
   ground?: number;
   /**
+   * Whether this surface can be taken apart by `burnAway`.
+   *
+   * A capability rather than an amount: how far through the burn any one body
+   * is belongs to that body, not to the material it shares with every other of
+   * its kind. See `burnAway`.
+   */
+  burn?: boolean;
+  /**
    * How far one instance's colour may stand from its neighbours', 0 to 1.
    *
    * Every grass clump on the road is the same mesh with the same material, and
@@ -123,6 +133,7 @@ const UNIFORMS = [
   { name: 'vAtmoWind', size: 4, type: 'vec4' },
   { name: 'vAtmoLeaf', size: 4, type: 'vec4' },
   { name: 'vAtmoSurface', size: 4, type: 'vec4' },
+  { name: 'vAtmoBurn', size: 4, type: 'vec4' },
 ] as const;
 
 const DECLARATIONS = `
@@ -135,6 +146,7 @@ uniform vec4 vAtmoAir;
 uniform vec4 vAtmoWind;
 uniform vec4 vAtmoLeaf;
 uniform vec4 vAtmoSurface;
+uniform vec4 vAtmoBurn;
 `;
 
 /**
@@ -189,7 +201,7 @@ const FRAGMENT_DECLARATIONS = `
 #ifdef ATMO_VARY
 varying vec3 vAtmoTint;
 #endif
-#ifdef ATMO_GROUND
+#if defined(ATMO_GROUND) || defined(ATMO_BURN)
 float atmoHash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
 float atmoNoise(vec2 p){
   vec2 cell = floor(p), f = fract(p);
@@ -270,8 +282,69 @@ const AIR_CODE = `
 #endif
 
   finalColor.rgb = mix(finalColor.rgb, atmoColor, clamp(atmoHaze, 0.0, 1.0));
+
+#ifdef ATMO_BURN
+  // Nothing at all for a body that is simply standing there, and the test is
+  // uniform across the draw, so the branch costs one compare and never diverges.
+  if (vAtmoBurn.x > 0.0) {
+    // Sheared by height rather than sampled in 3D: two multiplies buy a pattern
+    // that crosses the body diagonally, where a flat xz sample would take every
+    // fragment in a vertical column at once and read as a falling curtain.
+    vec2 atmoBurnAt = vec2(
+      vPositionW.x * 6.5 + vPositionW.y * 3.1,
+      vPositionW.z * 6.5 - vPositionW.y * 4.3);
+    // Half where the fragment stands and half noise, which is what makes this a
+    // front rather than an event. All noise and the whole body goes at once,
+    // because a sum of two noises is a bell and the threshold crosses the bulk
+    // of it in a fifth of the burn; all gradient and it is a straight line
+    // climbing a leg. Low at the feet, so the body is taken from under itself
+    // and what is left of it hangs in the air.
+    float atmoBurnUp = clamp(vPositionW.y * 0.85, 0.0, 1.0);
+    float atmoBurnField =
+      atmoBurnUp * 0.5 +
+      (atmoNoise(atmoBurnAt) * 0.62 + atmoNoise(atmoBurnAt * 2.7) * 0.38) * 0.5;
+    // Runs past both ends of the field, so the first frame of a burn takes
+    // nothing off the body and the last frame leaves none of it behind.
+    float atmoBurnCut = mix(-0.1, 1.1, vAtmoBurn.x);
+    float atmoAlive = smoothstep(atmoBurnCut, atmoBurnCut + 0.16, atmoBurnField);
+    // The edge is the band halfway between gone and solid. Squared to tighten
+    // it into a line rather than a wash across the whole surface.
+    float atmoRim = atmoAlive * (1.0 - atmoAlive) * 4.0;
+    atmoRim *= atmoRim;
+    finalColor.rgb += vAtmoBurn.yzw * atmoRim;
+    finalColor.a *= atmoAlive;
+    // The edge holds its own alpha after the surface behind it has gone, which
+    // is the difference between a body coming apart and a body fading out.
+    finalColor.a = max(finalColor.a, atmoRim * 0.9);
+  }
+#endif
 }
 `;
+
+/**
+ * How far through coming apart a single mesh is, 0 to 1.
+ *
+ * Kept beside the meshes rather than on the plugin, and that is the whole
+ * point: every briarling on the road shares one material, so a burn set on the
+ * material would take all of them at once. `hardBindForSubMesh` runs per draw
+ * and knows which mesh it is drawing, which is the same door Babylon's own
+ * per-mesh `visibility` goes through.
+ */
+const burning = new WeakMap<AbstractMesh, number>();
+
+export function burnAway(mesh: AbstractMesh, amount: number): void {
+  if (amount > 0) burning.set(mesh, Math.min(1, amount));
+  else burning.delete(mesh);
+}
+
+/**
+ * The colour of the edge, in linear light and well over one.
+ *
+ * The scene's image processing runs as a post-process, so the shader hands off
+ * unclamped colour and the bloom threshold - 0.82 - is what decides what
+ * glows. An ember under one would be a warm line; this is a hot one.
+ */
+const EMBER = new Color3(2.6, 0.92, 0.26);
 
 export class AtmospherePlugin extends MaterialPluginBase {
   private readonly leaf = new Color3(0, 0, 0);
@@ -287,8 +360,13 @@ export class AtmospherePlugin extends MaterialPluginBase {
       ATMO_LEAF: false,
       ATMO_GROUND: false,
       ATMO_VARY: false,
+      ATMO_BURN: false,
     });
     this.respondWith(response);
+    // Without this, `hardBindForSubMesh` is simply never called: the manager
+    // wires that callback up only for plugins that ask for it, and it has to be
+    // asked before the plugin is activated, not after.
+    this.registerForExtraEvents = true;
     this._enable(true);
   }
 
@@ -333,6 +411,7 @@ export class AtmospherePlugin extends MaterialPluginBase {
     defines.ATMO_LEAF = (this.response.translucency ?? 0) > 0;
     defines.ATMO_GROUND = (this.response.ground ?? 0) > 0;
     defines.ATMO_VARY = (this.response.vary ?? 0) > 0;
+    defines.ATMO_BURN = this.response.burn === true;
   }
 
   override getUniforms(): {
@@ -345,6 +424,25 @@ export class AtmospherePlugin extends MaterialPluginBase {
       vertex: DECLARATIONS,
       fragment: DECLARATIONS,
     };
+  }
+
+  /**
+   * Runs before Babylon's own rebind gate, and therefore once per mesh.
+   *
+   * `bindForSubMesh` is skipped when the material is already bound and nothing
+   * it cares about changed - which is exactly the case for two bodies sharing a
+   * material. Anything per mesh has to be written here or it is written once
+   * for whichever body happened to be drawn first.
+   */
+  override hardBindForSubMesh(
+    uniformBuffer: UniformBuffer,
+    _scene: Scene,
+    _engine: AbstractEngine,
+    subMesh: SubMesh,
+  ): void {
+    const burn = this.response.burn === true ? (burning.get(subMesh.getMesh()) ?? 0) : 0;
+    (globalThis as any).__burns?.push([subMesh.getMesh().name, burn, subMesh.getMesh().visibility, (subMesh.getMaterial() as any)?.name]);
+    uniformBuffer.updateFloat4('vAtmoBurn', burn, EMBER.r, EMBER.g, EMBER.b);
   }
 
   override bindForSubMesh(uniformBuffer: UniformBuffer): void {

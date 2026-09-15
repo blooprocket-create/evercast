@@ -13,6 +13,8 @@ export interface VfxAnchors {
   mage(): Vector3;
   target(id: number): Vector3 | undefined;
   actor(id: number): ActorVisual | undefined;
+  /** A boss barely rocks when it is hit; everything else takes the blow. */
+  boss(id: number): boolean;
 }
 
 /** Short cosmetic timeline. Simulation has already resolved every event before ingestion. */
@@ -155,7 +157,14 @@ export class SpellVfxPresenter {
             this.combat.burst(source, 'fire', Math.min(3, radius));
           }
           if (hit.terminal) this.combat.burst(p, 'storm', 1.65, true);
-          this.combat.hit(hit, p, this.anchors.actor(hit.instanceId));
+          // A bolt from the staff has no `fromId`; it came from the mage.
+          this.combat.hit(
+            hit,
+            p,
+            this.anchors.actor(hit.instanceId),
+            source ?? this.anchors.mage(),
+            this.anchors.boss(hit.instanceId),
+          );
           if (hit.healing && hit.healing !== '0') this.siphon(p);
         });
       }
