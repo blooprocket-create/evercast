@@ -92,6 +92,19 @@ export type GameEvent =
       instanceId: number;
       /** Seconds until the blow lands, so the clip can be fitted to it. */
       durationSeconds: number;
+      /**
+       * Whether this is a Surge - a boss swing telegraphed long enough to be
+       * answered. Absent rather than false on an ordinary swing, so the
+       * overwhelming majority of these events keep the shape they had.
+       */
+      surge?: boolean;
+    }
+  | {
+      type: 'surge_broken';
+      time: number;
+      instanceId: number;
+      staggerSeconds: number;
+      chargesLeft: number;
     }
   | {
       type: 'enemy_attack';

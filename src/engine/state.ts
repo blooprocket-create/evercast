@@ -1,3 +1,4 @@
+import { createCounterspellState } from './combat/Surge';
 import type { EngineConfig } from './config';
 import { createInitialCompanionsState } from './companions/CompanionSystem';
 import { createInitialEquipmentState } from './gear/GearSystem';
@@ -8,6 +9,7 @@ import { createInitialSpellTreeState } from './spellTree/SpellTreeSystem';
 
 export function createInitialRunState(config: EngineConfig): RunState {
   return {
+    counter: createCounterspellState(),
     companions: [],
     benchedCompanions: [],
     elapsedSeconds: 0,

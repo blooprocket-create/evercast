@@ -5,6 +5,7 @@ import { big } from '../numbers';
 import { random01 } from '../random/DeterministicRandom';
 import type { SpellMechanics } from '../spell/SpellMechanics';
 import { combatState, nearby, positionOf, type CombatPosition } from './SpellCombatState';
+import { staggerMultiplier } from './Surge';
 const EPS = 1e-9;
 type Emit = (event: GameEvent) => void;
 
@@ -22,7 +23,9 @@ export class TimedSpellEffects {
   }
   damage(run: RunState, target: EnemyState, amount: string): string {
     const ruin = target.statuses?.ruin;
-    const multiplier = ruin && ruin.expiresAt > run.elapsedSeconds ? 1 + ruin.amplification : 1;
+    const multiplier =
+      (ruin && ruin.expiresAt > run.elapsedSeconds ? 1 + ruin.amplification : 1) *
+      staggerMultiplier(run, target);
     const damage = big(amount).mul(multiplier),
       actual = damage.cmp(target.hp) > 0 ? big(target.hp) : damage;
     target.hp = target.hp.sub(actual);

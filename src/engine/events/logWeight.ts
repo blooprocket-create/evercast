@@ -78,7 +78,13 @@ export function logWeight(event: GameEvent): LogWeight {
      * The rest is what the chronicle exists for - every one of them is either
      * something the player chose, or something that happened to them. None can
      * repeat fast enough to need folding.
+     *
+     * `surge_broken` sits here rather than with combat above despite being a
+     * combat event, because it is the only one of them the player *did*. It is
+     * also rate-limited by the charge pool and the boss cadence, so it cannot
+     * strobe the way a projectile hit would.
      */
+    case 'surge_broken':
     case 'mage_defeated':
     case 'mode_changed':
     case 'gear_evolved':

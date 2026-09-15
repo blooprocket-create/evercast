@@ -21,6 +21,7 @@ import type { GameState } from './model';
 import { ProgressionSystem } from './progression/ProgressionSystem';
 import { RebirthSystem } from './prestige/RebirthSystem';
 import { compileSpell } from './spell/SpellCompiler';
+import { breakSurge } from './combat/Surge';
 import { SpellTreeSystem } from './spellTree/SpellTreeSystem';
 import { buildSimulationSnapshot } from './snapshot/SimulationSnapshotBuilder';
 import { createInitialGameState } from './state';
@@ -60,6 +61,7 @@ export class EvercastSimulation {
   private lastDefeat: DefeatSnapshot | null = null;
   private defeats = 0;
   private lastSummon: LastSummonSnapshot | null = null;
+  private readonly emit: (event: GameEvent) => void;
 
   constructor(options: SimulationOptions = {}) {
     this.config = { ...DEFAULT_ENGINE_CONFIG, ...options.config };
@@ -70,6 +72,7 @@ export class EvercastSimulation {
     this.eventBus = new EventBus<GameEvent>(this.config.maxEventsPerFlush);
     this.eventBus.subscribe((event) => this.captureEvent(event));
     const emit = (event: GameEvent) => this.eventBus.emit(event);
+    this.emit = emit;
     this.progressionSystem = new ProgressionSystem(this.config, emit);
     this.rebirthSystem = new RebirthSystem(this.config, emit);
     this.gearSystem = new GearSystem(this.config, emit);
@@ -236,6 +239,8 @@ export class EvercastSimulation {
         return this.companionSystem.equip(this.state, command.definitionId, command.slot);
       case 'unequip_companion':
         return this.companionSystem.unequip(this.state, command.slot);
+      case 'counterspell':
+        return breakSurge(this.state.run, this.config.enemyAttackRange, this.emit) !== undefined;
     }
   }
 

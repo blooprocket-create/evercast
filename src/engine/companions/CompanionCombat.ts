@@ -7,6 +7,7 @@ import type { EnemyState, RunState } from '../model';
 import { big } from '../numbers';
 import { compileSpell, routeDamageScale } from '../spell/SpellCompiler';
 import { inAttackRange, livingByDistance } from '../combat/SpellCombatState';
+import { staggerMultiplier } from '../combat/Surge';
 // prettier-ignore
 import { abilityMagnitude, companionDamage, requireCompanion } from './CompanionCatalog';
 import { companionIndices, reachThreshold } from './Formation';
@@ -150,7 +151,11 @@ function nearestInReach(run: RunState, threshold: number): EnemyState | undefine
 
 function amplified(run: RunState, enemy: EnemyState, damage: Decimal): Decimal {
   const ruin = enemy.statuses?.ruin;
-  return ruin && ruin.expiresAt > run.elapsedSeconds ? damage.mul(1 + ruin.amplification) : damage;
+  const ruined = ruin && ruin.expiresAt > run.elapsedSeconds ? damage.mul(1 + ruin.amplification) : damage;
+  // A companion hitting a staggered boss gets the same window the mage does.
+  // The party is the player's, and a reward that only the mage collected would
+  // quietly punish the builds that lean on the roster.
+  return ruined.mul(staggerMultiplier(run, enemy));
 }
 
 /** The party-wide damage buff a rally has raised, if one is still running. */

@@ -73,7 +73,9 @@ export function describeGameEvent(event: GameEvent): string {
     case 'projectile_hit':
       return `${event.critical ? 'Critical! ' : ''}${hitLabel(event.source)} hits for ${n(event.damage)}.`;
     case 'enemy_windup':
-      return 'An enemy raises a weapon.';
+      return event.surge ? 'The boss gathers a Surge.' : 'An enemy raises a weapon.';
+    case 'surge_broken':
+      return `Surge broken. The boss reels for ${event.staggerSeconds}s.`;
     case 'enemy_attack':
       return `An enemy hits for ${n(event.damage)}.`;
     case 'enemy_killed':

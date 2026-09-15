@@ -14,6 +14,9 @@ import {
 } from '../companions/types';
 import type { CombatPhase, EnemyState, GameState, RunMode, RunStatistics } from '../model';
 import { ENEMIES } from '../../content/enemies';
+// prettier-ignore
+import { COUNTER_MAX_CHARGES, COUNTER_RECHARGE_SECONDS, STAGGER_AMPLIFICATION } from '../../content/combatTuning';
+import { createCounterspellState, type CounterspellState } from '../combat/Surge';
 import { ZONES } from '../../content/zones';
 import { big } from '../numbers';
 import { SPELL_TREE_NODE_BY_ID } from '../spellTree/SpellTreeCatalog';
@@ -375,6 +378,26 @@ function guardedDot(raw: unknown): DotState | undefined {
   };
 }
 
+/**
+ * The Counterspell pool.
+ *
+ * Absent on every save written before Surges existed, which is the common case
+ * and wants the full pool rather than an empty one: a returning player has not
+ * spent anything, and starting them at zero charges would read as the update
+ * having taken something away.
+ */
+function guardedCounter(raw: unknown): CounterspellState {
+  if (raw === undefined || raw === null) return createCounterspellState();
+  const source = guardedObject(raw);
+  return {
+    charges: guardedCount(source.charges, COUNTER_MAX_CHARGES, COUNTER_MAX_CHARGES),
+    recharge: guardedNumber(source.recharge, COUNTER_RECHARGE_SECONDS, {
+      min: 0,
+      max: COUNTER_RECHARGE_SECONDS,
+    }),
+  };
+}
+
 function guardedStatuses(raw: unknown): EnemyStatuses | undefined {
   if (raw === undefined || raw === null) return undefined;
   const source = guardedObject(raw);
@@ -394,6 +417,19 @@ function guardedStatuses(raw: unknown): EnemyStatuses | undefined {
     statuses.ruin = {
       amplification: guardedNumber(ruin.amplification, 1),
       expiresAt: guardedNumber(ruin.expiresAt, 0, { min: 0 }),
+    };
+  }
+  if (source.stagger !== undefined && source.stagger !== null) {
+    const stagger = guardedObject(source.stagger);
+    statuses.stagger = {
+      // Bounded to what a broken Surge actually applies, rather than merely to
+      // a finite number: an edited save must not be able to hand itself a
+      // thousandfold damage window that the rules can never produce.
+      amplification: guardedNumber(stagger.amplification, STAGGER_AMPLIFICATION, {
+        min: 0,
+        max: STAGGER_AMPLIFICATION,
+      }),
+      expiresAt: guardedNumber(stagger.expiresAt, 0, { min: 0 }),
     };
   }
   return statuses;
@@ -435,6 +471,7 @@ function deserializeEnemy(raw: unknown): EnemyState | null {
   if (source.tags !== undefined)
     enemy.tags = guardedArray(source.tags, (tag) => guardedString(tag, '') || null, 32);
   if (source.contactSlot !== undefined) enemy.contactSlot = guardedCount(source.contactSlot, 0, 64);
+  if (source.swings !== undefined) enemy.swings = guardedCount(source.swings, 0, LIMITS.counter);
   if (source.frontlineOffset !== undefined)
     enemy.frontlineOffset = guardedNumber(source.frontlineOffset, 0, { min: -100, max: 100 });
   if (source.approachFrom !== undefined)
@@ -655,6 +692,7 @@ function deserializeRun(raw: unknown, config: EngineConfig): GameState['run'] {
 
   const combatState = guardedCombatState(source.combatState);
   if (combatState) run.combatState = combatState;
+  run.counter = guardedCounter(source.counter);
   const aura = guardedAura(source.companionAura);
   if (aura) run.companionAura = aura;
   // An instance id already in play would let two enemies share an identity,

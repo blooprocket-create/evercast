@@ -12,6 +12,7 @@ import type { GameEvent } from '../events/GameEvent';
 import type { GameState } from '../model';
 import type { ProgressionSystem } from '../progression/ProgressionSystem';
 import { compileSpell } from '../spell/SpellCompiler';
+import { tickCounterspell } from '../combat/Surge';
 
 /**
  * The tolerance that makes landing exactly on an event mean landing on it.
@@ -55,6 +56,7 @@ export class EncounterLoop {
     const consumed = Math.min(available, timeToEncounter);
     run.travelElapsed += consumed;
     run.elapsedSeconds += consumed;
+    tickCounterspell(run, consumed);
 
     if (run.travelElapsed + EPSILON >= this.config.travelSeconds) {
       const descriptor = this.systems.encounters.createForRun(run);
@@ -118,6 +120,8 @@ export class EncounterLoop {
 
     const consumed = Math.min(available, nextAction);
     run.elapsedSeconds += consumed;
+    // Deliberately not one of the gates above: see `tickCounterspell`.
+    tickCounterspell(run, consumed);
     // Gates read positions as they were at the START of this step. Arrival is
     // itself an event, so an enemy is either out of range for the whole step or
     // in range for the whole step - which is what keeps a chunked run, a single
@@ -166,6 +170,11 @@ export class EncounterLoop {
     for (const enemy of resolveEnemyBeats(run, this.config, this.emit)) {
       const result = this.systems.combat.enemyAttack(run, enemy);
       enemy.attackCooldown += enemy.attackInterval;
+      // Counted after the blow lands, so `isSurgeSwing` is always asking about
+      // the *next* swing. A Surge broken by the player advances the same count
+      // from `breakSurge`, which is what stops a countered boss from simply
+      // winding another Surge straight back up.
+      enemy.swings = (enemy.swings ?? 0) + 1;
       enemy.telegraphed = false;
       if (result.mageDefeated) {
         this.systems.progression.handleDefeat(state, enemy);

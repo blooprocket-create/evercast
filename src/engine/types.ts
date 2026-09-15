@@ -157,6 +157,9 @@ export interface SimulationSnapshot {
   spawnInterval: number;
   phase: 'travel' | 'combat';
   boss: boolean;
+  /** The Surge in the air right now, if one is. */
+  surge: SurgeSnapshot | null;
+  counterspell: CounterspellSnapshot;
   casts: number;
   kills: number;
   deaths: number;
@@ -242,6 +245,25 @@ export interface SimulationSnapshot {
   lastDefeat: DefeatSnapshot | null;
 }
 
+export interface SurgeSnapshot {
+  /** Which body is gathering it, so the interface can point at the right one. */
+  instanceId: number;
+  enemyName: string;
+  /** Seconds left to answer it. */
+  secondsRemaining: number;
+  /** The window it opened with, so a closing ring can be drawn as a fraction. */
+  windowSeconds: number;
+}
+
+export interface CounterspellSnapshot {
+  charges: number;
+  maxCharges: number;
+  /** Progress toward the next charge, 0 to 1. One while the pool is full. */
+  rechargeFraction: number;
+  /** Whether pressing it right now would actually do something. */
+  ready: boolean;
+}
+
 export type EngineCommand =
   | { type: 'retry_frontier' }
   | { type: 'set_spell_build'; build: import('./spell/types').SpellBuild }
@@ -255,4 +277,5 @@ export type EngineCommand =
   | { type: 'ascend_companion'; definitionId: string }
   | { type: 'equip_companion'; definitionId: string; slot: number }
   | { type: 'unequip_companion'; slot: number }
-  | { type: 'mark_story_flag'; flag: string };
+  | { type: 'mark_story_flag'; flag: string }
+  | { type: 'counterspell' };
