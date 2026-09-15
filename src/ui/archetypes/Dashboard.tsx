@@ -7,7 +7,13 @@ import styles from './Dashboard.module.css';
  * every layout and scroll decision.
  */
 interface DashboardProps {
-  stats: React.ReactNode;
+  /**
+   * Optional, because a dashboard's subject does not always have numbers.
+   * Automation is the first: four switches and the sentences explaining them,
+   * with nothing to count. Rendering the grid anyway left an empty row's worth
+   * of gap above the first panel.
+   */
+  stats?: React.ReactNode;
   sections?: React.ReactNode;
   aside?: React.ReactNode;
 }
@@ -22,7 +28,7 @@ export function Dashboard({ stats, sections, aside }: DashboardProps) {
       {...scrollEdgeAttributes(edges)}
     >
       <div className={styles.main}>
-        <div className={styles.stats}>{stats}</div>
+        {stats !== undefined && <div className={styles.stats}>{stats}</div>}
         {sections}
       </div>
       {aside && <div className={styles.aside}>{aside}</div>}

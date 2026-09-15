@@ -82,6 +82,27 @@ describe('ui architecture', () => {
     expect(offences(candidates, /overflow(-[xy])?\s*:\s*(auto|scroll)/)).toEqual([]);
   });
 
+  /**
+   * The other half of the rule above, and the half nothing was checking.
+   *
+   * Forbidding a surface from declaring `overflow: auto` only works if the
+   * surface reaches an archetype that declares it instead. A surface that
+   * renders a bare `div` breaks no pattern here and gets no scroll container
+   * at all - it inherits the host's `overflow: hidden` and anything past the
+   * fold is simply unreachable. That shipped once, on Automation, where the
+   * fourth switch could not be scrolled to on a phone.
+   */
+  it('makes every surface reach an archetype for its layout', () => {
+    const surfaces = FILES.filter(
+      (file) => within(file, 'surfaces') && file.relativePath.endsWith('.tsx'),
+    );
+    expect(surfaces.length).toBeGreaterThan(0);
+    const bare = surfaces
+      .filter((file) => !/from '\.\.\/archetypes\//.test(file.text))
+      .map((file) => file.relativePath);
+    expect(bare).toEqual([]);
+  });
+
   it('never positions a surface by hardcoded pixels', () => {
     // `.slot-staff { top: 205px }` is why the old paperdoll could not hold a
     // ninth gear slot. Surfaces describe data; archetypes own geometry.

@@ -1,3 +1,4 @@
+import { Dashboard } from '../archetypes/Dashboard';
 import { Field, Toggle } from '../primitives/Field';
 import { Panel } from '../primitives/Panel';
 import type { AutomationKey } from '../../engine/automation/AutomationSystem';
@@ -39,49 +40,58 @@ const ROWS: { key: AutomationKey; label: string; hint: string }[] = [
 
 export function AutomationSurface() {
   const run = useCommand();
-  const automation = useSnapshotSelector(
-    (s) => ROWS.map((row) => s.automation[row.key]).join(','),
-  );
+  const automation = useSnapshotSelector((s) => ROWS.map((row) => s.automation[row.key]).join(','));
   const enabled = automation.split(',').map((value) => value === 'true');
 
   return (
-    <div className={styles.pane}>
-      <div className={styles.heading}>
-        <h2 className={styles.title}>Automation</h2>
-        <p className={styles.blurb}>
-          The Evercast fights on its own. These are the chores around it — the ones where you were
-          only ever pressing the one button that was correct.
-        </p>
-      </div>
+    /*
+     * A dashboard, and the archetype is doing the one job this surface cannot
+     * do for itself: owning the scroll. The first version of this screen
+     * rendered its own `div` and used no archetype at all, so it inherited the
+     * host's `overflow: hidden` and the fourth switch was simply unreachable
+     * below the fold on a phone. A surface describes data and hands it over -
+     * see `never lets a surface own a scroll container` in architecture.test.
+     */
+    <Dashboard
+      sections={
+        <>
+          <div className={styles.heading}>
+            <p className={styles.blurb}>
+              The Evercast fights on its own. These are the chores around it — the ones where you
+              were only ever pressing the one button that was correct.
+            </p>
+          </div>
 
-      <Panel title="Hand over">
-        {ROWS.map((row, index) => (
-          <Field key={row.key} label={row.label} hint={row.hint}>
-            <Toggle
-              checked={enabled[index] ?? false}
-              label={row.label}
-              onChange={(next) => run({ type: 'set_automation', key: row.key, enabled: next })}
-            />
-          </Field>
-        ))}
-      </Panel>
+          <Panel title="Hand over">
+            {ROWS.map((row, index) => (
+              <Field key={row.key} label={row.label} hint={row.hint}>
+                <Toggle
+                  checked={enabled[index] ?? false}
+                  label={row.label}
+                  onChange={(next) => run({ type: 'set_automation', key: row.key, enabled: next })}
+                />
+              </Field>
+            ))}
+          </Panel>
 
-      {/*
-        Said out loud rather than left to be noticed. A player who finds a
-        setting they did not expect should be able to tell immediately whether
-        the game has been playing itself behind their back.
-      */}
-      <Panel title="What stays yours">
-        <p className={styles.blurb}>
-          The spell tree, your party, and when to Rebirth. Nothing here will ever light a node,
-          fill a slot or spend your run — a game that picked the tree for you would have automated
-          away the only thing Evercast is about.
-        </p>
-        <p className={styles.note}>
-          Purchases are made on the road between encounters, so Gold banked mid-fight is spent a
-          few seconds later rather than the instant it lands.
-        </p>
-      </Panel>
-    </div>
+          {/*
+            Said out loud rather than left to be noticed. A player who finds a
+            setting they did not expect should be able to tell immediately
+            whether the game has been playing itself behind their back.
+          */}
+          <Panel title="What stays yours">
+            <p className={styles.blurb}>
+              The spell tree, your party, and when to Rebirth. Nothing here will ever light a node,
+              fill a slot or spend your run — a game that picked the tree for you would have
+              automated away the only thing Evercast is about.
+            </p>
+            <p className={styles.note}>
+              Purchases are made on the road between encounters, so Gold banked mid-fight is spent
+              a few seconds later rather than the instant it lands.
+            </p>
+          </Panel>
+        </>
+      }
+    />
   );
 }
