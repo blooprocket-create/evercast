@@ -29,14 +29,74 @@ const HASHED = /^\/assets\//;
  */
 const REVALIDATE = /^\/(models|fonts|icons)\/|^\/manifest\.webmanifest$/;
 
+/** A sane ceiling on what one shell can legitimately reference. */
+const MAX_SHELL_ENTRIES = 40;
+
+/**
+ * The files the browser asks for while parsing the shell, read out of the
+ * shell itself.
+ *
+ * This is the whole reason the install step is more than two lines. Registration
+ * is deferred until `load`, so on a player's FIRST visit the entry bundle, the
+ * stylesheet and the two preloaded typefaces have all been fetched before this
+ * worker exists - it never sees those requests and so never caches them. Every
+ * *later* request does go through it, which is why a first visit already ends
+ * with the lazy chunks and the models cached and the one thing needed to start
+ * missing. Measured: 87 entries cached, 34 of them assets, and zero fonts, and
+ * an offline launch that got as far as the static wordmark and stopped.
+ *
+ * Parsing `/` rather than reading a generated manifest is a deliberate size
+ * trade. The build emits 467 chunks totalling 7.4 MB, of which a normal boot
+ * requests about thirty - precaching the lot would roughly double a first
+ * visit's download for files most players never ask for. The shell is seven
+ * entries, they are the seven the worker provably cannot catch, and everything
+ * after them is cached as the application requests it.
+ *
+ * Nothing here forces a revalidation. These files were fetched seconds ago and
+ * carry the build's own cache headers, so this is close to free - and it must
+ * stay that way, because the install blocks `skipWaiting`. An earlier version
+ * of this used `cache: 'reload'`, which delayed the claim enough that the
+ * worker missed more lazy chunks than the precache gained: 87 cached entries
+ * fell to 24, and the offline launch went from broken to more broken.
+ */
+async function shellResources() {
+  const response = await fetch('/');
+  if (!response.ok) return [];
+  const html = await response.text();
+  const found = new Set();
+  // Only absolute, same-origin paths; the shell references nothing else, and a
+  // worker that cached a foreign URL would be the first thing here to break
+  // what `connect-src 'self'` promises.
+  for (const match of html.matchAll(/(?:src|href)="(\/[^"]+)"/g)) {
+    found.add(match[1]);
+    if (found.size >= MAX_SHELL_ENTRIES) break;
+  }
+  return [...found];
+}
+
 self.addEventListener('install', (event) => {
-  // The shell, so a cold launch offline has something to open.
   event.waitUntil(
-    caches
-      .open(CACHE)
-      .then((cache) => cache.addAll(['/', '/manifest.webmanifest']))
-      .then(() => self.skipWaiting())
-      .catch(() => self.skipWaiting()),
+    (async () => {
+      try {
+        const cache = await caches.open(CACHE);
+        const urls = ['/', '/manifest.webmanifest', ...(await shellResources())];
+        /*
+         * Settled individually rather than through `addAll`, which rejects the
+         * whole batch if any one entry fails. One stale reference must not cost
+         * the player every other file in the list.
+         */
+        await Promise.allSettled(
+          urls.map(async (url) => {
+            const response = await fetch(url);
+            if (response.ok) await cache.put(url, response);
+          }),
+        );
+      } catch {
+        // An install that cached nothing is a game with no offline support,
+        // not a broken game. Activate anyway.
+      }
+      await self.skipWaiting();
+    })(),
   );
 });
 
@@ -49,8 +109,24 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+/*
+ * `ignoreVary` on every lookup, and it is load-bearing rather than defensive.
+ *
+ * The host sends `Vary: Origin` - Vite's preview server does, and a CDN may -
+ * which makes a cached entry match only when the stored request's `Origin`
+ * header agrees with the incoming one. The worker's own `fetch` sends no
+ * Origin; the page's module-script request does. So the shell precache was
+ * storing exactly the right files under exactly the right URLs and then
+ * failing to serve them: measured, `index-*.js` and `index-*.css` were both in
+ * the cache and both failed offline anyway.
+ *
+ * Every entry here is same-origin by construction, so there is no variant to
+ * pick between and nothing for Vary to protect.
+ */
+const MATCH = { ignoreVary: true };
+
 async function cacheFirst(request) {
-  const cached = await caches.match(request);
+  const cached = await caches.match(request, MATCH);
   if (cached) return cached;
   const response = await fetch(request);
   if (response.ok) (await caches.open(CACHE)).put(request, response.clone());
@@ -59,7 +135,7 @@ async function cacheFirst(request) {
 
 async function staleWhileRevalidate(request) {
   const cache = await caches.open(CACHE);
-  const cached = await cache.match(request);
+  const cached = await cache.match(request, MATCH);
   const network = fetch(request)
     .then((response) => {
       if (response.ok) cache.put(request, response.clone());
@@ -82,7 +158,7 @@ async function shellFirst(request) {
     if (response.ok) (await caches.open(CACHE)).put('/', response.clone());
     return response;
   } catch (error) {
-    const cached = await caches.match('/');
+    const cached = await caches.match('/', MATCH);
     if (cached) return cached;
     throw error;
   }

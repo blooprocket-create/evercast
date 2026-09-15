@@ -280,7 +280,14 @@ by subtraction and `nextAction` is untouched.
 
 Evercast is a web app with a manifest, an icon set and a service worker
 (`public/sw.js`), so it installs to a home screen and opens with no network at
-all. Only Vite's content-hashed `assets/` are cached as immutable; models,
+all - from the first visit, which took two fixes to be true. Registration is
+deferred to `load`, so the entry bundle, the stylesheet and the preloaded
+typefaces are all fetched before the worker exists; it never sees those
+requests, so the install step goes and gets them by parsing the shipped shell.
+And every cache lookup passes `ignoreVary`, because a host sending
+`Vary: Origin` otherwise makes a stored entry unmatchable by the page that
+needs it - the precache was storing the right files under the right URLs and
+failing to serve them. Only Vite's content-hashed `assets/` are cached as immutable; models,
 fonts and icons are served from cache and refreshed behind the player, so a new
 model arrives on the next launch with nothing versioned by hand. The shell is
 network-first, because serving a stale one would pin a player to a build whose

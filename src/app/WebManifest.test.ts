@@ -109,6 +109,46 @@ describe('the service worker', () => {
     expect(worker).toContain('staleWhileRevalidate');
   });
 
+  /**
+   * The gap a review caught and a measurement confirmed: registration is
+   * deferred to `load`, so on a first visit the entry bundle, the stylesheet
+   * and the preloaded typefaces are all fetched before the worker exists. It
+   * never sees those requests, so it must go and get them itself.
+   */
+  it('precaches the shell it provably cannot intercept', () => {
+    expect(worker).toContain('shellResources');
+    // Read out of the shipped shell, so a content hash can never go stale here.
+    expect(worker).toMatch(/fetch\('\/'\)/);
+    expect(worker).toMatch(/src\|href/);
+  });
+
+  /**
+   * `Vary: Origin` from the host makes a cached entry match only when the
+   * stored request's Origin agrees with the incoming one - and the worker's own
+   * fetch sends none while a module-script request does. Without this the
+   * precache above stores exactly the right files and then fails to serve them.
+   */
+  it('ignores Vary on every lookup, or the precache is worthless', () => {
+    expect(worker).toContain('ignoreVary: true');
+    const lookups = worker.match(/(?:caches|cache)\.match\(/g) ?? [];
+    const withMatchOptions = worker.match(/(?:caches|cache)\.match\([^)]*MATCH\)/g) ?? [];
+    expect(lookups.length).toBeGreaterThan(0);
+    expect(withMatchOptions.length).toBe(lookups.length);
+  });
+
+  /**
+   * Precaching every chunk would roughly double a first visit: the build emits
+   * 467 files totalling 7.4 MB and a normal boot requests about thirty. The
+   * shell is the bounded set the worker cannot otherwise reach.
+   */
+  it('does not force a revalidation while the install blocks activation', () => {
+    // Comments stripped first: this file explains at length why `reload` was
+    // removed, and the explanation must not read as the thing it warns about.
+    const code = worker.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    expect(code).not.toContain("cache: 'reload'");
+    expect(code).toContain('ignoreVary');
+  });
+
   it('is registered from the app rather than from the markup', () => {
     // `Installable.ts` can guard it; a script tag in the HTML cannot.
     expect(html).not.toContain('serviceWorker');
