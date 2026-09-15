@@ -93,6 +93,24 @@ describe('deployed security headers', () => {
         expect(directive(name).length, name).toBeGreaterThan(0);
       }
     });
+
+    /**
+     * The service worker registers against `worker-src`, and everything it
+     * fetches is same-origin and therefore against `connect-src`. Both are
+     * already exactly what they need to be - this is here so that stays true,
+     * because a policy tightened without knowing about the worker would take
+     * offline launch away with no test failing anywhere near it.
+     */
+    it('permits the service worker, and still lets it reach nothing but this origin', () => {
+      expect(directive('worker-src')).toContain("'self'");
+      expect(directive('connect-src')).toEqual(["'self'"]);
+    });
+
+    /** The manifest is fetched against `manifest-src`, which is not set. */
+    it('leaves the manifest to default-src, which allows exactly this origin', () => {
+      expect(directive('manifest-src')).toEqual([]);
+      expect(directive('default-src')).toEqual(["'self'"]);
+    });
   });
 
   it('refuses to be framed, sniffed, or to leak a referrer', () => {

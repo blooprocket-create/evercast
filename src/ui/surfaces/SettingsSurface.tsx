@@ -9,6 +9,7 @@ import type { IconName } from '../icons/names';
 import { Button } from '../primitives/Button';
 import { Choice, Field, Slider, Toggle } from '../primitives/Field';
 import { Row } from '../primitives/Row';
+import { installStore, useInstallState } from '../state/useInstall';
 import { uiSettings, useUiSettings } from '../state/useUiSettings';
 import styles from './SettingsSurface.module.css';
 
@@ -219,6 +220,46 @@ function DisplaySection({ settings }: { settings: ReturnType<typeof useUiSetting
   );
 }
 
+/**
+ * The home-screen install, offered where the player is already thinking about
+ * where their game lives - and offered rather than pushed.
+ *
+ * The browser's own bar is suppressed the moment it is fired (see
+ * `InstallStore.offer`) precisely so this can be the only place it is asked.
+ * An idle game that interrupted a fight to ask for an icon would deserve the
+ * dismissal it got. When no offer is outstanding the row says why rather than
+ * vanishing, because a control that appears and disappears with nothing said
+ * reads as a bug.
+ */
+function InstallField() {
+  const { available, installed } = useInstallState();
+
+  if (installed) {
+    return (
+      <Field label="Install" hint="Evercast is installed on this device, and opens without a network.">
+        <span className={styles.note}>Installed</span>
+      </Field>
+    );
+  }
+  if (!available) {
+    return (
+      <Field
+        label="Install"
+        hint="Your browser has not offered an install for Evercast. On iOS, use Share then Add to Home Screen."
+      >
+        <span className={styles.note}>Not offered</span>
+      </Field>
+    );
+  }
+  return (
+    <Field label="Install" hint="Adds Evercast to this device, with its own icon, and lets it open without a network.">
+      <Button variant="primary" onClick={() => void installStore.prompt()}>
+        Install
+      </Button>
+    </Field>
+  );
+}
+
 function AccountSection() {
   const fileInput = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
@@ -266,6 +307,8 @@ function AccountSection() {
       </div>
 
       <div className={styles.fields}>
+        <InstallField />
+
         <Field label="Export save" hint="Downloads a file you can keep or move to another browser.">
           <Button onClick={download}>Download</Button>
         </Field>

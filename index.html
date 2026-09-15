@@ -12,6 +12,20 @@
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
     <meta name="theme-color" content="#070d10" />
+    <!--
+      What makes Evercast something you can keep rather than a tab you have to
+      find again. The manifest carries the icons and the standalone display
+      mode; the two `apple-` lines are Safari's equivalents, which it still
+      reads instead of the manifest.
+    -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icons/icon-192.png" type="image/png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Evercast" />
+    <!-- `black-translucent` is what lets the diorama run under the status bar,
+         which the safe-area insets in the stylesheet already account for. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Evercast</title>
     <!--
       The two faces the game is drawn in, fetched as early as the parser can
