@@ -75,14 +75,42 @@ export class AtmosphereState {
   time = 0;
   /** A gust, 0 to 1, so a still biome can be still. */
   gust = 1;
+  /**
+   * How far the world has walked.
+   *
+   * Load-bearing for anything keyed to a position. The chunks scroll *under* a
+   * pinned camera, so a fragment's world x is not a place in the world - it is
+   * a place on the screen, and noise sampled there would sit still while the
+   * ground slid beneath it, which is the oldest artefact in the book. Adding
+   * the travel back gives the coordinate the world actually has.
+   */
+  travelled = 0;
 }
 
-/** How hard a surface answers to the wind and to the sun behind it. */
+/** How hard a surface answers to the wind, the sun behind it, and its own place. */
 export interface AtmosphereResponse {
   /** Sway in world units per unit of height above the prop's base. 0 is rigid. */
   wind?: number;
   /** How much light comes through the surface, 0 to 1. */
   translucency?: number;
+  /**
+   * How much world-scale variation is painted over this surface, 0 to 1.
+   *
+   * For the ground, which is half the frame and was one flat colour across all
+   * of it. Three scales of noise and a wear gradient beside the trail is what
+   * turns a wash of green into a meadow, and it costs a handful of instructions
+   * on a surface that is already the cheapest thing being shaded.
+   */
+  ground?: number;
+  /**
+   * How far one instance's colour may stand from its neighbours', 0 to 1.
+   *
+   * Every grass clump on the road is the same mesh with the same material, and
+   * without this they are also the same green - which is what makes a field
+   * read as a repeated asset rather than as a field. Hashed from the instance's
+   * own place, so a given clump keeps its colour for as long as it exists.
+   */
+  vary?: number;
 }
 
 const UNIFORMS = [
@@ -94,6 +122,7 @@ const UNIFORMS = [
   { name: 'vAtmoAir', size: 4, type: 'vec4' },
   { name: 'vAtmoWind', size: 4, type: 'vec4' },
   { name: 'vAtmoLeaf', size: 4, type: 'vec4' },
+  { name: 'vAtmoSurface', size: 4, type: 'vec4' },
 ] as const;
 
 const DECLARATIONS = `
@@ -105,6 +134,7 @@ uniform vec3 vAtmoGlow;
 uniform vec4 vAtmoAir;
 uniform vec4 vAtmoWind;
 uniform vec4 vAtmoLeaf;
+uniform vec4 vAtmoSurface;
 `;
 
 /**
@@ -124,6 +154,50 @@ const WIND_CODE = `
     sin(vAtmoWind.x * 2.07 + atmoPhase * 1.7) * 0.38;
   float atmoAmount = vAtmoWind.y * vAtmoWind.z * atmoHeight;
   worldPos.xz += vec2(atmoSway, atmoSway * 0.42) * atmoAmount;
+}
+#endif
+#ifdef ATMO_VARY
+{
+  // The instance's own place, with the travel added back so a clump keeps its
+  // colour as the road walks past rather than inheriting its neighbour's.
+  vec2 atmoSeed = vec2(finalWorld[3].x + vAtmoSurface.w, finalWorld[3].z);
+  float atmoValue = fract(sin(dot(atmoSeed, vec2(41.31, 289.07))) * 43758.5453);
+  float atmoHue = fract(sin(dot(atmoSeed, vec2(93.71, 17.93))) * 24634.6345);
+  // Value first, because that is what actually separates one clump from the
+  // next; then a small push along the yellow-to-blue axis foliage varies on.
+  float atmoLevel = 1.0 + (atmoValue - 0.5) * vAtmoSurface.x;
+  float atmoSkew = (atmoHue - 0.5) * vAtmoSurface.y;
+  vAtmoTint = atmoLevel * vec3(1.0 + atmoSkew, 1.0 + atmoSkew * 0.25, 1.0 - atmoSkew);
+}
+#endif
+`;
+
+const VERTEX_DECLARATIONS = `
+#ifdef ATMO_VARY
+varying vec3 vAtmoTint;
+#endif
+`;
+
+/**
+ * Value noise, three octaves of it, over the ground.
+ *
+ * Cheap on purpose: a hash and four mixes per octave, no texture, no
+ * derivatives. The ground is the largest surface in the frame and the one that
+ * least deserves a dependent texture read.
+ */
+const FRAGMENT_DECLARATIONS = `
+#ifdef ATMO_VARY
+varying vec3 vAtmoTint;
+#endif
+#ifdef ATMO_GROUND
+float atmoHash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
+float atmoNoise(vec2 p){
+  vec2 cell = floor(p), f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(
+    mix(atmoHash(cell), atmoHash(cell + vec2(1.0, 0.0)), f.x),
+    mix(atmoHash(cell + vec2(0.0, 1.0)), atmoHash(cell + vec2(1.0, 1.0)), f.x),
+    f.y);
 }
 #endif
 `;
@@ -155,6 +229,33 @@ const AIR_CODE = `
   float atmoForward = atmoScatter * atmoScatter;
   atmoColor += vAtmoGlow * atmoForward * atmoForward;
 
+#ifdef ATMO_VARY
+  // This instance's own colour, decided in the vertex shader from where it
+  // stands. Before the haze, because the haze is the air in front of it.
+  finalColor.rgb *= vAtmoTint;
+#endif
+
+#ifdef ATMO_GROUND
+  {
+    // The un-scrolled coordinate: see AtmosphereState.travelled.
+    vec2 atmoGround = vec2(vPositionW.x + vAtmoSurface.w, vPositionW.z);
+    // Three scales. The meadow patches are what the eye reads at a distance,
+    // the clumps are what it reads at the mage's feet, and the fine octave is
+    // only there to stop the other two looking like a gradient.
+    float atmoPatch =
+      atmoNoise(atmoGround * 0.068) * 0.55 +
+      atmoNoise(atmoGround * 0.31) * 0.3 +
+      atmoNoise(atmoGround * 1.37) * 0.15;
+    // Ground beside a trail is trodden and dry; further out it is not. This is
+    // the one piece of variation here that is about the place rather than the
+    // noise, and it is the one that makes the road look walked on.
+    float atmoWear = 1.0 - smoothstep(0.85, 3.6, abs(vPositionW.z));
+    float atmoDry = clamp(atmoPatch * 0.75 + atmoWear * 0.5, 0.0, 1.0);
+    vec3 atmoSoil = mix(vec3(0.80, 1.06, 0.83), vec3(1.26, 1.07, 0.68), atmoDry);
+    finalColor.rgb *= mix(vec3(1.0), atmoSoil, vAtmoSurface.z) * (0.70 + atmoPatch * 0.62);
+  }
+#endif
+
 #ifdef ATMO_LEAF
   // A leaf with the sun behind it. Strongest where the surface faces away from
   // the light, which is exactly where direct lighting has left it darkest.
@@ -168,19 +269,44 @@ const AIR_CODE = `
 
 export class AtmospherePlugin extends MaterialPluginBase {
   private readonly leaf = new Color3(0, 0, 0);
+  private readonly response: AtmosphereResponse = {};
 
   constructor(
     material: Material,
     private readonly state: AtmosphereState,
-    private readonly response: AtmosphereResponse = {},
+    response: AtmosphereResponse = {},
   ) {
-    super(material, 'Atmosphere', 220, { ATMO_WIND: false, ATMO_LEAF: false });
-    if (material instanceof PBRMaterial && response.translucency) {
+    super(material, 'Atmosphere', 220, {
+      ATMO_WIND: false,
+      ATMO_LEAF: false,
+      ATMO_GROUND: false,
+      ATMO_VARY: false,
+    });
+    this.respondWith(response);
+    this._enable(true);
+  }
+
+  /**
+   * Merges in what this surface does, and recompiles if that changed the shape
+   * of the shader.
+   *
+   * Merging rather than replacing, because the callers legitimately overlap and
+   * their order is not something any of them can see. `EvercastScene` installs
+   * the plugin from the scene's new-material observable - which fires from the
+   * material's own constructor - so by the time `createTerrainMaterials` says
+   * "and this one is ground", the plugin is already there. It used to return
+   * early at that point, which is why the ground kept its flat wash: the one
+   * call that knew it was ground was the one that did nothing.
+   */
+  respondWith(response: AtmosphereResponse): void {
+    Object.assign(this.response, response);
+    const material = this._material;
+    if (material instanceof PBRMaterial && this.response.translucency) {
       // The light that comes through a leaf is the leaf's own colour, warmed:
       // a green leaf against a low sun goes yellow, not white.
       Color3.LerpToRef(material.albedoColor, new Color3(1, 0.86, 0.5), 0.35, this.leaf);
     }
-    this._enable(true);
+    this.markAllDefinesAsDirty();
   }
 
   getClassName(): string {
@@ -199,6 +325,8 @@ export class AtmospherePlugin extends MaterialPluginBase {
   override prepareDefines(defines: MaterialDefines, _scene: Scene, _mesh: AbstractMesh): void {
     defines.ATMO_WIND = (this.response.wind ?? 0) > 0;
     defines.ATMO_LEAF = (this.response.translucency ?? 0) > 0;
+    defines.ATMO_GROUND = (this.response.ground ?? 0) > 0;
+    defines.ATMO_VARY = (this.response.vary ?? 0) > 0;
   }
 
   override getUniforms(): {
@@ -229,11 +357,29 @@ export class AtmospherePlugin extends MaterialPluginBase {
       this.leaf.b,
       this.response.translucency ?? 0,
     );
+    const vary = this.response.vary ?? 0;
+    uniformBuffer.updateFloat4(
+      'vAtmoSurface',
+      vary * 0.34,
+      vary * 0.16,
+      this.response.ground ?? 0,
+      state.travelled,
+    );
   }
 
   override getCustomCode(shaderType: string): { [pointName: string]: string } | null {
-    if (shaderType === 'vertex') return { CUSTOM_VERTEX_UPDATE_WORLDPOS: WIND_CODE };
-    if (shaderType === 'fragment') return { CUSTOM_FRAGMENT_BEFORE_FRAGCOLOR: AIR_CODE };
+    if (shaderType === 'vertex') {
+      return {
+        CUSTOM_VERTEX_DEFINITIONS: VERTEX_DECLARATIONS,
+        CUSTOM_VERTEX_UPDATE_WORLDPOS: WIND_CODE,
+      };
+    }
+    if (shaderType === 'fragment') {
+      return {
+        CUSTOM_FRAGMENT_DEFINITIONS: FRAGMENT_DECLARATIONS,
+        CUSTOM_FRAGMENT_BEFORE_FRAGCOLOR: AIR_CODE,
+      };
+    }
     return null;
   }
 }
@@ -254,6 +400,10 @@ export function breatheOn(
   response: AtmosphereResponse = {},
 ): void {
   if (!(material instanceof PBRMaterial)) return;
-  if (material.pluginManager?.getPlugin('Atmosphere')) return;
+  const installed = material.pluginManager?.getPlugin<AtmospherePlugin>('Atmosphere');
+  if (installed) {
+    installed.respondWith(response);
+    return;
+  }
   new AtmospherePlugin(material, state, response);
 }

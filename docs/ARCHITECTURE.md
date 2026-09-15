@@ -274,6 +274,22 @@ screen space, which is what keeps the horizon, the sun and the stars correct at
 every aspect `Framing` produces. Its ridgelines are mixed out of the sky's own
 horizon colour so the two cannot drift apart.
 
+`game/world/WorldHorizon` owns the ground past `CHUNK_FAR_Z`. The rule it exists
+for: **a chunked ground cannot fill a frustum.** The frustum widens with depth
+and the chunks do not, so the far corners of any wide shot will show the world
+ending unless something unchunked is underneath them. It and the chunk terrain
+read the same `terrainHeight`, and the horizon sits a hair below - so wherever
+chunks exist they win, and where they have run out the seam is invisible. A
+chunk's far rows were deleted to pay for it, which made the whole change
+slightly *cheaper* than what it replaced.
+
+The lighting has one number worth defending: the **key-to-fill ratio**. The sky
+light, the rim and the sun used to come out at roughly one to one, which is the
+ratio at which a landscape has no shape - and, less obviously, the ratio at
+which a shadow map is pointless, because a shadow only removes the key's share.
+`FILL_SCALE` and `KEY_SCALE` scale the authored biome values rather than
+replacing them, so the relative mood of the four zones is exactly as written.
+
 ## Snapshots and coordinator size
 
 `EvercastSimulation` is the orchestration boundary, not a dumping ground for every derived read model. Snapshot construction lives in `src/engine/snapshot/SimulationSnapshotBuilder.ts`, and event-to-text formatting lives in `src/engine/events/describeGameEvent.ts`.

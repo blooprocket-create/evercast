@@ -83,9 +83,26 @@ export interface RenderProfile {
   chunksAhead: number;
   /** Ground-cover props authored per chunk. */
   groundCover: number;
+  /**
+   * Clumps placed between the camera and the road, per chunk.
+   *
+   * They are cropped by the bottom of the frame and, on a tier with depth of
+   * field, well inside the near blur - which is the whole point. A shot with
+   * nothing in front of its subject reads as an elevation drawing; one with
+   * something out of focus across the bottom reads as a photograph of a place.
+   */
+  foreground: number;
   /** Scatter tufts baked into each chunk's single detail mesh. */
   groundDetail: number;
   motes: number;
+  /**
+   * Standing bands of ground mist in the middle distance, nearest first.
+   *
+   * Each is a screen-wide alpha-blended band, so they are the one thing here
+   * that costs fill rather than geometry - which is exactly the budget a phone
+   * has least of.
+   */
+  mistBands: number;
   glowKernel: number;
   effects: FinishingEffects;
 }
@@ -102,8 +119,10 @@ const DESKTOP: RenderProfile = {
   chunksBehind: 2,
   chunksAhead: 3,
   groundCover: 22,
+  foreground: 4,
   groundDetail: 150,
   motes: 22,
+  mistBands: 3,
   glowKernel: 24,
   effects: { depthOfField: true, grain: true, sharpen: true, aberration: true, fxaa: true },
 };
@@ -118,8 +137,10 @@ const TABLET: RenderProfile = {
   shadowSpan: 26,
   chunksAhead: 2,
   groundCover: 16,
+  foreground: 3,
   groundDetail: 110,
   motes: 16,
+  mistBands: 2,
   glowKernel: 16,
   // Depth of field is three passes and a blur chain; it is the one finishing
   // effect on this list that costs more than the whole of the rest together.
@@ -146,8 +167,10 @@ const HANDHELD: RenderProfile = {
   chunksBehind: 1,
   chunksAhead: 2,
   groundCover: 10,
+  foreground: 2,
   groundDetail: 70,
   motes: 10,
+  mistBands: 1,
   glowKernel: 12,
   effects: { depthOfField: false, grain: false, sharpen: false, aberration: false, fxaa: true },
 };

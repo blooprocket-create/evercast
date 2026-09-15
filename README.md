@@ -116,6 +116,23 @@ The diorama is shaded by three custom shaders rather than by Babylon's defaults.
 - **`src/game/actors/ActorAssets.ts`** fades an enemy up as it arrives and down
   as its body settles, which is what lets the shot be aimed further down the
   road than the spawn line.
+- **`src/game/world/WorldHorizon.ts`** is the land past the last chunk, plus the
+  mist lying on it. A camera frustum widens with depth, so a ground made of
+  twelve-unit chunks runs out inside the frame however many of them are kept
+  alive - and the corners of the picture showed the world ending on a diagonal.
+  One mesh of four hundred vertices reaches further than any frame can, rolls
+  where the chunks are flat, and is continuous with them because both read the
+  same height function.
+
+Two things about the light are worth knowing before changing any of it. The
+**key-to-fill ratio** used to be about one to one - between the sky light, the
+rim and the sun, the sun was roughly a third of the light in the scene, so
+nothing had a lit side and a dark side and the shadow map had almost nothing to
+remove. `FILL_SCALE` and `KEY_SCALE` in `WorldGenerator` pull those apart
+without touching a single authored biome value. And the **foreground** is a
+deliberate plane: a few clumps between the camera and the road, cropped by the
+bottom of the frame and well inside the near blur, because a shot with nothing
+in front of its subject reads as an elevation drawing.
 
 The shot itself is composed by `src/game/render/Framing.ts`. The party stands
 about a third in from the left at every aspect the game is played at, with the

@@ -55,7 +55,7 @@ export function createContactShadows(scene: Scene, material: StandardMaterial, p
   for (const { worldX, localX, z, radius } of patches) {
     const center = positions.length / 3;
     positions.push(localX, terrainHeight(worldX, z) + 0.024, z);
-    colors.push(0, 0, 0, 0.19);
+    colors.push(0, 0, 0, 0.34);
     for (let i = 0; i < 16; i++) {
       const angle = i * Math.PI * 2 / 16;
       const dx = Math.cos(angle) * radius, dz = Math.sin(angle) * radius * 0.62;

@@ -73,8 +73,10 @@ describe('what each tier is allowed to spend', () => {
         larger.chunksBehind + larger.chunksAhead,
       );
       expect(smaller.groundCover).toBeLessThanOrEqual(larger.groundCover);
+      expect(smaller.foreground).toBeLessThanOrEqual(larger.foreground);
       expect(smaller.groundDetail).toBeLessThanOrEqual(larger.groundDetail);
       expect(smaller.motes).toBeLessThanOrEqual(larger.motes);
+      expect(smaller.mistBands).toBeLessThanOrEqual(larger.mistBands);
       expect(smaller.samples).toBeLessThanOrEqual(larger.samples);
       expect(smaller.glowKernel).toBeLessThanOrEqual(larger.glowKernel);
       const passes = (p: typeof handheld) => Object.values(p.effects).filter(Boolean).length;

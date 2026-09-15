@@ -19,6 +19,7 @@ import { chooseEnvironmentProp } from './EnvironmentPropCatalog';
 import { createTerrainChunk, createTerrainMaterials, terrainHeight, type TerrainPalette } from './WorldTerrain';
 import { createGroundDetails, createContactShadows, type ContactPatch } from './WorldGroundDetails';
 import { WorldBackdrop } from './WorldBackdrop';
+import { WorldHorizon } from './WorldHorizon';
 import { ZONES } from '../../content/zones';
 import { DEFAULT_ENGINE_CONFIG } from '../../engine/config';
 import { AtmosphereState } from '../render/Atmosphere';
@@ -96,6 +97,23 @@ const LANTERN_SCAN_FRAMES = 8;
  * smaller number to reach the same place at the far end of the road.
  */
 const HAZE_SCALE = 0.34;
+
+/**
+ * Key to fill, and the reason the diorama used to look like a product shot.
+ *
+ * The biomes author an ambient and a sun each, and between the sky light, the
+ * rim and the sun the three came out at very nearly the same strength - a ratio
+ * of about one to one. At that ratio nothing has a lit side and a dark side, so
+ * nothing has a shape: turning the sun off entirely changed the picture about as
+ * much as a cloud passing. It also made the shadow map pointless, because a
+ * shadow only removes the sun's share and the sun's share was a third.
+ *
+ * These pull the fill down and the key up without touching a single authored
+ * biome value, so the relative mood of the four zones is exactly as written and
+ * only the contrast between them and their own shadows changes.
+ */
+const FILL_SCALE = 0.52;
+const KEY_SCALE = 1.3;
 /** Scratch, so a cloud of motes costs no allocation a frame. */
 const MOTE_MATRIX = Matrix.Identity();
 
@@ -207,6 +225,27 @@ const LANDMARK_GATE: Record<BiomeId, string> = {
   ashen_road: 'ruined_arch',
 };
 
+/**
+ * What stands in the foreground of each biome.
+ *
+ * Tall enough to be cropped by the bottom of the frame, and nothing with a
+ * silhouette worth reading - it is a blurred plane, not a subject.
+ */
+function foregroundProp(biome: BiomeId, roll: number): string {
+  switch (biome) {
+    case 'greenfields':
+      // Mostly grass. A flower head this close to the lens is a bright blob
+      // the size of the mage, and the bloom finds it before the blur does.
+      return roll < 0.88 ? (roll < 0.44 ? 'grass_clump_a' : 'grass_clump_b') : 'flower_patch_a';
+    case 'whispering_woods':
+      return roll < 0.6 ? 'forest_fern' : 'root_cluster';
+    case 'gravehollow':
+      return roll < 0.5 ? 'bone_pile_rubble' : 'gravestone_b';
+    default:
+      return roll < 0.55 ? 'bone_pile_rubble' : 'small_ruin_stone';
+  }
+}
+
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
 }
@@ -286,6 +325,7 @@ export class WorldGenerator {
   private readonly terrainMaterials: [PBRMaterial, PBRMaterial];
   private readonly contactMaterial: StandardMaterial;
   private readonly backdrop: WorldBackdrop;
+  private readonly horizon: WorldHorizon;
   private readonly lanternNodes = new Set<TransformNode>();
   /** Scratch: one chunk's ground contacts, gathered while it is being built. */
   private readonly contacts: ContactPatch[] = [];
@@ -321,6 +361,7 @@ export class WorldGenerator {
     this.contactMaterial.emissiveColor = Color3.White();
     this.contactMaterial.backFaceCulling = false;
     this.backdrop = new WorldBackdrop(scene);
+    this.horizon = new WorldHorizon(scene, atmosphere, profile.mistBands);
     for (let i = 0; i < 2; i++) {
       const light = new PointLight(`landmark candle-${i}`, Vector3.Zero(), scene);
       light.diffuse = new Color3(1, 0.52, 0.19); light.intensity = 2.8; light.range = 3.5; light.setEnabled(false);
@@ -398,6 +439,7 @@ export class WorldGenerator {
     this.moteMaterial.dispose();
     this.assets.dispose();
     this.backdrop.dispose();
+    this.horizon.dispose();
     for (const material of this.terrainMaterials) material.dispose();
     this.contactMaterial.dispose();
     this.lanternNodes.clear();
@@ -511,6 +553,32 @@ export class WorldGenerator {
         scale = 0.26 + random01(seed + 4) * 0.2;
       }
       this.placeProp(id, root, x, z, scale, random01(seed + 5) * Math.PI * 2, false);
+    }
+
+    /*
+     * The foreground: a few clumps between the camera and the road.
+     *
+     * The bottom edge of the frame lands at about z = -7.5, so these are half
+     * cropped by it - deliberately. They are also eight units from the lens
+     * against a plane of focus out on the road, so wherever depth of field is
+     * affordable they are a soft green wash across the bottom of the picture
+     * rather than blades anyone can count. Two things nothing else here does:
+     * they give the shot a foreground plane, and they hide the line where the
+     * ground cover stops.
+     */
+    for (let slot = 0; slot < this.profile.foreground; slot++) {
+      const seed = index * 613 + slot * 53;
+      const x = -5.5 + (slot + random01(seed)) * (11 / Math.max(1, this.profile.foreground));
+      const z = -7.6 + random01(seed + 1) * 1.7;
+      const style = styleAt(center + x, 'props');
+      const biome = random01(seed + 2) < style.t ? style.to.id : style.from.id;
+      this.placeProp(
+        foregroundProp(biome, random01(seed + 3)),
+        root, x, z,
+        1.35 + random01(seed + 4) * 0.55,
+        random01(seed + 5) * Math.PI * 2,
+        false,
+      );
     }
 
     if (landmark) {
@@ -659,7 +727,7 @@ export class WorldGenerator {
     const farFoliage = lerpColor(backdropStyle.from.foliage, backdropStyle.to.foliage, backdropStyle.t);
     const daylight = influenceFor(skyStyle, 'greenfields');
 
-    this.skyLight.intensity = lerp(skyStyle.from.ambient, skyStyle.to.ambient, skyStyle.t);
+    this.skyLight.intensity = lerp(skyStyle.from.ambient, skyStyle.to.ambient, skyStyle.t) * FILL_SCALE;
     const gloom = 1 - daylight;
     this.skyLight.diffuse = lerpColor(new Color3(0.91, 0.96, 0.92), new Color3(0.66, 0.77, 0.88), gloom);
     this.skyLight.groundColor = lerpColor(groundStyle.from.ground.scale(0.32), groundStyle.to.ground.scale(0.32), groundStyle.t);
@@ -667,7 +735,7 @@ export class WorldGenerator {
     // Sun changes later than the sky, preserving warm light for a while as the horizon darkens.
     const sunSample = rawBiomeSample(this.distance + 6);
     const sunT = staged(sunSample.t, 0.24, 0.9);
-    this.sun.intensity = lerp(sunSample.from.sun, sunSample.to.sun, sunT);
+    this.sun.intensity = lerp(sunSample.from.sun, sunSample.to.sun, sunT) * KEY_SCALE;
     this.sun.diffuse = lerpColor(new Color3(1, 0.95, 0.83), new Color3(0.74, 0.80, 1), gloom);
 
     /*
@@ -691,6 +759,19 @@ export class WorldGenerator {
     air.glow.copyFrom(this.sun.diffuse).scaleInPlace(0.1 + daylight * 0.32);
     air.sun.copyFrom(this.sun.direction).normalize();
     air.time = this.visualTime;
+    air.travelled = this.distance;
+
+    /*
+     * The far ground, and the mist on it. It reads its height at the same world
+     * x the chunks do - `distance` is what both are offset by - so the seam
+     * where one takes over from the other holds however far the road has come.
+     */
+    const farGround = lerpColor(groundStyle.from.ground, groundStyle.to.ground, groundStyle.t);
+    // How much of the shot is looking down-sun, which is what decides whether
+    // the mist glows or just sits there.
+    const sunward = Math.max(0, -air.sun.z) * daylight;
+    this.horizon.update(this.distance, farGround, haze, sunward, this.visualTime);
+
     this.backdrop.update(this.distance, {
       sky,
       haze,

@@ -19,6 +19,8 @@ const WIND = [
 
 /** Only the parts thin enough for a low sun to come through. */
 const FOLIAGE = /^(Leaf|Moss|Flower|Petal|Frond) \//;
+/** Weathered surfaces, which vary between one another but not much. */
+const STONE = /^(Stone|Rock|Granite|Slate|Bark|Wood|Bone|Ash) \//;
 
 /**
  * What the air and the light do to one environment surface.
@@ -28,11 +30,19 @@ const FOLIAGE = /^(Leaf|Moss|Flower|Petal|Frond) \//;
  * `Iron /` and `Arcane /` rather than inventing a parallel classification.
  */
 export function environmentResponse(materialName: string, assetId: string): AtmosphereResponse {
-  if (!FOLIAGE.test(materialName)) return {};
+  /*
+   * Every prop of a kind shares one material, so without this every grass
+   * clump on the road is the same green and every tree the same tree - which
+   * is what makes a field read as one asset repeated rather than as a field.
+   * Stone and bark vary too, just far less: rock is rock, but no two are the
+   * same rock.
+   */
+  const vary = FOLIAGE.test(materialName) ? 0.85 : STONE.test(materialName) ? 0.35 : 0.2;
+  if (!FOLIAGE.test(materialName)) return { vary };
   const wind = WIND.find((rule) => rule.match.test(assetId))?.amplitude ?? 0;
   // A flower petal is thinner than a leaf and reads brighter against the sun.
   const translucency = materialName.startsWith('Flower /') ? 0.5 : 0.34;
-  return { wind, translucency };
+  return { wind, translucency, vary };
 }
 
 /** The environment is painted and matte; only actual iron/bronze retains a muted highlight. */

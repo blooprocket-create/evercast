@@ -239,7 +239,9 @@ export class EvercastScene {
     // geometry, so it is threshold-led: only the emissive VFX and the brightest
     // sky cross the line, and the diorama itself stays crisp underneath it.
     presentation.bloomEnabled = true;
-    presentation.bloomThreshold = 0.7;
+    // Raised with the exposure: at 1.38 a sunlit flower head crosses 0.7 and
+    // blooms like a spell does, which is the one thing the threshold is for.
+    presentation.bloomThreshold = 0.82;
     presentation.bloomWeight = 0.45;
     presentation.bloomKernel = finish.bloomKernel;
     presentation.bloomScale = 0.6;
@@ -276,7 +278,9 @@ export class EvercastScene {
     this.setDepthOfField(DEFAULT_DEPTH_OF_FIELD);
     this.scene.imageProcessingConfiguration.toneMappingEnabled = true;
     this.scene.imageProcessingConfiguration.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
-    this.scene.imageProcessingConfiguration.exposure = 1.2;
+    // Lifted with the fill drop: half the ambient is half the light in every
+    // shadow, and the exposure is what puts the midtones back where they were.
+    this.scene.imageProcessingConfiguration.exposure = 1.38;
     this.scene.imageProcessingConfiguration.contrast = 1.04;
     this.scene.imageProcessingConfiguration.vignetteEnabled = true;
     this.scene.imageProcessingConfiguration.vignetteWeight = 1.25;
@@ -308,15 +312,24 @@ export class EvercastScene {
     const skyLight = new HemisphericLight('sky', new Vector3(0, 1, 0), this.scene);
     skyLight.intensity = 0.65;
     /*
-     * The authored key light, left where it is. A lower sun was tried here -
-     * long raking shadows are the usual way to give a landscape shape - and it
-     * made this one flatter, not deeper: the light comes from behind the camera,
-     * so dropping it only pushed the shadows further behind the things casting
-     * them while washing the canopy out. The depth in this shot comes from the
-     * air in front of it instead. See `Atmosphere`.
+     * Mid-afternoon rather than noon: about thirty-five degrees up, where a
+     * four-metre tree lays five metres of shadow across the grass instead of
+     * two under its own canopy.
+     *
+     * Lowering the sun was tried once before this and made the picture flatter,
+     * which was the right observation about the wrong cause. The fill was the
+     * problem - between the sky light and the rim, the sun was about a third of
+     * the light in the scene, so its angle could not matter and its shadows had
+     * almost nothing to remove. With `FILL_SCALE` and the rim corrected, the
+     * same change is what finally gives the ground shape.
+     *
+     * The position follows the direction rather than being authored beside it:
+     * the shadow frustum is built around the light, so the two have to agree
+     * about where the fight is or the map is pointed at empty grass.
      */
-    const sun = new DirectionalLight('sun', new Vector3(0.5, -1, 0.45), this.scene);
-    sun.position = new Vector3(-10, 20, -9);
+    const sun = new DirectionalLight('sun', new Vector3(0.6, -0.55, 0.4), this.scene);
+    sun.direction.normalize();
+    sun.position = sun.direction.scale(-26);
     sun.intensity = 1.5;
     sun.shadowMinZ = 1;
     sun.shadowMaxZ = 65;
@@ -326,7 +339,9 @@ export class EvercastScene {
     this.shadows.filteringQuality = ShadowGenerator.QUALITY_MEDIUM;
     this.shadows.bias = 0.0005;
     this.shadows.normalBias = 0.04;
-    this.shadows.setDarkness(0.22);
+    // Deep enough to read now that the key is carrying the lighting. The grade
+    // is what makes them blue; this only decides how much light is left in them.
+    this.shadows.setDarkness(0.16);
 
     // The rim: a cool backlight from behind and above the lane, opposite the
     // sun. It contributes almost nothing to overall exposure and everything to
@@ -334,7 +349,15 @@ export class EvercastScene {
     // characters are separated from the background by a line of light rather
     // than by an outline drawn on top of them.
     const rim = new DirectionalLight('rim', new Vector3(-0.38, -0.42, -0.86), this.scene);
-    rim.intensity = 1.35;
+    /*
+     * Halved, and it is doing the same job better for it.
+     *
+     * A rim light is meant to draw a line down a silhouette. At 1.35 against a
+     * sun of about 2 it was a second key from the opposite side, filling in
+     * exactly the shadow the sun was casting - which is most of why nothing in
+     * this scene had a dark side. See `FILL_SCALE` in WorldGenerator.
+     */
+    rim.intensity = 0.68;
     rim.diffuse = new Color3(0.56, 0.71, 1);
     rim.specular = new Color3(0.82, 0.89, 1);
 
