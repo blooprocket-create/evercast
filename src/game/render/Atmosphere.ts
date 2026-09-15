@@ -441,7 +441,6 @@ export class AtmospherePlugin extends MaterialPluginBase {
     subMesh: SubMesh,
   ): void {
     const burn = this.response.burn === true ? (burning.get(subMesh.getMesh()) ?? 0) : 0;
-    (globalThis as any).__burns?.push([subMesh.getMesh().name, burn, subMesh.getMesh().visibility, (subMesh.getMaterial() as any)?.name]);
     uniformBuffer.updateFloat4('vAtmoBurn', burn, EMBER.r, EMBER.g, EMBER.b);
   }
 

@@ -35,7 +35,12 @@ export class ProcVfxPresenter {
       }
     for (const key of this.statuses.keys()) if (!active.has(key)) this.statuses.delete(key);
   }
-  ingest(events: readonly GameEvent[]): void {
+  /**
+   * `boss` is passed in rather than asked of the anchors, because this runs
+   * deferred for explosions and the tracker has moved on by then. See
+   * `SpellVfxPresenter.ingest`.
+   */
+  ingest(events: readonly GameEvent[], boss: (id: number) => boolean = () => false): void {
     const bursts = new Set<number>();
     for (const event of events) {
       if (
@@ -101,7 +106,7 @@ export class ProcVfxPresenter {
           position,
           this.anchors.actor(event.instanceId),
           this.anchors.mage(),
-          this.anchors.boss(event.instanceId),
+          boss(event.instanceId),
         );
         if (!bursts.has(event.effectId) && event.effect !== 'dot') {
           bursts.add(event.effectId);
