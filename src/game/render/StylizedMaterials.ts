@@ -1,4 +1,5 @@
 import { Color3, PBRMaterial } from '@babylonjs/core';
+import { type AtmosphereState, breatheOn } from './Atmosphere';
 
 /**
  * How the actors are shaded.
@@ -36,8 +37,11 @@ export function familyOf(name: string): Family {
  * and specular to 0 on everything, which flattened the arcane materials'
  * authored emissive along with the rest and left the rim light nothing to catch.
  */
-export function stylizeActorMaterial(material: PBRMaterial): void {
+export function stylizeActorMaterial(material: PBRMaterial, atmosphere?: AtmosphereState): void {
   const family = familyOf(material.name);
+  // The same air as the scenery stands in. An actor left out of it is a
+  // cut-out: crisp at forty units where the treeline beside him has gone soft.
+  if (atmosphere) breatheOn(material, atmosphere);
   // No environment texture is loaded, so image-based lighting would only wash
   // the palette out. All of the shaping below comes from the three real lights.
   material.environmentIntensity = 0;

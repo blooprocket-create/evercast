@@ -3,6 +3,7 @@ import {
   Color4,
   DirectionalLight,
   HemisphericLight,
+  Matrix,
   Mesh,
   MeshBuilder,
   PBRMaterial,
@@ -16,11 +17,16 @@ import {
 import { EnvironmentAssets } from './EnvironmentAssets';
 import { chooseEnvironmentProp } from './EnvironmentPropCatalog';
 import { createTerrainChunk, createTerrainMaterials, terrainHeight, type TerrainPalette } from './WorldTerrain';
-import { createGroundDetails, createContactShadow } from './WorldGroundDetails';
+import { createGroundDetails, createContactShadows, type ContactPatch } from './WorldGroundDetails';
 import { WorldBackdrop } from './WorldBackdrop';
 import { ZONES } from '../../content/zones';
 import { DEFAULT_ENGINE_CONFIG } from '../../engine/config';
+import { AtmosphereState } from '../render/Atmosphere';
+import { type RenderProfile, renderProfileFor, readDeviceFacts } from '../render/DeviceProfile';
 import { WORLD_UNITS_PER_ZONE, worldTravelSpeed } from './JourneyProgress';
+// Thin instances put the whole mote cloud in one draw call; the methods are a
+// side-effect import rather than part of `Mesh` itself.
+import '@babylonjs/core/Meshes/thinInstanceMesh';
 
 /**
  * The rendered biomes are the authored zones, one for one, by id.
@@ -67,11 +73,36 @@ export interface TransitionProfile {
 interface WorldChunk {
   index: number;
   root: TransformNode;
+  /** Kept so a chunk can be shown or hidden without walking its subtree. */
+  shown: boolean;
 }
 
 const CHUNK_SIZE = 12;
-const VISIBLE_BEHIND = 4;
-const VISIBLE_AHEAD = 8;
+/**
+ * How far past the edge of the frame a chunk is still shown.
+ *
+ * Half a chunk of slack, because the camera's half-width is measured at the
+ * road and a tall prop leaning in from a chunk just off-frame is drawn at a
+ * shallower angle than its root suggests.
+ */
+const CHUNK_MARGIN = CHUNK_SIZE * 0.5;
+/** Frames between re-picking which lanterns the two point lights stand in. */
+const LANTERN_SCAN_FRAMES = 8;
+/**
+ * The authored fog densities, converted to haze per world unit.
+ *
+ * Babylon's EXP2 fog squares the distance, so it is nearly absent up close and
+ * then arrives all at once; `Atmosphere` is linear in distance and needs a
+ * smaller number to reach the same place at the far end of the road.
+ */
+const HAZE_SCALE = 0.34;
+/** Scratch, so a cloud of motes costs no allocation a frame. */
+const MOTE_MATRIX = Matrix.Identity();
+
+/** A prop's x in world terms: its chunk has the travel in it, the prop the offset. */
+function absoluteX(node: TransformNode): number {
+  return ((node.parent as TransformNode | null)?.position.x ?? 0) + node.position.x;
+}
 // Each region has a clear arrival, a settled landscape, and a gradual ecological drift.
 const SEGMENT_LENGTH = WORLD_UNITS_PER_ZONE;
 const TRANSITION_LENGTH = SEGMENT_LENGTH * 0.6;
@@ -255,12 +286,20 @@ export class WorldGenerator {
   private readonly terrainMaterials: [PBRMaterial, PBRMaterial];
   private readonly contactMaterial: StandardMaterial;
   private readonly backdrop: WorldBackdrop;
-  private readonly windNodes = new Set<TransformNode>();
   private readonly lanternNodes = new Set<TransformNode>();
+  /** Scratch: one chunk's ground contacts, gathered while it is being built. */
+  private readonly contacts: ContactPatch[] = [];
   private readonly localLights: PointLight[] = [];
+  private readonly nearestLanterns: TransformNode[] = [];
   private readonly chunks = new Map<number, WorldChunk>();
-  private readonly motes: Mesh[] = [];
+  private readonly motes: Mesh | null = null;
+  private readonly moteDrift: { x: number; y: number; z: number; size: number }[] = [];
+  private readonly moteMatrices: Float32Array;
   private readonly moteMaterial: StandardMaterial;
+  /** Half the width of road on screen, in world units. Set by the camera. */
+  private visibleHalfWidth = 14;
+  private visibleCenterX = 0;
+  private lanternScan = 0;
   private distance = 0;
   private visualTime = 0;
   /** Overwritten from the snapshot on the first sync; see `setZoneLength`. */
@@ -272,9 +311,11 @@ export class WorldGenerator {
     private readonly skyLight: HemisphericLight,
     private readonly sun: DirectionalLight,
     shadows?: ShadowGenerator,
+    private readonly profile: RenderProfile = renderProfileFor(readDeviceFacts()),
+    readonly atmosphere: AtmosphereState = new AtmosphereState(),
   ) {
-    this.assets = new EnvironmentAssets(scene, undefined, shadows);
-    this.terrainMaterials = createTerrainMaterials(scene);
+    this.assets = new EnvironmentAssets(scene, undefined, shadows, atmosphere);
+    this.terrainMaterials = createTerrainMaterials(scene, atmosphere);
     this.contactMaterial = new StandardMaterial('ground contact shade', scene);
     this.contactMaterial.disableLighting = true;
     this.contactMaterial.emissiveColor = Color3.White();
@@ -285,13 +326,31 @@ export class WorldGenerator {
       light.diffuse = new Color3(1, 0.52, 0.19); light.intensity = 2.8; light.range = 3.5; light.setEnabled(false);
       this.localLights.push(light);
     }
-    this.scene.fogMode = Scene.FOGMODE_EXP2;
+    // Babylon's own fog is off for the whole scene: `Atmosphere` is doing the
+    // job, in the same pass, with a direction and a height to it.
+    this.scene.fogMode = Scene.FOGMODE_NONE;
     this.moteMaterial = new StandardMaterial('world-motes', this.scene);
     this.moteMaterial.disableLighting = true;
     this.moteMaterial.emissiveColor = BIOMES[0].accent;
     this.moteMaterial.alpha = 0.55;
-    this.createAtmosphereMotes();
+    this.moteMatrices = new Float32Array(Math.max(1, this.profile.motes) * 16);
+    this.motes = this.createAtmosphereMotes();
     this.rebuildVisibleChunks();
+  }
+
+  /**
+   * What the camera can see of the road, so the chunks off either end can be
+   * hidden rather than drawn and then thrown away by the frustum test.
+   *
+   * Frustum culling already skipped them, but culling is not free: every mesh
+   * in the scene is walked, transformed and tested every frame, and a chunk is
+   * a few hundred of them. Hiding the root takes the whole subtree out of that
+   * walk, out of the shadow map, and out of the glow layer at once.
+   */
+  setView(centerX: number, halfWidth: number): void {
+    this.visibleCenterX = centerX;
+    this.visibleHalfWidth = halfWidth;
+    this.positionChunks();
   }
 
   /**
@@ -309,7 +368,6 @@ export class WorldGenerator {
     this.rebuildVisibleChunks();
     this.updateAtmosphere();
     this.updateMotes(deltaSeconds);
-    this.updateWind();
     this.updateLocalLights();
   }
 
@@ -336,13 +394,12 @@ export class WorldGenerator {
   dispose(): void {
     for (const chunk of this.chunks.values()) this.disposeChunk(chunk);
     this.chunks.clear();
-    for (const mote of this.motes) mote.dispose();
+    this.motes?.dispose();
     this.moteMaterial.dispose();
     this.assets.dispose();
     this.backdrop.dispose();
     for (const material of this.terrainMaterials) material.dispose();
     this.contactMaterial.dispose();
-    this.windNodes.clear();
     this.lanternNodes.clear();
     for (const light of this.localLights) light.dispose();
   }
@@ -355,8 +412,8 @@ export class WorldGenerator {
     }
     this.lastCenterIndex = centerIndex;
 
-    const min = centerIndex - VISIBLE_BEHIND;
-    const max = centerIndex + VISIBLE_AHEAD;
+    const min = centerIndex - this.profile.chunksBehind;
+    const max = centerIndex + this.profile.chunksAhead;
 
     for (const [index, chunk] of this.chunks) {
       if (index < min || index > max) {
@@ -372,8 +429,16 @@ export class WorldGenerator {
   }
 
   private positionChunks(): void {
+    const left = this.visibleCenterX - this.visibleHalfWidth - CHUNK_MARGIN;
+    const right = this.visibleCenterX + this.visibleHalfWidth + CHUNK_MARGIN;
     for (const [index, chunk] of this.chunks) {
-      chunk.root.position.x = index * CHUNK_SIZE - this.distance + WORLD_ANCHOR_X;
+      const x = index * CHUNK_SIZE - this.distance + WORLD_ANCHOR_X;
+      chunk.root.position.x = x;
+      // A chunk is twelve units wide about its own origin.
+      const shown = x + CHUNK_SIZE * 0.5 >= left && x - CHUNK_SIZE * 0.5 <= right;
+      if (shown === chunk.shown) continue;
+      chunk.shown = shown;
+      chunk.root.setEnabled(shown);
     }
   }
 
@@ -384,8 +449,9 @@ export class WorldGenerator {
 
   private buildChunk(index: number): WorldChunk {
     const root = new TransformNode(`world-chunk-${index}`, this.scene);
+    this.contacts.length = 0;
     for (const mesh of createTerrainChunk(index, this.scene, this.paletteAt, ...this.terrainMaterials)) mesh.parent = root;
-    createGroundDetails(index, this.scene, this.terrainMaterials[0], this.paletteAt).parent = root;
+    createGroundDetails(index, this.scene, this.terrainMaterials[0], this.paletteAt, this.profile.groundDetail).parent = root;
     const center = index * CHUNK_SIZE;
     const arrival = wrap(center, CYCLE_LENGTH);
     // One at the mouth of every zone but the first, whose mouth is the start.
@@ -421,7 +487,7 @@ export class WorldGenerator {
     }
 
     // Ground cover follows the verges, in small ecological patches with breathing room.
-    for (let slot = 0; slot < 22; slot++) {
+    for (let slot = 0; slot < this.profile.groundCover; slot++) {
       const seed = index * 197 + slot * 19;
       const x = -5.8 + (slot % 11) * 1.12 + (random01(seed) - 0.5) * 0.65;
       const z = slot < 11 ? -1.45 - random01(seed + 1) * 2.1 : 1.65 + random01(seed + 1) * 2.4;
@@ -463,7 +529,12 @@ export class WorldGenerator {
     if (wrap(index, 10) === 0 && !landmark && styleAt(center, 'props').from.id === 'greenfields') {
       this.placeProp('meadow_waystone', root, 2.1, 2.6, 1);
     }
-    return { index, root };
+    // One mesh for every ground contact in the chunk, built last so it has them
+    // all. See `createContactShadows`.
+    const contact = createContactShadows(this.scene, this.contactMaterial, this.contacts);
+    if (contact) contact.parent = root;
+    this.contacts.length = 0;
+    return { index, root, shown: true };
   }
 
   private placeProp(id: string, root: TransformNode, x: number, z: number, scale = 1, yaw = 0, castShadow = true): void {
@@ -474,23 +545,9 @@ export class WorldGenerator {
       this.lanternNodes.add(node);
       node.onDisposeObservable.addOnce(() => this.lanternNodes.delete(node));
     }
-    if (/tree|fir|fern|grass_clump|flower_patch|bush_clump/.test(id)) {
-      node.metadata.windPhase = random01(absoluteX * 41 + z * 7) * Math.PI * 2;
-      node.metadata.windStrength = /tree|fir/.test(id) ? 0.004 : 0.024;
-      this.windNodes.add(node);
-      node.onDisposeObservable.addOnce(() => this.windNodes.delete(node));
-    }
     if (castShadow && z < 8) {
       const radius = /mausoleum|arch|gate/.test(id) ? 1.7 : id.includes('tree') ? 0.65 : 0.6;
-      const contact = createContactShadow(this.scene, this.contactMaterial, absoluteX, x, z, radius * scale);
-      contact.parent = root;
-    }
-  }
-
-  private updateWind(): void {
-    for (const node of this.windNodes) {
-      if (Math.abs(node.getAbsolutePosition().x) > 28) continue;
-      node.rotation.z = Math.sin(this.visualTime * 0.85 + node.metadata.windPhase) * node.metadata.windStrength;
+      this.contacts.push({ worldX: absoluteX, localX: x, z, radius: radius * scale });
     }
   }
 
@@ -531,16 +588,37 @@ export class WorldGenerator {
     }
   }
 
-  private createAtmosphereMotes(): void {
-    for (let i = 0; i < 22; i += 1) {
-      const mote = MeshBuilder.CreateSphere(`world-mote-${i}`, { diameter: 0.018 + (i % 5) * 0.004, segments: 4 }, this.scene);
-      mote.material = this.moteMaterial;
-      mote.position = new Vector3(-7 + random01(i * 13) * 17, 0.6 + random01(i * 17) * 4.8, -1.8 + random01(i * 23) * 7.5);
-      this.motes.push(mote);
+  /**
+   * One mesh, however many specks.
+   *
+   * These were a mesh each, and a mesh each is a draw call each: two dozen of
+   * them for four hundred triangles of dust. As thin instances they are one
+   * buffer of matrices and one call, which is also what makes the count worth
+   * tiering - a phone can have ten and a desktop twenty-two without either of
+   * them costing a draw.
+   */
+  private createAtmosphereMotes(): Mesh | null {
+    if (this.profile.motes <= 0) return null;
+    const mesh = MeshBuilder.CreateSphere('world-motes', { diameter: 0.024, segments: 4 }, this.scene);
+    mesh.material = this.moteMaterial;
+    mesh.isPickable = false;
+    // The drift wanders them well past the box they start in; culling them on
+    // one shared bounding box would blink the whole cloud out at the edge.
+    mesh.alwaysSelectAsActiveMesh = true;
+    for (let i = 0; i < this.profile.motes; i += 1) {
+      this.moteDrift.push({
+        x: -7 + random01(i * 13) * 17,
+        y: 0.6 + random01(i * 17) * 4.8,
+        z: -1.8 + random01(i * 23) * 7.5,
+        size: 0.75 + (i % 5) * 0.17,
+      });
     }
+    mesh.thinInstanceSetBuffer('matrix', this.moteMatrices, 16, false);
+    return mesh;
   }
 
   private updateMotes(deltaSeconds: number): void {
+    if (!this.motes) return;
     const style = styleAt(this.distance + 8, 'motes');
     const accent = lerpColor(style.from.accent, style.to.accent, style.t);
     this.moteMaterial.emissiveColor = accent;
@@ -550,17 +628,21 @@ export class WorldGenerator {
     const woodsInfluence = influenceFor(style, 'whispering_woods');
     const driftX = lerp(0.12, -0.38, graveInfluence);
 
-    for (let i = 0; i < this.motes.length; i += 1) {
-      const mote = this.motes[i];
-      mote.position.x += deltaSeconds * (driftX + Math.sin(this.visualTime * 0.8 + i) * 0.04);
-      mote.position.y += deltaSeconds * (0.05 + woodsInfluence * Math.sin(this.visualTime * 1.8 + i * 0.6) * 0.08 - graveInfluence * 0.12);
-      if (mote.position.x < -8.5) mote.position.x = 9;
-      if (mote.position.x > 9.5) mote.position.x = -8;
-      if (mote.position.y < 0.25) mote.position.y = 5.2;
-      if (mote.position.y > 5.5) mote.position.y = 0.45;
+    for (let i = 0; i < this.moteDrift.length; i += 1) {
+      const mote = this.moteDrift[i];
+      mote.x += deltaSeconds * (driftX + Math.sin(this.visualTime * 0.8 + i) * 0.04);
+      mote.y += deltaSeconds * (0.05 + woodsInfluence * Math.sin(this.visualTime * 1.8 + i * 0.6) * 0.08 - graveInfluence * 0.12);
+      if (mote.x < -8.5) mote.x = 9;
+      if (mote.x > 9.5) mote.x = -8;
+      if (mote.y < 0.25) mote.y = 5.2;
+      if (mote.y > 5.5) mote.y = 0.45;
       const pulse = 0.65 + woodsInfluence * (0.35 + Math.sin(this.visualTime * 4 + i) * 0.35);
-      mote.scaling.setAll(Math.max(0.25, pulse));
+      const scale = Math.max(0.25, pulse) * mote.size;
+      Matrix.ScalingToRef(scale, scale, scale, MOTE_MATRIX);
+      MOTE_MATRIX.setTranslationFromFloats(mote.x, mote.y, mote.z);
+      MOTE_MATRIX.copyToArray(this.moteMatrices, i * 16);
     }
+    this.motes.thinInstanceBufferUpdated('matrix');
   }
 
   private updateAtmosphere(): void {
@@ -570,24 +652,58 @@ export class WorldGenerator {
     const fogStyle = styleAt(this.distance + 4, 'fog');
 
     const sky = lerpColor(skyStyle.from.sky, skyStyle.to.sky, skyStyle.t);
-    const fog = lerpColor(fogStyle.from.fog, fogStyle.to.fog, fogStyle.t);
+    const haze = lerpColor(fogStyle.from.fog, fogStyle.to.fog, fogStyle.t);
+    // Behind the painted sky, so it is only ever seen through a hole in it.
     this.scene.clearColor = new Color4(sky.r, sky.g, sky.b, 1);
     const backdropStyle = styleAt(this.distance + FAR_LOOKAHEAD, 'background');
     const farFoliage = lerpColor(backdropStyle.from.foliage, backdropStyle.to.foliage, backdropStyle.t);
-    this.backdrop.update(this.distance, sky, fog, farFoliage, influenceFor(skyStyle, 'greenfields'));
-    this.scene.fogColor = fog;
-    this.scene.fogDensity = lerp(fogStyle.from.fogDensity, fogStyle.to.fogDensity, fogStyle.t);
+    const daylight = influenceFor(skyStyle, 'greenfields');
 
     this.skyLight.intensity = lerp(skyStyle.from.ambient, skyStyle.to.ambient, skyStyle.t);
-    const gloom = 1 - influenceFor(skyStyle, 'greenfields');
+    const gloom = 1 - daylight;
     this.skyLight.diffuse = lerpColor(new Color3(0.91, 0.96, 0.92), new Color3(0.66, 0.77, 0.88), gloom);
     this.skyLight.groundColor = lerpColor(groundStyle.from.ground.scale(0.32), groundStyle.to.ground.scale(0.32), groundStyle.t);
 
     // Sun changes later than the sky, preserving warm light for a while as the horizon darkens.
-    const sunT = staged(rawBiomeSample(this.distance + 6).t, 0.24, 0.9);
     const sunSample = rawBiomeSample(this.distance + 6);
+    const sunT = staged(sunSample.t, 0.24, 0.9);
     this.sun.intensity = lerp(sunSample.from.sun, sunSample.to.sun, sunT);
     this.sun.diffuse = lerpColor(new Color3(1, 0.95, 0.83), new Color3(0.74, 0.80, 1), gloom);
+
+    /*
+     * The air itself, which every PBR surface in the scene reads from.
+     *
+     * `near` is the haze standing on the ground and `far` is what that haze
+     * becomes against the sky - lifted most of the way toward the sky colour
+     * rather than all of it, because a ridge that faded to the exact zenith
+     * would not recede into the distance, it would disappear into it.
+     */
+    const air = this.atmosphere;
+    air.near.copyFrom(haze);
+    Color3.LerpToRef(haze, sky, 0.66, air.far);
+    // The authored densities were tuned for Babylon's squared-distance fog;
+    // this one is linear in distance, which is softer close up and is what
+    // makes a long road read as a long road rather than as a wall of grey.
+    air.density = lerp(fogStyle.from.fogDensity, fogStyle.to.fogDensity, fogStyle.t) * HAZE_SCALE;
+    // Down-sun glow, in the sun's own colour: brightest under an open sky and
+    // almost nothing under a canopy, which is the difference between a golden
+    // afternoon and a cold one.
+    air.glow.copyFrom(this.sun.diffuse).scaleInPlace(0.1 + daylight * 0.32);
+    air.sun.copyFrom(this.sun.direction).normalize();
+    air.time = this.visualTime;
+    this.backdrop.update(this.distance, {
+      sky,
+      haze,
+      foliage: farFoliage,
+      daylight,
+      // Gravehollow is the one place with a sky worth looking up at; the woods
+      // have a canopy over them and the Ashen Road has smoke.
+      starlight: influenceFor(skyStyle, 'gravehollow'),
+      sun: air.sun,
+      seconds: this.visualTime,
+    });
+    // Gusts, shared by every blade of grass on the road so they lean together.
+    air.gust = 0.72 + Math.sin(this.visualTime * 0.31) * 0.2 + Math.sin(this.visualTime * 0.13) * 0.12;
   }
 
   private disposeChunk(chunk: WorldChunk): void {

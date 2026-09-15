@@ -43,6 +43,20 @@ describe('sanitizeUiSettings', () => {
     );
   });
 
+  it('rejects a frame rate the renderer cannot honour', () => {
+    expect(sanitizeUiSettings({ display: { frameRate: '144' } }).display.frameRate).toBe('auto');
+    expect(sanitizeUiSettings({ display: { frameRate: 30 } }).display.frameRate).toBe('auto');
+    for (const frameRate of ['auto', 'battery', 'smooth', 'unlimited']) {
+      expect(sanitizeUiSettings({ display: { frameRate } }).display.frameRate).toBe(frameRate);
+    }
+  });
+
+  it('defaults the frame rate to whatever the device tier decided', () => {
+    // Anything else would be this file overruling `DeviceProfile` on the one
+    // setting that exists to stop a phone getting hot.
+    expect(DEFAULT_UI_SETTINGS.display.frameRate).toBe('auto');
+  });
+
   it('clamps volumes rather than trusting them', () => {
     const settings = sanitizeUiSettings({ audio: { master: -5, music: 99, effects: NaN } });
     expect(settings.audio.master).toBe(0);

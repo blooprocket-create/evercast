@@ -12,6 +12,7 @@ import {
 import '@babylonjs/loaders/glTF/2.0/glTFLoader';
 import '@babylonjs/loaders/glTF/2.0/Extensions/KHR_materials_specular';
 import manifest from '../../../public/models/environment/manifest.json';
+import type { AtmosphereState } from '../render/Atmosphere';
 import { finishEnvironmentMaterial } from './EnvironmentMaterials';
 
 type AssetDefinition = (typeof manifest.assets)[number];
@@ -30,6 +31,7 @@ export class EnvironmentAssets {
     private readonly scene: Scene,
     private readonly loader: EnvironmentAssetLoader = (url, target) => LoadAssetContainerAsync(url, target),
     private readonly shadows?: ShadowGenerator,
+    private readonly atmosphere?: AtmosphereState,
   ) {}
 
   place(id: string, parent: TransformNode, x: number, z: number, scale = 1, yaw = 0,
@@ -88,7 +90,9 @@ export class EnvironmentAssets {
       }
       for (const mesh of container.meshes) { mesh.isPickable = false; mesh.receiveShadows = true; }
       for (const material of container.materials) {
-        if (material instanceof PBRMaterial) finishEnvironmentMaterial(material);
+        if (material instanceof PBRMaterial) {
+          finishEnvironmentMaterial(material, asset.id, this.atmosphere);
+        }
       }
       this.containers.set(asset.id, container);
       return container;

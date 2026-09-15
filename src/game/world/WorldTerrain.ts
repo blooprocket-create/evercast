@@ -1,4 +1,5 @@
 import { Color3, Mesh, PBRMaterial, Scene, VertexData } from '@babylonjs/core';
+import { type AtmosphereState, breatheOn } from '../render/Atmosphere';
 
 export const TERRAIN_CHUNK_SIZE = 12;
 export type TerrainPalette = { ground: Color3; road: Color3 };
@@ -79,6 +80,14 @@ export function createTerrainChunk(
   return [build(false), build(true)];
 }
 
-export function createTerrainMaterials(scene: Scene): [PBRMaterial, PBRMaterial] {
-  return [surfaceMaterial('matte meadow floor', scene), surfaceMaterial('worn earth trail', scene)];
+export function createTerrainMaterials(scene: Scene, atmosphere?: AtmosphereState): [PBRMaterial, PBRMaterial] {
+  const materials: [PBRMaterial, PBRMaterial] = [
+    surfaceMaterial('matte meadow floor', scene),
+    surfaceMaterial('worn earth trail', scene),
+  ];
+  // The ground is most of the picture, and it is the surface that runs from
+  // under the mage's feet to the horizon - so it is the one that has to carry
+  // the haze, or the road simply stops at the edge of the last chunk.
+  if (atmosphere) for (const material of materials) breatheOn(material, atmosphere);
+  return materials;
 }

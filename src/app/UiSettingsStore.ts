@@ -1,3 +1,4 @@
+import type { FrameRatePreference } from '../game/render/DeviceProfile';
 import type { VfxQuality } from '../game/vfx/VfxPool';
 
 /**
@@ -18,6 +19,15 @@ export interface AudioSettings {
 export interface DisplaySettings {
   /** 0 turns depth of field off; 1 is the shallowest focus. */
   depthOfField: number;
+  /**
+   * How many frames a second the renderer may draw.
+   *
+   * Kept apart from `vfxQuality` because it is the only display setting about
+   * the device rather than the picture: nothing on screen changes, and on a
+   * phone it is the difference between a session and a warm phone. `auto`
+   * defers to what `DeviceProfile` made of the device.
+   */
+  frameRate: FrameRatePreference;
   vfxQuality: VfxQuality;
   damageNumbers: boolean;
   /** Go straight to what a summon pulled, skipping the reveal. */
@@ -33,6 +43,7 @@ export const DEFAULT_UI_SETTINGS: UiSettings = {
   audio: { master: 0.8, music: 0.7, effects: 0.85, muted: false },
   display: {
     depthOfField: 0.75,
+    frameRate: 'auto',
     vfxQuality: 'medium',
     damageNumbers: true,
     skipSummonAnimation: false,
@@ -42,6 +53,7 @@ export const DEFAULT_UI_SETTINGS: UiSettings = {
 export const UI_SETTINGS_KEY = 'evercast.ui.v1';
 
 const VFX_QUALITIES: readonly VfxQuality[] = ['low', 'medium', 'high'];
+const FRAME_RATES: readonly FrameRatePreference[] = ['auto', 'battery', 'smooth', 'unlimited'];
 
 const clamp01 = (value: unknown, fallback: number): number =>
   typeof value === 'number' && Number.isFinite(value)
@@ -70,6 +82,9 @@ export function sanitizeUiSettings(raw: unknown): UiSettings {
     },
     display: {
       depthOfField: clamp01(display.depthOfField, DEFAULT_UI_SETTINGS.display.depthOfField),
+      frameRate: FRAME_RATES.includes(display.frameRate as FrameRatePreference)
+        ? (display.frameRate as FrameRatePreference)
+        : DEFAULT_UI_SETTINGS.display.frameRate,
       vfxQuality: VFX_QUALITIES.includes(quality as VfxQuality)
         ? (quality as VfxQuality)
         : DEFAULT_UI_SETTINGS.display.vfxQuality,

@@ -7,7 +7,6 @@ import {
   DefaultRenderingPipeline,
   DepthOfFieldEffectBlurLevel,
   Engine,
-  GlowLayer,
   HemisphericLight,
   ImageProcessingConfiguration,
   Material,
@@ -35,10 +34,27 @@ import { WorldHealthBars } from './vfx/WorldHealthBars';
 import { SpellVfxPresenter } from './vfx/SpellVfxPresenter';
 import { castDuration } from './vfx/CombatVfxPlan';
 import { BossTracker } from './BossTracker';
+import { AtmosphereState, breatheOn } from './render/Atmosphere';
 import { CombatFeel } from './render/CombatFeel';
 import { watchContextLoss } from './render/ContextLoss';
+import {
+  type FrameRatePreference,
+  type RenderProfile,
+  frameRateCapFor,
+  readDeviceFacts,
+  renderProfileFor,
+} from './render/DeviceProfile';
+import { FrameGovernor } from './render/FrameGovernor';
+import { LuminousGlow } from './render/LuminousGlow';
 import { type CameraPose, applyPose, capturePose, titlePose } from './title/TitleFraming';
-import { BASE_BETA, BASE_FOV, BASE_TARGET_X, CAMERA_RADIUS, framingFor } from './render/Framing';
+import {
+  BASE_BETA,
+  BASE_FOV,
+  BASE_TARGET_X,
+  CAMERA_RADIUS,
+  framingFor,
+  visibleSpan,
+} from './render/Framing';
 import { TitleSigil } from './title/TitleSigil';
 
 /** Roughly head height above an enemy's feet. */
@@ -66,6 +82,29 @@ const FINISH = {
   high: { samples: 4, bloomKernel: 64, grain: 5.5, sharpen: 0.3, aberration: 3.2 },
 } as const;
 
+/**
+ * How close a frame may come to the cap and still be drawn.
+ *
+ * Without it a thirty-frame cap on a sixty-hertz display lands on twenty: the
+ * frame that arrives at 16.6ms is refused for being 16.7ms early, and the next
+ * one is 33.3ms later again. A few milliseconds of slack is what makes the cap
+ * land on the vsync it was aiming at.
+ */
+const FRAME_SLACK_MS = 4;
+
+/**
+ * How long an enemy takes to arrive, and how long a body takes to go.
+ *
+ * Both are veils rather than animations - see `ActorVisual.materialise`. The
+ * arrival is short enough to be over before the foe is anywhere near the
+ * fight, and the departure runs out the end of the 1.8 seconds a corpse is
+ * already kept for, so nothing is held on screen any longer than it was.
+ */
+const ARRIVAL_SECONDS = 0.55;
+const DEPARTURE_SECONDS = 0.7;
+/** How long a killed enemy lies there before it is disposed of. */
+const RETIRE_SECONDS = 1.8;
+
 export class EvercastScene {
   private readonly engine: Engine;
   private readonly camera: ArcRotateCamera;
@@ -80,7 +119,12 @@ export class EvercastScene {
   private readonly stopWatchingContext: () => void;
   private readonly shadows: ShadowGenerator;
   private readonly enemyMeshes = new Map<number, ActorVisual>();
-  private readonly retiring: { id: number; actor: ActorVisual; remaining: number }[] = [];
+  private readonly retiring: {
+    id: number;
+    actor: ActorVisual;
+    remaining: number;
+    fading: boolean;
+  }[] = [];
   private readonly presentation: DefaultRenderingPipeline;
   private readonly healthBars: WorldHealthBars;
   private readonly partyBars: WorldHealthBars;
@@ -97,8 +141,18 @@ export class EvercastScene {
   private pendingResize: number | null = null;
   private depthOfFieldStrength = DEFAULT_DEPTH_OF_FIELD;
   private readonly canvasObserver?: ResizeObserver;
+  private readonly profile: RenderProfile;
+  private readonly atmosphere = new AtmosphereState();
+  private readonly governor: FrameGovernor;
+  private minFrameMs = 0;
+  private lastFrameAt = 0;
 
-  constructor(canvas: HTMLCanvasElement, quality: VfxQuality = 'medium') {
+  constructor(
+    canvas: HTMLCanvasElement,
+    quality: VfxQuality = 'medium',
+    profile: RenderProfile = renderProfileFor(readDeviceFacts()),
+  ) {
+    this.profile = profile;
     /*
      * `canvasTabIndex: -1` because Babylon's default is 1.
      *
@@ -121,7 +175,25 @@ export class EvercastScene {
       preserveDrawingBuffer: false,
       stencil: true,
       canvasTabIndex: -1,
+      /*
+       * A hint rather than an instruction, and the honest one for this game on
+       * both kinds of machine it runs on. On a laptop with two GPUs it asks for
+       * the discrete one, which is what a 3D scene wants; on a phone there is
+       * only ever one GPU and the hint is ignored. What actually keeps a phone
+       * cool is the frame cap and the passes below, not this.
+       */
+      powerPreference: 'high-performance',
     });
+    // Everything the device tier and the governor decide is spent through this
+    // one call: above 1 the scene is drawn smaller and stretched back up.
+    this.engine.setHardwareScalingLevel(profile.scaling);
+    this.governor = new FrameGovernor({
+      target: 60,
+      base: profile.scaling,
+      floor: profile.scalingFloor,
+      ceiling: profile.scalingCeiling,
+    });
+    this.setFrameRate('auto');
     // A browser reclaims GPU resources from a backgrounded tab, so a long
     // absence can end with the context already gone. Babylon restores what it
     // can; this is only so that it is not silent when it happens.
@@ -148,11 +220,20 @@ export class EvercastScene {
     camera.inputs.clear();
     this.camera = camera;
 
+    /*
+     * Two budgets, and the smaller of them wins on every line.
+     *
+     * `quality` is what the player asked for and `profile.effects` is what the
+     * device can pay for without getting warm, so a phone set to High gets the
+     * high bloom kernel and still no depth of field. Each of these is a full
+     * screen-sized pass; on a handheld the stack below went from six to two.
+     */
     const finish = FINISH[quality];
+    const afford = profile.effects;
     const presentation = new DefaultRenderingPipeline('environment finish', true, this.scene, [camera]);
     this.presentation = presentation;
-    presentation.samples = finish.samples;
-    presentation.fxaaEnabled = true;
+    presentation.samples = Math.min(finish.samples, profile.samples);
+    presentation.fxaaEnabled = afford.fxaa;
 
     // Bloom is what makes the spell work read as light rather than as coloured
     // geometry, so it is threshold-led: only the emissive VFX and the brightest
@@ -167,13 +248,13 @@ export class EvercastScene {
     // which is what keeps low-poly geometry reading as deliberate rather than
     // soft. Grain and aberration are almost subliminal at rest; CombatFeel
     // drives the aberration up on impact.
-    presentation.sharpenEnabled = finish.sharpen > 0;
+    presentation.sharpenEnabled = afford.sharpen && finish.sharpen > 0;
     presentation.sharpen.edgeAmount = finish.sharpen;
     presentation.sharpen.colorAmount = 1;
-    presentation.grainEnabled = finish.grain > 0;
+    presentation.grainEnabled = afford.grain && finish.grain > 0;
     presentation.grain.intensity = finish.grain;
     presentation.grain.animated = true;
-    presentation.chromaticAberrationEnabled = finish.aberration > 0;
+    presentation.chromaticAberrationEnabled = afford.aberration && finish.aberration > 0;
     presentation.chromaticAberration.aberrationAmount = finish.aberration;
     presentation.chromaticAberration.radialIntensity = 0.8;
 
@@ -218,17 +299,29 @@ export class EvercastScene {
     this.scene.onNewMaterialAddedObservable.add((material: Material) => {
       if (material instanceof PBRMaterial || material instanceof StandardMaterial)
         material.maxSimultaneousLights = LIGHTS_PER_MATERIAL;
+      // The catch-all. Everything that makes a PBR material on purpose installs
+      // the plugin itself; this is for anything that arrives another way, and
+      // it is idempotent so the overlap costs nothing.
+      breatheOn(material, this.atmosphere);
     });
 
     const skyLight = new HemisphericLight('sky', new Vector3(0, 1, 0), this.scene);
     skyLight.intensity = 0.65;
+    /*
+     * The authored key light, left where it is. A lower sun was tried here -
+     * long raking shadows are the usual way to give a landscape shape - and it
+     * made this one flatter, not deeper: the light comes from behind the camera,
+     * so dropping it only pushed the shadows further behind the things casting
+     * them while washing the canopy out. The depth in this shot comes from the
+     * air in front of it instead. See `Atmosphere`.
+     */
     const sun = new DirectionalLight('sun', new Vector3(0.5, -1, 0.45), this.scene);
     sun.position = new Vector3(-10, 20, -9);
     sun.intensity = 1.5;
     sun.shadowMinZ = 1;
     sun.shadowMaxZ = 65;
-    sun.shadowFrustumSize = 38;
-    this.shadows = new ShadowGenerator(2048, sun);
+    sun.shadowFrustumSize = profile.shadowSpan;
+    this.shadows = new ShadowGenerator(profile.shadowMapSize, sun);
     this.shadows.usePercentageCloserFiltering = true;
     this.shadows.filteringQuality = ShadowGenerator.QUALITY_MEDIUM;
     this.shadows.bias = 0.0005;
@@ -245,19 +338,16 @@ export class EvercastScene {
     rim.diffuse = new Color3(0.56, 0.71, 1);
     rim.specular = new Color3(0.82, 0.89, 1);
 
-    const glow = new GlowLayer('glow', this.scene, { blurKernelSize: 24 });
-    glow.intensity = 0.32;
-    glow.customEmissiveColorSelector = (_mesh, _subMesh, material, result) => {
-      const luminous =
-        material && /VFX \/|Arcane \/|Lantern \/ candle|Shrine \/ jade inlay/.test(material.name);
-      const color =
-        luminous && (material instanceof PBRMaterial || material instanceof StandardMaterial)
-          ? material.emissiveColor
-          : Color3.Black();
-      result.set(color.r, color.g, color.b, 1);
-    };
-    this.world = new WorldGenerator(this.scene, skyLight, sun, this.shadows);
-    this.actors = new ActorAssets(this.scene, this.shadows);
+    new LuminousGlow(this.scene, profile.glowKernel, 0.32);
+    this.world = new WorldGenerator(
+      this.scene,
+      skyLight,
+      sun,
+      this.shadows,
+      profile,
+      this.atmosphere,
+    );
+    this.actors = new ActorAssets(this.scene, this.shadows, undefined, this.atmosphere);
     // Before the mage, so every enemy model is in flight while the gate is up
     // rather than being requested during the 1.8 seconds of travel after it.
     this.actors.prewarm();
@@ -301,7 +391,7 @@ export class EvercastScene {
     // production build.
     if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).evercastScene = this;
     this.resize();
-    this.engine.runRenderLoop(() => this.scene.render());
+    this.engine.runRenderLoop(this.drawFrame);
     window.addEventListener('resize', this.scheduleResize);
     window.addEventListener('orientationchange', this.scheduleResize);
     if (typeof ResizeObserver !== 'undefined') {
@@ -330,6 +420,10 @@ export class EvercastScene {
     for (let i = this.retiring.length - 1; i >= 0; i--) {
       const entry = this.retiring[i];
       entry.remaining -= deltaSeconds;
+      if (!entry.fading && entry.remaining <= DEPARTURE_SECONDS) {
+        entry.fading = true;
+        entry.actor.dissolve(DEPARTURE_SECONDS);
+      }
       entry.actor.update(deltaSeconds);
       if (entry.remaining <= 0) {
         entry.actor.dispose();
@@ -361,7 +455,12 @@ export class EvercastScene {
       if (event.type === 'enemy_killed') {
         const mesh = this.enemyMeshes.get(event.instanceId);
         if (mesh) {
-          this.retiring.push({ id: event.instanceId, actor: mesh, remaining: 1.8 });
+          this.retiring.push({
+            id: event.instanceId,
+            actor: mesh,
+            remaining: RETIRE_SECONDS,
+            fading: false,
+          });
           if (this.retiring.length > 24) this.retiring.shift()!.actor.dispose();
           this.enemyMeshes.delete(event.instanceId);
         }
@@ -539,7 +638,9 @@ export class EvercastScene {
     // strength the aperture is wide enough that a sigil sitting a fraction off
     // the focal plane goes to mush. Nothing behind it needs separating, so the
     // effect has no work to do here.
-    const strength = this.title ? 0 : this.depthOfFieldStrength;
+    // A tier that cannot afford the pass never turns it on, whatever the slider
+    // says - the setting is about taste, and this is about a phone staying cool.
+    const strength = this.title || !this.profile.effects.depthOfField ? 0 : this.depthOfFieldStrength;
     this.presentation.depthOfFieldEnabled = strength > 0.02;
     if (strength <= 0.02) return;
     const fov = this.scene.activeCamera?.fov ?? BASE_FOV;
@@ -549,6 +650,52 @@ export class EvercastScene {
   setDamageNumbersVisible(visible: boolean): void {
     this.vfx.combat.setDamageNumbersVisible(visible);
   }
+
+  /**
+   * How many frames a second the renderer may draw.
+   *
+   * The simulation is event-driven and runs on its own clock, so this changes
+   * nothing about what happens - only how often it is painted. On a handheld
+   * that is the difference between a session and a warm phone, which is why
+   * `auto` is thirty there and uncapped on anything with a fan.
+   */
+  setFrameRate(preference: FrameRatePreference): void {
+    const cap = frameRateCapFor(preference, this.profile);
+    this.minFrameMs = cap > 0 ? 1000 / cap : 0;
+    // The governor judges the device against what it is now being asked for.
+    // Uncapped, sixty is the bar - past that nobody is in trouble.
+    this.governor.retarget({
+      target: cap > 0 ? cap : 60,
+      base: this.profile.scaling,
+      floor: this.profile.scalingFloor,
+      ceiling: this.profile.scalingCeiling,
+    });
+  }
+
+  /**
+   * One drawn frame: the cap, the governor, and the camera the air is seen from.
+   *
+   * The cap is enforced here rather than by slowing the loop down, because the
+   * browser only offers frames at the display's refresh rate and the useful
+   * thing to do with one that arrives too early is to decline it. Declining
+   * costs nothing - no render, no shadow map, no post-process chain - which is
+   * the whole point.
+   */
+  private readonly drawFrame = (): void => {
+    const now = performance.now();
+    if (this.minFrameMs > 0 && now - this.lastFrameAt < this.minFrameMs - FRAME_SLACK_MS) return;
+    const elapsed = now - this.lastFrameAt;
+    this.lastFrameAt = now;
+
+    const scaling = this.governor.sample(elapsed);
+    if (scaling !== null) this.engine.setHardwareScalingLevel(scaling);
+
+    // Where the air is being looked at from. A frame behind, because the camera
+    // resolves its own position while rendering - and a frame of a camera that
+    // is pinned to the road is not a distance anyone can see.
+    this.atmosphere.eye.copyFrom(this.camera.globalPosition);
+    this.scene.render();
+  };
 
   dispose(): void {
     // Before anything else: a quality change disposes the scene while the title
@@ -608,6 +755,10 @@ export class EvercastScene {
       // swings the camera instead of translating it.
       this.camera.setTarget(target, false, false, true);
     }
+
+    // What the shot actually shows of the road, so the world can stop drawing
+    // the chunks either side of it. See `WorldGenerator.setView`.
+    this.world.setView(framing.targetX, visibleSpan(framing, aspect).width / 2);
 
     // The aperture is calibrated against the base framing, so it moves with it.
     this.applyDepthOfField();
@@ -687,6 +838,7 @@ export class EvercastScene {
         actor = this.actors.create(id, `enemy-${enemy.instanceId}`);
         actor.root.scaling.setAll(enemy.boss ? 1.12 : 1);
         actor.root.position.copyFrom(destination).addInPlace(new Vector3(0.45, 0, 0));
+        actor.materialise(ARRIVAL_SECONDS);
         this.enemyMeshes.set(enemy.instanceId, actor);
       }
       // The scene gets a fresh snapshot every frame, so this smoothing is pure
