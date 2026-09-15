@@ -8,13 +8,22 @@ is worth more when it says exactly what it covers and how to check it.
 ## What is stored, and where
 
 Three keys in the browser's own `localStorage`, on the device the game is played
-on. Nothing leaves it.
+on, and one cache of the game's own files. Nothing leaves it.
 
 | Key | What it holds | Written by |
 | --- | --- | --- |
 | `evercast.save.v1` | The run: frontier, wallets, spell tree, gear, companions | `src/app/BrowserSaveStore.ts` |
 | `evercast.ui.v1` | Preferences: volumes, effect quality, damage numbers | `src/app/UiSettingsStore.ts` |
 | `evercast.clock.v1` | One number — the latest clock reading seen, so offline time cannot be farmed | `src/app/AwayClock.ts` |
+
+Alongside them, a single Cache Storage bucket named `evercast-v1`, written by
+the service worker in `public/sw.js`. It holds copies of the files the game
+already downloaded to run - the bundle, the two typefaces, the `.glb` models -
+so that a second visit does not fetch six megabytes again and so the game opens
+with no network at all. It records nothing about the player: every entry is a
+response to a request for one of Evercast's own files, and the worker refuses
+any request that is not same-origin, so nothing else can ever land in it.
+Clearing site data removes it along with everything else.
 
 None of it is personal data. There are no accounts, no names, no email
 addresses, no device or advertising identifiers, and no identifier that could
@@ -35,9 +44,11 @@ telemetry, no embedded third-party script, no font CDN, no social widget and no
 advertising.
 
 The only network requests the game makes are for its own files — the JavaScript
-bundle, the stylesheet, the two `.woff2` typefaces under `public/fonts/`, and
-the `.glb` models under `public/models/` — all from the origin the page was
-served from.
+bundle, the stylesheet, the two `.woff2` typefaces under `public/fonts/`, the
+`.glb` models under `public/models/`, the web app manifest and the icons beside
+it — all from the origin the page was served from. The service worker makes the
+same requests and no others; `src/app/WebManifest.test.ts` fails if a host ever
+appears in it.
 
 The typefaces are the reason "no font CDN" is worth stating rather than
 assuming. Gelasio and Inter are both under the SIL Open Font License (the full
@@ -69,8 +80,9 @@ Settings → Account, in the game:
   clock key are not progress, so a reset does not take a player's volume levels
   or reopen the offline-time question with them.
 
-Clearing site data for the origin is what removes all three keys and leaves
-nothing behind. The distinction is worth keeping straight in both directions:
+Clearing site data for the origin is what removes all three keys, the file
+cache, and leaves nothing behind. Uninstalling the app, where it was installed
+to a home screen, does the same on most platforms. The distinction is worth keeping straight in both directions:
 the in-game copy in Settings says the same thing, and a disclosure that
 overstates what a button does is worse than no disclosure at all.
 

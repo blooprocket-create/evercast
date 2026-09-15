@@ -45,11 +45,14 @@ honestly promise.
   pinned by `src/app/SecurityHeaders.test.ts`. `connect-src 'self'` is what
   turns "Evercast sends nothing" from a claim into something the browser
   enforces.
-- **Nothing leaves the device.** Three `localStorage` keys, no telemetry, no
-  third-party requests, no fonts from a CDN. See [the privacy
-  note](docs/PRIVACY.md), which includes the commands to check it, and
-  [third-party notices](THIRD_PARTY_NOTICES.md) for the Apache-2.0 attribution
-  Babylon.js requires.
+- **Nothing leaves the device.** Three `localStorage` keys, one cache holding
+  copies of the game's own files, no telemetry, no third-party requests, no
+  fonts from a CDN. The service worker that writes that cache refuses any
+  request that is not same-origin, and `src/app/WebManifest.test.ts` fails if a
+  host ever appears in it. See [the privacy note](docs/PRIVACY.md), which
+  includes the commands to check it, and [third-party
+  notices](THIRD_PARTY_NOTICES.md) for the Apache-2.0 attribution Babylon.js
+  requires.
 - **WCAG 2.2 AA** is enforced where it can be, in
   `src/ui/accessibility.test.ts`: contrast ratios computed from the token
   sheet, a focus ring on every focusable, reduced-motion honoured, and every
@@ -208,6 +211,95 @@ question about live state, and each retires because the player did the thing it
 asked for rather than because anything recorded that they saw it. Only the
 opening premise is stored, in the save rather than beside the preferences, so it
 travels with an export and a Rebirth never replays it.
+
+## Automation
+
+Evercast's opening line is "Nothing here needs your hands", and until
+`src/engine/automation/` that stopped being true after about an hour: the whole
+gold economy was a button, tapped a few hundred times a stage.
+
+The rule that decides what belongs there:
+
+> **Automate what has one right answer. Never automate what has a build behind
+> it.**
+
+So Gold, Spell Points and shards are handed over, and each defaults on because
+giving them away costs the player no decision they were making. Summoning is
+there too but defaults *off* - the reveal is content rather than friction.
+Activating a spell node is deliberately absent and must stay absent: the routes
+are exclusive, a capstone is a choice, and a game that picked the tree for you
+would have automated away the only thing Evercast is about. Party slots are out
+for the same reason.
+
+Automation runs as an encounter is created, and that call site is the whole
+determinism story. Buying gear changes the mage's damage, which changes when
+the next enemy dies - so it must not fire at a moment that depends on how
+`advance` was chunked. Arriving at an encounter is already an event the loop
+stops on, and both the cleared path and the defeated one route through travel
+to reach it, so one hook covers every way a fight can end.
+
+The engine owns the purchase rule and `tools/balance/` now imports it, so a
+balance run measures the player the game actually has. See [the progression
+curve](docs/PROGRESSION_CURVE_V1.md) for what that changed.
+
+## The Surge
+
+Every other decision in Evercast is made in a menu and then watched. The Surge
+is the exception, and the only place the game asks for the player rather than
+for their build.
+
+Every third boss swing is a **Surge**: telegraphed for about two seconds
+instead of the 0.3s cue an ordinary swing gets, which is the difference
+between a cue for the renderer and a window for a person. Spend a
+**Counterspell** charge while it is in the air and the blow is cancelled and
+the boss reels - taking half again as much damage from the mage and the party
+alike for four seconds.
+
+The rule the whole mechanic is built on, and the one not to break:
+
+> **A Surge replaces a boss swing. It never adds one.**
+
+It lands for the ordinary damage at the ordinary moment its cooldown was
+already going to bring it. The only thing that moves is when the telegraph
+*starts*. So a player who is away, or who never presses the button, faces
+exactly the boss they faced before Surges existed, and a player who is present
+gets something better than that. This is an idle game: a mechanic that punished
+absence would be a tax collected mostly from the people who like the genre
+most. `src/engine/combat/Surge.test.ts` pins that invariant in two halves - the
+telegraph does not move the blow, and an unanswered Surge deals ordinary
+damage.
+
+Whether the next swing is a Surge is derived from a swing count rather than
+stored as a flag, so offline catch-up, a chunked run and a resumed save agree
+about it without any of them replaying the fight. The charge pool is
+deliberately *not* one of the gates the combat loop stops on: a charge arriving
+changes what the player may do and never what the world will do, so it settles
+by subtraction and `nextAction` is untouched.
+
+## Installing it
+
+Evercast is a web app with a manifest, an icon set and a service worker
+(`public/sw.js`), so it installs to a home screen and opens with no network at
+all - from the first visit, which took two fixes to be true. Registration is
+deferred to `load`, so the entry bundle, the stylesheet and the preloaded
+typefaces are all fetched before the worker exists; it never sees those
+requests, so the install step goes and gets them by parsing the shipped shell.
+And every cache lookup passes `ignoreVary`, because a host sending
+`Vary: Origin` otherwise makes a stored entry unmatchable by the page that
+needs it - the precache was storing the right files under the right URLs and
+failing to serve them. Only Vite's content-hashed `assets/` are cached as immutable; models,
+fonts and icons are served from cache and refreshed behind the player, so a new
+model arrives on the next launch with nothing versioned by hand. The shell is
+network-first, because serving a stale one would pin a player to a build whose
+assets may already be gone.
+
+The install is offered in **Settings → Account** and nowhere else. The
+browser's own install bar is suppressed the moment it fires, precisely so an
+idle game never interrupts a fight to ask for a home-screen icon.
+
+Icons are generated by `tools/icons/generate.mjs`, which is dependency-free -
+Node already has the only hard part of PNG - and the output is committed. Run
+it after changing the mark.
 
 ## Spell tree
 

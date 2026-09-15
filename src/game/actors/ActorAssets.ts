@@ -204,6 +204,20 @@ export class ActorVisual {
     this.start(state, duration);
   }
 
+  /**
+   * Abandons a swing the simulation has cancelled.
+   *
+   * Needed because the attack clip is started from the *windup* and stretched
+   * across it, so a broken Surge leaves a boss most of two seconds of gather
+   * still to play - and it would follow through on a blow that is no longer
+   * coming. Cross-fades back to locomotion out of whatever pose is on screen,
+   * rather than snapping, which is what `start`'s soft path already does.
+   */
+  interrupt(): void {
+    if (this.dying || this.state !== 'attack') return;
+    this.start(this.locomotion);
+  }
+
   revive(walking: boolean): void {
     this.dying = false; this.locomotion = walking ? 'walk' : 'idle'; this.start(this.locomotion, undefined, true);
     this.burn = 0; this.burnRate = 0; this.veil = 1; this.veilRate = 0;

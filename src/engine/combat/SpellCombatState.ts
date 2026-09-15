@@ -22,6 +22,13 @@ export interface EnemyStatuses {
   dot?: DotState;
   weakness?: { stacks: number; strength: number; expiresAt: number };
   ruin?: { amplification: number; expiresAt: number };
+  /**
+   * Left by a broken Surge. Shaped like `ruin` but deliberately not merged
+   * with it: ruin is a spell mechanic with its own sources, its own duration
+   * and a capstone that consumes it, and folding the two would mean Doomfall
+   * started eating the player's own counter.
+   */
+  stagger?: { amplification: number; expiresAt: number };
 }
 export interface PendingMeteor {
   id: number;

@@ -45,6 +45,18 @@
   gap: var(--space-2);
 }
 
+/*
+ * A settled state where a button would otherwise sit, so the row keeps its
+ * shape whether or not there is anything to press.
+ */
+.note {
+  align-self: center;
+  font: 400 var(--text-small) / 1 var(--font-ui);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-low);
+}
+
 .danger {
   border-color: color-mix(in srgb, var(--hp-foe) 55%, transparent);
   color: var(--hp-foe);

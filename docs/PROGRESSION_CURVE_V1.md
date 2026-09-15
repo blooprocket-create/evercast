@@ -197,6 +197,38 @@ per stage within the band.
 | **power 1.07 / cost 1.075 / gold 6% / boss 3.0 / tier 1.30** | **262** | **174** | 0.22 | 1.04 | 0.46 | 1.25 | 30m |
 | power 1.08 / cost 1.085 / gold 6% / boss 3.0 / tier 1.30 | 280 | 174 | 0.22 | 0.79 | 0.44 | 1.14 | 31m |
 
+### Re-measured once automation shipped
+
+Every row above was measured against a bot that bought gear itself, four times
+a second. The game now buys for the player - `AutomationSystem` owns the
+marginal-stat-per-gold rule, runs it before every encounter, and the harness
+was cut back to only what a player still does by hand. The bot and the player
+are the same person again, which is the point, but it does mean the table above
+describes a player the game no longer has.
+
+| | Stage in 8h | Deaths | 1–25 | 26–50 | 51–100 | 101+ | Worst stage |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Shipping constants, bot buys | 262 | 174 | 0.22 | 1.04 | 0.46 | 1.25 | 30m |
+| **Shipping constants, automation buys** | **279** | **164** | 0.22 | **0.30** | 0.40 | 1.10 | 31.3m at stage 11 |
+
+Two things to notice, neither of them re-tuned here.
+
+The mid-game got **much** faster: 26–50 fell from 1.04 min/stage to 0.30. The
+new shape is at least monotonic - 0.22, 0.30, 0.40, 1.10 - where the old one
+dipped in the middle, and a ramp is a healthier curve than a sawtooth. But
+stages 1–100 now pass in about thirty-five minutes, and this document's own
+objection to a 1.08 power curve was that 0.79 min/stage was "closer to a
+cutscene than a climb". Three of the four bands are now faster than that.
+
+The worst single stage is **31.3 minutes, at stage 11** - immediately after the
+first boss. A half-hour wall in a player's first hour is the most expensive
+place in the game to put one.
+
+Both are tuning decisions rather than bugs, and tuning the curve is a larger
+change than the commit that surfaced them. They are recorded here so the next
+person to open `combatTuning.ts` or `gear.ts` starts from measurement rather
+than from the stale table above.
+
 An earlier sweep isolated the contributions: the power/cost curve alone carries
 roughly 90% of the gain, boss and `worldTier` softening the remaining 10%, and
 the gold coupling is a prerequisite for the power curve rather than an

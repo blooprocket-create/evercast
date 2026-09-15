@@ -12,6 +12,7 @@ import type { GameEvent } from '../events/GameEvent';
 import type { GameState } from '../model';
 import type { ProgressionSystem } from '../progression/ProgressionSystem';
 import { compileSpell } from '../spell/SpellCompiler';
+import { tickCounterspell } from '../combat/Surge';
 
 /**
  * The tolerance that makes landing exactly on an event mean landing on it.
@@ -23,6 +24,12 @@ export interface EncounterLoopSystems {
   encounters: EncounterSystem;
   combat: CombatSystem;
   progression: ProgressionSystem;
+  /**
+   * One automation pass. A closure rather than the system itself, so the loop
+   * never learns what automation depends on - which is most of the other
+   * systems in the engine.
+   */
+  automate: (state: GameState) => void;
 }
 
 /**
@@ -55,8 +62,20 @@ export class EncounterLoop {
     const consumed = Math.min(available, timeToEncounter);
     run.travelElapsed += consumed;
     run.elapsedSeconds += consumed;
+    tickCounterspell(run, consumed);
 
     if (run.travelElapsed + EPSILON >= this.config.travelSeconds) {
+      /*
+       * Automation runs here and nowhere else, and the call site is the whole
+       * determinism story: buying gear changes the mage's damage, which changes
+       * when the next enemy dies - so it must not fire at a moment that depends
+       * on how `advance` was chunked. Arriving at an encounter is already an
+       * event the loop stops on, and both the cleared path and the defeated one
+       * route through travel to get here, so one hook covers every way a fight
+       * can end. It is also when a player would have done it: you kit up
+       * between fights, not mid-swing.
+       */
+      this.systems.automate(state);
       const descriptor = this.systems.encounters.createForRun(run);
       run.encounter = descriptor.encounter;
       run.enemies = [];
@@ -118,6 +137,8 @@ export class EncounterLoop {
 
     const consumed = Math.min(available, nextAction);
     run.elapsedSeconds += consumed;
+    // Deliberately not one of the gates above: see `tickCounterspell`.
+    tickCounterspell(run, consumed);
     // Gates read positions as they were at the START of this step. Arrival is
     // itself an event, so an enemy is either out of range for the whole step or
     // in range for the whole step - which is what keeps a chunked run, a single
@@ -166,6 +187,11 @@ export class EncounterLoop {
     for (const enemy of resolveEnemyBeats(run, this.config, this.emit)) {
       const result = this.systems.combat.enemyAttack(run, enemy);
       enemy.attackCooldown += enemy.attackInterval;
+      // Counted after the blow lands, so `isSurgeSwing` is always asking about
+      // the *next* swing. A Surge broken by the player advances the same count
+      // from `breakSurge`, which is what stops a countered boss from simply
+      // winding another Surge straight back up.
+      enemy.swings = (enemy.swings ?? 0) + 1;
       enemy.telegraphed = false;
       if (result.mageDefeated) {
         this.systems.progression.handleDefeat(state, enemy);

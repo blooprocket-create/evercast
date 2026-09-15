@@ -236,3 +236,29 @@ describe('the Blender cast', () => {
     expect(loader).toHaveBeenCalledTimes(1); expect(b.root.getChildMeshes()).toHaveLength(1);
   });
 });
+
+describe('a cancelled swing', () => {
+  it('goes back to locomotion instead of following through', async () => {
+    const actor = await create('road_warden');
+    // Started from the windup and stretched across it, the way a Surge is.
+    actor.play('attack', 1.7);
+    expect(actor.root.metadata.animation).toBe('attack');
+    actor.interrupt();
+    expect(actor.root.metadata.animation).toBe('idle');
+  });
+
+  it('leaves anything that is not a swing alone', async () => {
+    const actor = await create('road_warden');
+    actor.play('hit');
+    expect(actor.root.metadata.animation).toBe('hit');
+    actor.interrupt();
+    expect(actor.root.metadata.animation).toBe('hit');
+  });
+
+  it('does not put a dead body back on its feet', async () => {
+    const actor = await create('road_warden');
+    actor.play('death');
+    actor.interrupt();
+    expect(actor.root.metadata.animation).toBe('death');
+  });
+});

@@ -20,6 +20,9 @@ import { wizardPerHit } from '../companions/CompanionCombat';
 import { masteryMultiplier, previewMastery } from '../prestige/Mastery';
 // prettier-ignore
 import { effectiveCastInterval, hasArrived, livingByDistance } from '../combat/SpellCombatState';
+// prettier-ignore
+import { counterspellState, surgeWindup, surgingEnemy } from '../combat/Surge';
+import { COUNTER_MAX_CHARGES, COUNTER_RECHARGE_SECONDS } from '../../content/combatTuning';
 
 export interface SimulationSnapshotBuildContext {
   state: GameState;
@@ -48,7 +51,15 @@ export function buildSimulationSnapshot({
   stagesPerSecond,
   lastDefeat,
 }: SimulationSnapshotBuildContext): SimulationSnapshot {
-  const run = state.run;
+const run = state.run;
+/*
+ * Read once, here, rather than by the interface asking the engine a question
+ * mid-render. The window is closing while this snapshot is being built, and
+ * two components that each measured it would disagree about how much of it
+ * was left.
+ */
+const surging = surgingEnemy(run, config.enemyAttackRange);
+const counter = counterspellState(run);
   // The same enemy the spell is aimed at, or the readout names one thing while
   // the mage shoots another.
   const target = livingByDistance(run)[0];
@@ -112,6 +123,26 @@ export function buildSimulationSnapshot({
     spawnInterval: run.encounter?.spawnInterval ?? config.enemySpawnInterval,
     phase: run.phase,
     boss: run.encounter?.bossStage ?? false,
+    surge: surging
+      ? {
+          instanceId: surging.instanceId,
+          enemyName: surging.name,
+          secondsRemaining: Math.max(0, surging.attackCooldown),
+          windowSeconds: surgeWindup(surging),
+        }
+      : null,
+    counterspell: {
+      charges: counter.charges,
+      maxCharges: COUNTER_MAX_CHARGES,
+      rechargeFraction:
+        counter.charges >= COUNTER_MAX_CHARGES
+          ? 1
+          : Math.min(1, Math.max(0, 1 - counter.recharge / COUNTER_RECHARGE_SECONDS)),
+      ready: surging !== undefined && counter.charges >= 1,
+    },
+    // Copied, not referenced: a surface that mutated the snapshot would be
+    // writing straight into meta with no command and no save behind it.
+    automation: { ...state.meta.automation },
     casts: run.stats.casts,
     kills: run.stats.kills,
     deaths: run.stats.deaths,

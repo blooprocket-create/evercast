@@ -13,6 +13,7 @@ import { damageCompanion, guardReduction } from '../companions/CompanionCombat';
 import { chooseTarget } from './Threat';
 import { EvolvingCombat } from './EvolvingCombat';
 import { livingByDistance } from './SpellCombatState';
+import { staggerMultiplier } from './Surge';
 
 export interface CombatResult {
   killedEnemyIds: number[];
@@ -198,6 +199,10 @@ export class CombatSystem {
     const hpBeforeHit = big(enemy.hp);
     let damage = big(baseDamage).mul(damageMultiplier);
     if (critical) damage = damage.mul(critMultiplier);
+    // Folded in before the effect triggers below, which derive their bonus
+    // damage from this figure - so a broken Surge amplifies what it sets off
+    // as well as what lands, rather than only the first number.
+    damage = damage.mul(staggerMultiplier(run, enemy));
     const actualDamage = damage.cmp(hpBeforeHit) > 0 ? hpBeforeHit : damage;
     enemy.hp = decimalMaxZero(enemy.hp.sub(damage));
     run.stats.projectileHits += 1;

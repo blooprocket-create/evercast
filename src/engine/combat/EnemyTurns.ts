@@ -2,6 +2,7 @@ import type { EngineConfig } from '../config';
 import type { GameEvent } from '../events/GameEvent';
 import type { EnemyState, RunState } from '../model';
 import { hasArrived } from './SpellCombatState';
+import { isSurgeSwing, surgeWindup } from './Surge';
 
 /** Matches the combat loop's own tolerance for landing exactly on a beat. */
 const BEAT_EPSILON = 1e-9;
@@ -12,8 +13,15 @@ const BEAT_EPSILON = 1e-9;
  * Capped against its own cadence as well as the config, so the quickest
  * attackers in the catalog still spend most of their interval at rest rather
  * than permanently wound up.
+ *
+ * A Surge is the one exception, and it is a long one: an ordinary telegraph is
+ * a cue for the renderer, and a Surge's is a window for the player. Note that
+ * the swing still lands at the same instant either way - the cooldown is
+ * untouched here, and only the moment the telegraph *starts* moves earlier.
+ * That is what makes a Surge cost an idle player nothing.
  */
 export function windupFor(enemy: EnemyState, config: EngineConfig): number {
+  if (isSurgeSwing(enemy)) return surgeWindup(enemy);
   return Math.min(config.enemyWindupSeconds, enemy.attackInterval * 0.4);
 }
 
@@ -66,6 +74,7 @@ export function resolveEnemyBeats(
         time: run.elapsedSeconds,
         instanceId: enemy.instanceId,
         durationSeconds: Math.max(0, enemy.attackCooldown),
+        surge: isSurgeSwing(enemy) || undefined,
       });
     }
     if (enemy.attackCooldown <= BEAT_EPSILON) due.push(enemy);

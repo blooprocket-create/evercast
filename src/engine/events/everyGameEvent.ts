@@ -37,6 +37,8 @@ export const EVERY_EVENT: GameEvent[] = [
     { type: 'projectile_hit', time: 1, castId: 1, projectileIndex: 0, instanceId: 1, damage: '99', critical: true, source, sequence: 1 },
   ]),
   { type: 'enemy_windup', time: 1, instanceId: 1, durationSeconds: 0.6 },
+  { type: 'enemy_windup', time: 1, instanceId: 1, durationSeconds: 2.2, surge: true },
+  { type: 'surge_broken', time: 1, instanceId: 1, staggerSeconds: 4, chargesLeft: 1 },
   { type: 'enemy_attack', time: 1, instanceId: 1, damage: '12' },
   { type: 'enemy_killed', time: 1, stage: 4, instanceId: 1, enemyId: 'moss_slime', gold: '30' },
   { type: 'mage_defeated', time: 1, stage: 9, enemyId: 'ash_beetle', enemyName: 'Ash Beetle' },

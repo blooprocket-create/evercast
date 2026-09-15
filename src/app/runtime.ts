@@ -1,3 +1,4 @@
+import { createInstallStore, registerServiceWorker } from './Installable';
 import { AwayClock } from './AwayClock';
 import { DEFAULT_ENGINE_CONFIG } from '../engine/config';
 import { EvercastSimulation } from '../engine/EvercastSimulation';
@@ -150,6 +151,14 @@ export const snapshotStore = new SnapshotStore(simulation.getSnapshot());
 
 /** Preferences live apart from the save, under their own key. */
 export const uiSettings = new UiSettingsStore(storage);
+
+/**
+ * Offline launch and the home-screen icon. Both are strictly additive: the
+ * game ran without either for its whole life and still does if a browser
+ * offers neither.
+ */
+export const installStore = createInstallStore();
+registerServiceWorker();
 
 /**
  * Sound outlives the scene. Effect quality rebuilds `EvercastScene` and with it

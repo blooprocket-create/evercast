@@ -1,3 +1,6 @@
+// prettier-ignore
+import { createAutomationSystem, type AutomationSystem } from './automation/AutomationSystem';
+import { executeCommand, type CommandContext } from './commands/executeCommand';
 import type Decimal from 'break_eternity.js';
 import { createDefaultCatalog, validateCatalog } from '../content/catalog';
 import type { ContentCatalog } from '../content/types';
@@ -21,6 +24,7 @@ import type { GameState } from './model';
 import { ProgressionSystem } from './progression/ProgressionSystem';
 import { RebirthSystem } from './prestige/RebirthSystem';
 import { compileSpell } from './spell/SpellCompiler';
+import { breakSurge } from './combat/Surge';
 import { SpellTreeSystem } from './spellTree/SpellTreeSystem';
 import { buildSimulationSnapshot } from './snapshot/SimulationSnapshotBuilder';
 import { createInitialGameState } from './state';
@@ -60,6 +64,9 @@ export class EvercastSimulation {
   private lastDefeat: DefeatSnapshot | null = null;
   private defeats = 0;
   private lastSummon: LastSummonSnapshot | null = null;
+  private readonly emit: (event: GameEvent) => void;
+  private readonly automationSystem: AutomationSystem;
+  private readonly commands: CommandContext;
 
   constructor(options: SimulationOptions = {}) {
     this.config = { ...DEFAULT_ENGINE_CONFIG, ...options.config };
@@ -70,21 +77,43 @@ export class EvercastSimulation {
     this.eventBus = new EventBus<GameEvent>(this.config.maxEventsPerFlush);
     this.eventBus.subscribe((event) => this.captureEvent(event));
     const emit = (event: GameEvent) => this.eventBus.emit(event);
+    this.emit = emit;
     this.progressionSystem = new ProgressionSystem(this.config, emit);
     this.rebirthSystem = new RebirthSystem(this.config, emit);
     this.gearSystem = new GearSystem(this.config, emit);
     this.spellTreeSystem = new SpellTreeSystem(emit);
     this.companionSystem = new CompanionSystem(emit);
     this.gachaSystem = new GachaSystem(this.config, emit);
+    this.automationSystem = createAutomationSystem({
+      gear: this.gearSystem,
+      spellTree: this.spellTreeSystem,
+      gacha: this.gachaSystem,
+      companions: this.companionSystem,
+    });
     this.loop = new EncounterLoop(
       this.config,
       {
         encounters: new EncounterSystem(this.catalog, this.config),
         combat: new CombatSystem(this.config, emit),
         progression: this.progressionSystem,
+        automate: (state) => this.automationSystem.run(state),
       },
       emit,
     );
+    this.commands = {
+      state: this.state,
+      config: this.config,
+      emit,
+      gear: this.gearSystem,
+      spellTree: this.spellTreeSystem,
+      companions: this.companionSystem,
+      gacha: this.gachaSystem,
+      progression: this.progressionSystem,
+      rebirth: this.rebirthSystem,
+      recordSummon: (summon) => {
+        this.lastSummon = summon;
+      },
+    };
     this.gearSystem.syncMageStats(this.state);
     this.spellTreeSystem.syncSpell(this.state);
     this.companionSystem.sync(this.state);
@@ -160,83 +189,7 @@ export class EvercastSimulation {
   }
 
   execute(command: EngineCommand): boolean {
-    switch (command.type) {
-      case 'retry_frontier':
-        this.progressionSystem.retryFrontier(this.state);
-        return true;
-      case 'set_spell_build':
-        clearSpellCombat(this.state.run);
-        this.state.run.spell = structuredClone(command.build);
-        this.state.run.castCooldown = Math.min(
-          this.state.run.castCooldown,
-          compileSpell(this.state.run.spell).castInterval,
-        );
-        return true;
-      case 'level_gear': {
-        const levelled = this.gearSystem.levelUp(this.state, command.slot);
-        // Companion health is a share of the mage's, so a gear level that
-        // raises her maximum raises theirs in the same breath.
-        if (levelled) this.companionSystem.sync(this.state);
-        return levelled;
-      }
-      case 'buy_spell_point':
-        return this.spellTreeSystem.buyPoint(this.state);
-      case 'buy_attunement':
-        return this.spellTreeSystem.buyAttunement(this.state, command.attunementId);
-      case 'activate_spell_node': {
-        const activated = this.spellTreeSystem.activateNode(this.state, command.nodeId);
-        if (activated) {
-          this.state.run.castCooldown = Math.min(
-            this.state.run.castCooldown,
-            compileSpell(this.state.run.spell).castInterval,
-          );
-        }
-        return activated;
-      }
-      /**
-       * The one piece of onboarding that cannot be derived. A hint about gold
-       * stops being true the moment gold is spent, so nothing needs recording;
-       * a premise the player has read leaves no mark on the state it described,
-       * so it does. Refusing a flag already held keeps it idempotent, and keeps
-       * a re-dismissal from spending a publish and a save on nothing.
-       */
-      case 'mark_story_flag': {
-        if (this.state.meta.storyFlags.includes(command.flag)) return false;
-        this.state.meta.storyFlags.push(command.flag);
-        return true;
-      }
-      case 'respec_spell_tree':
-        return this.spellTreeSystem.respec(this.state);
-      case 'rebirth': {
-        const performed = this.rebirthSystem.perform(this.state);
-        if (performed) {
-          this.spellTreeSystem.syncSpell(this.state);
-          // The roster survives a rebirth alongside gear and the spell tree; a
-          // prestige that wiped a collection would make the gacha worthless.
-          this.companionSystem.sync(this.state);
-        }
-        return performed;
-      }
-      case 'summon_draw': {
-        const results = this.gachaSystem.draw(this.state, command.count);
-        if (!results) return false;
-        this.companionSystem.sync(this.state);
-        this.lastSummon = {
-          serial: this.state.companions.drawSerial,
-          results: results.map((result) => ({
-            ...result,
-            name: requireCompanion(result.definitionId).name,
-          })),
-        };
-        return true;
-      }
-      case 'ascend_companion':
-        return this.companionSystem.ascend(this.state, command.definitionId);
-      case 'equip_companion':
-        return this.companionSystem.equip(this.state, command.definitionId, command.slot);
-      case 'unequip_companion':
-        return this.companionSystem.unequip(this.state, command.slot);
-    }
+    return executeCommand(this.commands, command);
   }
 
   getSnapshot(): SimulationSnapshot {
