@@ -31,16 +31,12 @@
 import { describe, it } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type Decimal from 'break_eternity.js';
 import { EvercastSimulation } from '../../src/engine/EvercastSimulation';
-import { compileGearStats, createInitialEquipmentState, gearLevelCost } from '../../src/engine/gear/GearSystem';
-import { GEAR_DEFINITIONS, GEAR_SLOT_ORDER } from '../../src/engine/gear/GearCatalog';
-import type { GearSlot } from '../../src/engine/gear/types';
-import { SPELL_ATTUNEMENTS, SPELL_TREE_NODES } from '../../src/content/spellTree';
-import { big } from '../../src/engine/numbers';
+import { GEAR_SLOT_ORDER } from '../../src/engine/gear/GearCatalog';
+// The bot moved to its own module when `surge.test.ts` needed the same player.
+import { createBot, play } from './bot';
 
 const SIM_HOURS = Number(process.env.BALANCE_HOURS ?? '8');
-const TICK_SECONDS = 0.25;
 
 const report: string[] = [];
 function log(line = ''): void {
@@ -55,95 +51,6 @@ function flush(): void {
 }
 
 /* ------------------------------------------------------------------ bot --- */
-
-/**
- * What one more level of a slot is worth, read out of the engine rather than
- * recomputed. A linear curve makes this a constant and a geometric one makes it
- * grow; the bot does not need to know which. Memoized because the same
- * (slot, level) is asked on every tick until it becomes affordable.
- */
-const marginalCache = new Map<string, Decimal>();
-
-function contributionOf(slot: GearSlot, level: number): Decimal {
-  // Every other slot sits at level 1 and contributes nothing, so the compiled
-  // stat is this slot's contribution alone.
-  const equipment = createInitialEquipmentState();
-  equipment.pieces[slot].level = level;
-  const stats = compileGearStats(equipment);
-  return GEAR_DEFINITIONS[slot].primaryStat === 'baseDamage' ? stats.baseDamageBonus : stats.maxHpBonus;
-}
-
-function marginalGain(slot: GearSlot, level: number): Decimal {
-  const key = `${slot}:${level}`;
-  const cached = marginalCache.get(key);
-  if (cached) return cached;
-  const value = contributionOf(slot, level + 1).sub(contributionOf(slot, level));
-  marginalCache.set(key, value);
-  return value;
-}
-
-function bestBuy(simulation: EvercastSimulation, want: 'baseDamage' | 'maxHp'): GearSlot | null {
-  const { equipment } = simulation.getState();
-  let best: GearSlot | null = null;
-  let bestEfficiency: Decimal = big(0);
-  for (const slot of GEAR_SLOT_ORDER) {
-    if (GEAR_DEFINITIONS[slot].primaryStat !== want) continue;
-    const level = equipment.pieces[slot].level;
-    const cost = gearLevelCost(slot, level);
-    if (equipment.gold.cmp(cost) < 0) continue;
-    const efficiency = marginalGain(slot, level).div(cost);
-    if (efficiency.cmp(bestEfficiency) > 0) {
-      bestEfficiency = efficiency;
-      best = slot;
-    }
-  }
-  return best;
-}
-
-/** Spend everything affordable, alternating offence and defence. */
-function spendGold(simulation: EvercastSimulation, state: { wantHp: boolean }): void {
-  for (let guard = 0; guard < 500; guard += 1) {
-    const first = state.wantHp ? 'maxHp' : 'baseDamage';
-    const second = state.wantHp ? 'baseDamage' : 'maxHp';
-    const slot = bestBuy(simulation, first) ?? bestBuy(simulation, second);
-    if (!slot) return;
-    simulation.execute({ type: 'level_gear', slot });
-    state.wantHp = !state.wantHp;
-  }
-}
-
-/** Essence into the tree, Knowledge into attunements, Starlight into the party. */
-function developBuild(simulation: EvercastSimulation): void {
-  while (simulation.execute({ type: 'buy_spell_point' }));
-  for (let pass = 0; pass < 3; pass += 1) {
-    let progressed = false;
-    for (const node of SPELL_TREE_NODES) {
-      if (simulation.execute({ type: 'activate_spell_node', nodeId: node.id })) progressed = true;
-    }
-    if (!progressed) break;
-  }
-  for (const attunement of SPELL_ATTUNEMENTS) {
-    simulation.execute({ type: 'buy_attunement', attunementId: attunement.id });
-  }
-  while (simulation.execute({ type: 'summon_draw', count: 10 }));
-
-  const owned = Object.keys(simulation.getState().companions.owned);
-  for (const definitionId of owned) simulation.execute({ type: 'ascend_companion', definitionId });
-  const { party } = simulation.getState().companions;
-  for (let slot = 0; slot < 5; slot += 1) {
-    if (party[slot]) continue;
-    for (const definitionId of owned) {
-      if (party.includes(definitionId)) continue;
-      if (simulation.execute({ type: 'equip_companion', definitionId, slot })) break;
-    }
-  }
-}
-
-function play(simulation: EvercastSimulation, state: { wantHp: boolean }): void {
-  simulation.advance(TICK_SECONDS, { presentationEvents: false });
-  spendGold(simulation, state);
-  developBuild(simulation);
-}
 
 /* -------------------------------------------------------------- metrics --- */
 
@@ -185,7 +92,7 @@ function worstStage(records: StageRecord[]): { minutes: number; stage: number } 
 function runPush(label: string, hours: number): { simulation: EvercastSimulation; records: StageRecord[] } {
   const simulation = new EvercastSimulation();
   const budget = hours * 3600;
-  const state = { wantHp: false };
+  const state = createBot();
   const records: StageRecord[] = [];
   let lastStage = simulation.getState().run.frontierStage;
   records.push({ stage: lastStage, elapsed: 0, knowledgeIfRebirth: 0 });
@@ -260,7 +167,7 @@ function reportKnowledgeRate(records: StageRecord[]): number {
  */
 function reportRebirthSpam(simulation: EvercastSimulation, deepRate: number): void {
   log('\nRebirth-spam check (same save, gear and gold retained):');
-  const state = { wantHp: false };
+  const state = createBot();
 
   if (!simulation.getSnapshot().canRebirth) {
     log('  never became rebirth-viable');

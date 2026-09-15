@@ -310,6 +310,55 @@ The solver is analytical past its sample window, as the seam always anticipated:
 
 Coverage includes the boot phase reducer and the gate it drives, the title framing (a camera pose round-trip, and the Babylon `setTarget` behaviour it depends on) and the sigil it raises (fog opt-out, drift bounds, reduced motion, teardown), onboarding marks (that each retires on the state it describes, that one speaks at a time, and that none precedes the premise), deterministic advancement, multi-enemy overlap, push/farm behavior, content references, spell compilation, gear, Spell Point economy/pathing, first-clear Essence, save migrations and the version window the codec accepts, offline settlement (a day away from a played save inside a bounded budget, exactness within the sample window, rate scaling past it, and no synthesised Essence or stage), the advance loop's runaway guard, save loading that never throws on the way up, prestige reset boundaries, and architecture guards preventing presentation dependencies from entering `src/engine`.
 
+## The Surge, and the one command with a deadline
+
+`src/engine/combat/Surge.ts` owns the only player input in combat. Three
+decisions in it are load-bearing enough to name here.
+
+**A Surge replaces a boss swing rather than adding one.** It lands for the
+ordinary damage at the moment the cooldown was already going to bring it;
+`windupFor` moves only when the telegraph *starts*. That is what makes the
+mechanic free to an absent player, and it is the constraint every future
+change to it has to hold - an idle game that punished absence would be
+collecting a tax from the players who like the genre most.
+
+**Whether a swing is a Surge is derived, not stored.** `isSurgeSwing` reads
+`enemy.swings`, so offline catch-up, a chunked run and a resumed save agree
+without replaying anything. `telegraphed` stays a stored flag beside it
+precisely because it means something different - that the *renderer* was told -
+and is cleared whenever the presentation that heard it is gone.
+
+**The charge pool is not a gate.** `tickCounterspell` settles by subtraction
+rather than joining `nextAction` in `EncounterLoop`, because a charge arriving
+changes what the player may do and never what the world will do. Every new
+event source in that `Math.min` is another way for a chunked run and a single
+pass to disagree, and this one buys nothing in exchange for that risk.
+
+`breakSurge` is the only command in `execute` with a deadline: everything else
+there is a purchase that is equally legal a minute later. So its legality is
+settled against the boss's own cooldown rather than against anything the
+interface believes it last drew - a button that stayed enabled a frame too long
+is refused, not honoured. On the presentation side `ActorVisual.interrupt`
+exists for the same reason: the attack clip is started from the windup and
+stretched across it, so without it a countered boss would follow through on a
+blow that is no longer coming.
+
+## Installing, and running without a network
+
+`src/app/Installable.ts` holds two separable things that answer one question -
+whether Evercast is something you can keep. `registerServiceWorker` is guarded
+the way `BrowserSaveStore` is: production only, behind a capability check, and
+never a reason the app fails to start. `InstallStore` parks the browser's
+`beforeinstallprompt` instead of acting on it, so the offer appears in Settings
+and nowhere else.
+
+`public/sw.js` is handwritten and served verbatim rather than generated, and it
+is the one piece of Evercast that could quietly break `connect-src 'self'` -
+it sees every request the page makes. So it handles nothing but same-origin
+GETs, and `src/app/WebManifest.test.ts` fails if a host ever appears in it.
+Only `/assets/` is cached as immutable, because only Vite's output carries a
+content hash.
+
 ## Still intentionally deferred
 
 - final spell-tree balance,

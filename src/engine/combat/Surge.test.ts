@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import Decimal from 'break_eternity.js';
 // prettier-ignore
-import { COUNTER_MAX_CHARGES, COUNTER_RECHARGE_SECONDS, STAGGER_AMPLIFICATION, STAGGER_SECONDS, SURGE_EVERY } from '../../content/combatTuning';
+import { COUNTER_MAX_CHARGES, COUNTER_RECHARGE_SECONDS, STAGGER_AMPLIFICATION, STAGGER_SECONDS, SURGE_EVERY, SURGE_OFFSET } from '../../content/combatTuning';
 import { DEFAULT_ENGINE_CONFIG } from '../config';
 import { EvercastSimulation } from '../EvercastSimulation';
 import type { GameEvent } from '../events/GameEvent';
@@ -14,6 +14,14 @@ import { resolveEnemyBeats, windupFor } from './EnemyTurns';
 import { breakSurge, counterspellState, isSurgeSwing, staggerMultiplier, surgeWindup, surgingEnemy, tickCounterspell } from './Surge';
 
 const REACH = DEFAULT_ENGINE_CONFIG.enemyAttackRange;
+
+/*
+ * Read off the tuning rather than written in: which swing surges is a number
+ * that moves with measurement (see `combatTuning.ts`), and a suite that hard
+ * coded it would have to be rewritten every time it did.
+ */
+const SURGING = SURGE_OFFSET;
+const QUIET = SURGE_OFFSET + 1;
 
 /** A boss standing in contact, so every gate that asks about reach says yes. */
 function boss(overrides: Partial<EnemyState> = {}): EnemyState {
@@ -41,8 +49,8 @@ function runWith(enemies: EnemyState[]): RunState {
 
 describe('the Surge', () => {
   it('is a boss swing and nothing else', () => {
-    expect(isSurgeSwing(boss({ swings: 1 }))).toBe(true);
-    expect(isSurgeSwing(boss({ boss: false, swings: 1 }))).toBe(false);
+    expect(isSurgeSwing(boss({ swings: SURGING }))).toBe(true);
+    expect(isSurgeSwing(boss({ boss: false, swings: SURGING }))).toBe(false);
   });
 
   it('arrives on a cycle rather than on every swing', () => {
@@ -55,8 +63,8 @@ describe('the Surge', () => {
   });
 
   it('is telegraphed far longer than an ordinary swing', () => {
-    const ordinary = windupFor(boss({ swings: 0 }), DEFAULT_ENGINE_CONFIG);
-    const surge = windupFor(boss({ swings: 1 }), DEFAULT_ENGINE_CONFIG);
+    const ordinary = windupFor(boss({ swings: QUIET }), DEFAULT_ENGINE_CONFIG);
+    const surge = windupFor(boss({ swings: SURGING }), DEFAULT_ENGINE_CONFIG);
     expect(surge).toBeGreaterThan(ordinary * 4);
     // ...but never longer than the cadence it announces, or the boss would read
     // as permanently wound up rather than as raising a threat.
@@ -70,7 +78,7 @@ describe('the Surge', () => {
    */
   describe('costs an absent player nothing', () => {
     it('does not move the blow it announces', () => {
-      const run = runWith([boss({ swings: 1, attackCooldown: 1.5 })]);
+      const run = runWith([boss({ swings: SURGING, attackCooldown: 1.5 })]);
       const before = run.enemies[0]!.attackCooldown;
       resolveEnemyBeats(run, DEFAULT_ENGINE_CONFIG, () => {});
       expect(run.enemies[0]!.telegraphed).toBe(true);
@@ -104,13 +112,13 @@ describe('the Surge', () => {
 
   it('marks its telegraph so the interface can tell the two apart', () => {
     const events: GameEvent[] = [];
-    resolveEnemyBeats(runWith([boss({ swings: 1, attackCooldown: 1.5 })]), DEFAULT_ENGINE_CONFIG, (e) =>
+    resolveEnemyBeats(runWith([boss({ swings: SURGING, attackCooldown: 1.5 })]), DEFAULT_ENGINE_CONFIG, (e) =>
       events.push(e),
     );
     expect(events.find((event) => event.type === 'enemy_windup')?.surge).toBe(true);
 
     events.length = 0;
-    resolveEnemyBeats(runWith([boss({ swings: 0, attackCooldown: 0.2 })]), DEFAULT_ENGINE_CONFIG, (e) =>
+    resolveEnemyBeats(runWith([boss({ swings: QUIET, attackCooldown: 0.2 })]), DEFAULT_ENGINE_CONFIG, (e) =>
       events.push(e),
     );
     expect(events.find((event) => event.type === 'enemy_windup')?.surge).toBeUndefined();
@@ -118,17 +126,17 @@ describe('the Surge', () => {
 });
 
 describe('breaking a Surge', () => {
-  const live = () => runWith([boss({ swings: 1, attackCooldown: 1.0 })]);
+  const live = () => runWith([boss({ swings: SURGING, attackCooldown: 1.0 })]);
 
   it('is offered only while the window is open', () => {
     expect(surgingEnemy(live(), REACH)).toBeDefined();
     // Too early: the telegraph has not started yet.
-    expect(surgingEnemy(runWith([boss({ swings: 1, attackCooldown: 1.85 })]), REACH)).toBeUndefined();
+    expect(surgingEnemy(runWith([boss({ swings: SURGING, attackCooldown: 1.85 })]), REACH)).toBeUndefined();
     // Not a Surge at all.
-    expect(surgingEnemy(runWith([boss({ swings: 0, attackCooldown: 0.2 })]), REACH)).toBeUndefined();
+    expect(surgingEnemy(runWith([boss({ swings: QUIET, attackCooldown: 0.2 })]), REACH)).toBeUndefined();
     // Still walking, so not swinging.
     expect(
-      surgingEnemy(runWith([boss({ swings: 1, attackCooldown: 1, position: { x: 9, z: 0 } })]), REACH),
+      surgingEnemy(runWith([boss({ swings: SURGING, attackCooldown: 1, position: { x: 9, z: 0 } })]), REACH),
     ).toBeUndefined();
   });
 
@@ -155,7 +163,7 @@ describe('breaking a Surge', () => {
   });
 
   it('refuses when there is nothing in the air, and when there is nothing to spend', () => {
-    const quiet = runWith([boss({ swings: 0, attackCooldown: 1.9 })]);
+    const quiet = runWith([boss({ swings: QUIET, attackCooldown: 1.9 })]);
     expect(breakSurge(quiet, REACH, () => {})).toBeUndefined();
 
     const spent = live();
@@ -208,7 +216,7 @@ describe('the Surge inside the real loop', () => {
     const simulation = new EvercastSimulation();
     const state = simulation.getState();
     state.run.phase = 'combat';
-    state.run.enemies = [boss({ hp: big(1e9), maxHp: big(1e9), swings: 0 })];
+    state.run.enemies = [boss({ hp: big(1e9), maxHp: big(1e9), swings: QUIET })];
     state.run.encounter = {
       stage: 10, totalEnemies: 1, spawnedEnemies: 1,
       spawnInterval: 1, spawnCooldown: 99, maxAlive: 1, bossStage: true,
@@ -324,7 +332,7 @@ describe('surgeWindup', () => {
 
 /** Nothing here should have taught the engine about Decimal-free enemies. */
 it('leaves enemy health a Decimal throughout', () => {
-  const run = runWith([boss({ swings: 1, attackCooldown: 1 })]);
+  const run = runWith([boss({ swings: SURGING, attackCooldown: 1 })]);
   breakSurge(run, REACH, () => {});
   expect(run.enemies[0]!.hp).toBeInstanceOf(Decimal);
 });

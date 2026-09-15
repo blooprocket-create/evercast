@@ -8,14 +8,25 @@
  */
 
 /**
- * Every Nth boss swing is a Surge.
+ * Every Nth boss swing is a Surge, starting with the first.
  *
- * Offset so the second swing of a boss fight is the first Surge: a mechanic the
- * player might not meet until the third encounter is a mechanic most players
- * never learn exists.
+ * Measured with the greedy bot in `tools/balance/surge.test.ts`, over two
+ * simulated hours to stage 100 and 129 boss encounters: every boss opens at
+ * least one window at either offset, the first at stage 10 - a player's very
+ * first boss. The offset decides how many follow, at 2.9 windows per boss from
+ * 0 against 2.5 from 1, because at 0 the boss gathers on arrival instead of
+ * having to survive a swing first.
+ *
+ * Worth recording how that was nearly got wrong. The first measurement used
+ * hand-built saves with gear levels picked by hand, and reported that the
+ * window opened almost never. Those saves were enormously over-geared for
+ * their stage, so the boss died during its walk-in and never swung at all -
+ * which says something true about an over-geared run and nothing whatsoever
+ * about the game. Any question about how Evercast feels at a given depth has
+ * to be asked of a run that bought its way there.
  */
 export const SURGE_EVERY = 3;
-export const SURGE_OFFSET = 1;
+export const SURGE_OFFSET = 0;
 
 /**
  * How long a Surge is telegraphed.
