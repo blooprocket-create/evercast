@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { Color3, NullEngine, PBRMaterial, Scene, StandardMaterial } from '@babylonjs/core';
+import {
+  Color3,
+  MultiMaterial,
+  NullEngine,
+  PBRMaterial,
+  Scene,
+  StandardMaterial,
+} from '@babylonjs/core';
 import { AtmosphereState, breatheOn } from './Atmosphere';
 import { environmentResponse } from '../world/EnvironmentMaterials';
-import { isLuminousMaterial } from './LuminousGlow';
+import { isLuminousMaterial, isLuminousSurface } from './LuminousGlow';
 
 describe('what the wind and the sun do to a surface', () => {
   it('bends foliage and leaves everything else rigid', () => {
@@ -98,6 +105,26 @@ describe('what the glow pass is allowed to look at', () => {
       expect(isLuminousMaterial(name), name).toBe(false);
     }
     expect(isLuminousMaterial(undefined)).toBe(false);
+  });
+
+  it('finds a luminous material inside one that carries several', () => {
+    // Nothing shipped hits this - Babylon's glTF loader splits a
+    // multi-primitive mesh into one mesh per primitive, each with its own
+    // single material, which is why the shrine's inlay matches by name at all.
+    // A MultiMaterial would fail silently and asset-shaped, so it is covered.
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    const stone = new StandardMaterial('Stone / warm slate', scene);
+    const inlay = new StandardMaterial('Shrine / jade inlay', scene);
+    const combined = new MultiMaterial('forest_shrine_arch', scene);
+    combined.subMaterials = [stone, inlay];
+
+    expect(isLuminousMaterial(combined.name)).toBe(false);
+    expect(isLuminousSurface(combined)).toBe(true);
+    expect(isLuminousSurface(new MultiMaterial('all stone', scene))).toBe(false);
+    expect(isLuminousSurface(null)).toBe(false);
+    scene.dispose();
+    engine.dispose();
   });
 
   it('agrees with the colour selector, because it is the same rule', () => {

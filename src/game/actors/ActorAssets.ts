@@ -159,6 +159,17 @@ export class ActorVisual {
     this.applyVeil();
   }
 
+  /**
+   * How much of this actor is on screen, 0 to 1.
+   *
+   * Read by anything drawn *over* the actor rather than by it - a health bar
+   * hanging at full opacity above a foe that has not arrived yet is the veil
+   * defeating itself, and at the reframed aim the spawn line is in shot.
+   */
+  get solidity(): number {
+    return this.veil;
+  }
+
   /** The other end of the same idea: a body settling out of the picture. */
   dissolve(seconds: number): void {
     this.veilRate = -1 / Math.max(0.01, seconds);

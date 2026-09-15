@@ -83,14 +83,14 @@ const FINISH = {
 } as const;
 
 /**
- * How close a frame may come to the cap and still be drawn.
+ * How early a frame may arrive against the deadline and still be drawn.
  *
- * Without it a thirty-frame cap on a sixty-hertz display lands on twenty: the
- * frame that arrives at 16.6ms is refused for being 16.7ms early, and the next
- * one is 33.3ms later again. A few milliseconds of slack is what makes the cap
- * land on the vsync it was aiming at.
+ * Vsync jitter, and nothing more - a frame landing a hair before the deadline
+ * it was aiming at should be taken rather than deferred a whole refresh. The
+ * *aliasing* is handled by the deadline itself, in `drawFrame`, and this used
+ * to be four milliseconds trying and failing to do both jobs at once.
  */
-const FRAME_SLACK_MS = 4;
+const FRAME_TOLERANCE_MS = 1;
 
 /**
  * How long an enemy takes to arrive, and how long a body takes to go.
@@ -146,6 +146,8 @@ export class EvercastScene {
   private readonly governor: FrameGovernor;
   private minFrameMs = 0;
   private lastFrameAt = 0;
+  /** When the next capped frame is due. See `drawFrame`. */
+  private nextFrameAt = 0;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -323,11 +325,23 @@ export class EvercastScene {
      * almost nothing to remove. With `FILL_SCALE` and the rim corrected, the
      * same change is what finally gives the ground shape.
      *
+     * The azimuth puts the source up-field rather than behind the lens, and
+     * that half is not taste. Every term keyed to looking toward the sun -
+     * the haze glow, the leaf translucency, the sky's own halo - is zero when
+     * the sun is behind the camera, because there is no direction you can look
+     * that finds it. With the source in front, foliage lights through and the
+     * air down the road warms, which is what those terms were written for.
+     *
+     * The disc itself still never appears: the shot looks down fifteen degrees
+     * with a vertical field of about thirty-nine, so nothing above four and a
+     * half degrees of elevation is in frame, and a sun that low would lay
+     * fifty-metre shadows. The sky keeps its disc for a biome that wants one.
+     *
      * The position follows the direction rather than being authored beside it:
      * the shadow frustum is built around the light, so the two have to agree
      * about where the fight is or the map is pointed at empty grass.
      */
-    const sun = new DirectionalLight('sun', new Vector3(0.6, -0.55, 0.4), this.scene);
+    const sun = new DirectionalLight('sun', new Vector3(0.66, -0.5, -0.3), this.scene);
     sun.direction.normalize();
     sun.position = sun.direction.scale(-26);
     sun.intensity = 1.5;
@@ -508,6 +522,8 @@ export class EvercastScene {
           hpPercent: enemy.hpPercent,
           hp: enemy.hp.display,
           maxHp: enemy.maxHp.display,
+          // A bar arrives with the foe it belongs to, not ahead of it.
+          opacity: this.enemyMeshes.get(enemy.instanceId)?.solidity ?? 1,
         })),
       (instanceId: number) => {
         const actor = this.enemyMeshes.get(instanceId);
@@ -685,6 +701,8 @@ export class EvercastScene {
   setFrameRate(preference: FrameRatePreference): void {
     const cap = frameRateCapFor(preference, this.profile);
     this.minFrameMs = cap > 0 ? 1000 / cap : 0;
+    // The old cadence says nothing about the new one; the next frame is due now.
+    this.nextFrameAt = 0;
     // The governor judges the device against what it is now being asked for.
     // Uncapped, sixty is the bar - past that nobody is in trouble.
     this.governor.retarget({
@@ -706,7 +724,23 @@ export class EvercastScene {
    */
   private readonly drawFrame = (): void => {
     const now = performance.now();
-    if (this.minFrameMs > 0 && now - this.lastFrameAt < this.minFrameMs - FRAME_SLACK_MS) return;
+    if (this.minFrameMs > 0) {
+      if (now < this.nextFrameAt - FRAME_TOLERANCE_MS) return;
+      /*
+       * The deadline advances by a whole frame from where it was, not from the
+       * frame that was just drawn - which is what keeps a cap honest on a
+       * display whose refresh is not a multiple of it.
+       *
+       * Measured against the old rule, which subtracted a fixed slack from the
+       * gap since the last frame: a 60 cap on a 90Hz phone took every second
+       * 11.1ms callback and produced 45fps, and the governor read that as a
+       * device in trouble and traded resolution away for it. On 144Hz the same
+       * rule produced 72. Advancing a deadline alternates one and two callbacks
+       * and averages the number that was asked for. `Math.max` is the catch-up
+       * clamp: after a stall the deadline is now, not a backlog of frames.
+       */
+      this.nextFrameAt = Math.max(now, this.nextFrameAt + this.minFrameMs);
+    }
     const elapsed = now - this.lastFrameAt;
     this.lastFrameAt = now;
 

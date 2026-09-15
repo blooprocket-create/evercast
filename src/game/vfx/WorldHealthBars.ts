@@ -7,6 +7,7 @@ interface Bar {
   readout: HTMLSpanElement;
   anchor: Vector3;
   faded?: boolean;
+  opacity: number;
 }
 
 /** Anything that can wear a bar: an enemy instance, or a party slot. */
@@ -17,6 +18,12 @@ export interface HealthBarTarget {
   maxHp: string;
   /** A downed companion keeps its bar, dimmed, so you can see who is out. */
   faded?: boolean;
+  /**
+   * How solid the thing wearing it is, 0 to 1. Defaults to 1.
+   *
+   * An enemy walking out of the haze is not there yet, and neither is its bar.
+   */
+  opacity?: number;
 }
 
 /** Foes read red, the party reads green - the same split the HUD meters use. */
@@ -79,7 +86,7 @@ export class WorldHealthBars {
     track.append(fill);
     element.append(readout, track);
     this.root?.append(element);
-    return { element, fill, readout, anchor: Vector3.Zero() };
+    return { element, fill, readout, anchor: Vector3.Zero(), opacity: 1 };
   }
 
   /** `heightOf` gives the world-space head height for a target id. */
@@ -101,6 +108,7 @@ export class WorldHealthBars {
       bar.fill.style.width = `${Math.max(0, Math.min(100, target.hpPercent))}%`;
       bar.readout.textContent = `${target.hp} / ${target.maxHp}`;
       bar.faded = target.faded === true;
+      bar.opacity = target.opacity ?? 1;
     }
 
     for (const [id, bar] of this.bars) {
@@ -129,7 +137,9 @@ export class WorldHealthBars {
         viewport,
       );
       const behindCamera = projected.z < 0 || projected.z > 1;
-      bar.element.style.opacity = behindCamera ? '0' : bar.faded ? '0.4' : '1';
+      bar.element.style.opacity = behindCamera
+        ? '0'
+        : ((bar.faded ? 0.4 : 1) * bar.opacity).toFixed(3);
       if (behindCamera) continue;
       bar.element.style.transform = `translate(${
         rect.left + (projected.x / width) * rect.width - 48

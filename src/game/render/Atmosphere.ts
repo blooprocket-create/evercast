@@ -224,8 +224,14 @@ const AIR_CODE = `
   float atmoUp = clamp(atmoView.y * 2.2 + 0.42, 0.0, 1.0);
   vec3 atmoColor = mix(vAtmoNear, vAtmoFar, atmoUp);
 
-  // Down-sun, the air itself lights up.
-  float atmoScatter = max(dot(atmoView, vAtmoSun), 0.0);
+  // Looking toward the sun, the air itself lights up.
+  //
+  // vAtmoSun is the direction the light *travels*, and atmoView points from the
+  // eye to the fragment - so light arriving at the eye travels along -atmoView,
+  // and forward scatter is where that agrees with the sun. The sign was the
+  // other way round here and nowhere else, which peaked the glow looking away
+  // from the sun and left it disagreeing with the sky, which had it right.
+  float atmoScatter = max(-dot(atmoView, vAtmoSun), 0.0);
   float atmoForward = atmoScatter * atmoScatter;
   atmoColor += vAtmoGlow * atmoForward * atmoForward;
 

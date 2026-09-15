@@ -1,5 +1,12 @@
-import { Color3, GlowLayer, PBRMaterial, Scene, StandardMaterial } from '@babylonjs/core';
-import type { AbstractMesh } from '@babylonjs/core';
+import {
+  Color3,
+  GlowLayer,
+  MultiMaterial,
+  PBRMaterial,
+  Scene,
+  StandardMaterial,
+} from '@babylonjs/core';
+import type { AbstractMesh, Material } from '@babylonjs/core';
 
 /**
  * The glow pass, over the things that actually glow.
@@ -24,8 +31,28 @@ import type { AbstractMesh } from '@babylonjs/core';
  */
 export const LUMINOUS = /VFX \/|Arcane \/|Lantern \/ candle|Shrine \/ jade inlay/;
 
-export function isLuminousMaterial(name: string | undefined): boolean {
-  return name !== undefined && LUMINOUS.test(name);
+export function isLuminousMaterial(name: string | undefined | null): boolean {
+  return name !== undefined && name !== null && LUMINOUS.test(name);
+}
+
+/**
+ * Whether a mesh's material - or, if it carries several, any one of them - can
+ * contribute to the pass.
+ *
+ * The sub-material branch is belt and braces rather than a fix for anything
+ * shipped: Babylon's glTF loader splits a multi-primitive mesh into one mesh
+ * per primitive, each with a single material, so the lantern's candle and the
+ * shrine's inlay arrive as meshes of their own and match by name. A
+ * `MultiMaterial` would not, and the failure would be silent and asset-shaped -
+ * a prop that simply stopped glowing - so the three lines are worth having.
+ */
+export function isLuminousSurface(material: Material | null): boolean {
+  if (!material) return false;
+  if (isLuminousMaterial(material.name)) return true;
+  return (
+    material instanceof MultiMaterial &&
+    material.subMaterials.some((sub) => isLuminousMaterial(sub?.name))
+  );
 }
 
 export class LuminousGlow extends GlowLayer {
@@ -50,6 +77,6 @@ export class LuminousGlow extends GlowLayer {
    * word, which is what keeps the layer's own include/exclude lists working.
    */
   override hasMesh(mesh: AbstractMesh): boolean {
-    return isLuminousMaterial(mesh.material?.name) && super.hasMesh(mesh);
+    return isLuminousSurface(mesh.material) && super.hasMesh(mesh);
   }
 }
