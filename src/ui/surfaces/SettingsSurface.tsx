@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { audio, eraseSave, exportSaveFile, importSaveFile } from '../../app/runtime';
+import type { FrameRatePreference } from '../../game/render/DeviceProfile';
 import type { VfxQuality } from '../../game/vfx/VfxPool';
 import { Detail } from '../archetypes/Detail';
 import { Ledger } from '../archetypes/Ledger';
@@ -23,6 +24,13 @@ const QUALITIES: readonly { id: VfxQuality; label: string }[] = [
   { id: 'low', label: 'Low' },
   { id: 'medium', label: 'Medium' },
   { id: 'high', label: 'High' },
+];
+
+const FRAME_RATES: readonly { id: FrameRatePreference; label: string }[] = [
+  { id: 'auto', label: 'Auto' },
+  { id: 'battery', label: '30' },
+  { id: 'smooth', label: '60' },
+  { id: 'unlimited', label: 'Max' },
 ];
 
 export function SettingsSurface() {
@@ -164,6 +172,18 @@ function DisplaySection({ settings }: { settings: ReturnType<typeof useUiSetting
             value={settings.depthOfField}
             format={(value) => (value <= 0.02 ? 'Off' : `${Math.round(value * 100)}%`)}
             onChange={(depthOfField) => uiSettings.setDisplay({ depthOfField })}
+          />
+        </Field>
+
+        <Field
+          label="Frame rate"
+          hint="How often the world is drawn. Auto reads the device: thirty on a phone, uncapped on a desktop. Fewer frames run cooler and last longer on a battery, and none of it changes what the spell is doing."
+        >
+          <Choice
+            label="Frame rate"
+            value={settings.frameRate}
+            options={FRAME_RATES}
+            onChange={(frameRate) => uiSettings.setDisplay({ frameRate })}
           />
         </Field>
 

@@ -1,4 +1,6 @@
 import { Color3, Mesh, PBRMaterial, Scene, VertexData } from '@babylonjs/core';
+import { type AtmosphereState, breatheOn } from '../render/Atmosphere';
+import { CHUNK_FAR_Z } from './WorldHorizon';
 
 export const TERRAIN_CHUNK_SIZE = 12;
 export type TerrainPalette = { ground: Color3; road: Color3 };
@@ -37,8 +39,16 @@ export function createTerrainChunk(
   roadMaterial: PBRMaterial,
 ): Mesh[] {
   const center = index * TERRAIN_CHUNK_SIZE;
+  /*
+   * The far end stops at `CHUNK_FAR_Z` rather than at 56.
+   *
+   * Eleven of the old rows were out past the treeline, which is a third of a
+   * chunk's geometry spent on ground that `WorldHorizon` now covers in one mesh
+   * for every chunk at once - and covers *better*, because a chunk is twelve
+   * units wide and the frame at that depth is over fifty.
+   */
   const zRows = [-24, -20, -16, -12, -10, -8, -6, -5, -4, -3, -2, -1.35, 0, 1.35,
-    2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 21, 24, 28, 33, 39, 47, 56];
+    2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, CHUNK_FAR_Z];
   const build = (road: boolean): Mesh => {
     const positions: number[] = [], indices: number[] = [], colors: number[] = [], normals: number[] = [];
     const steps = 24;
@@ -79,6 +89,21 @@ export function createTerrainChunk(
   return [build(false), build(true)];
 }
 
-export function createTerrainMaterials(scene: Scene): [PBRMaterial, PBRMaterial] {
-  return [surfaceMaterial('matte meadow floor', scene), surfaceMaterial('worn earth trail', scene)];
+export function createTerrainMaterials(scene: Scene, atmosphere?: AtmosphereState): [PBRMaterial, PBRMaterial] {
+  const materials: [PBRMaterial, PBRMaterial] = [
+    surfaceMaterial('matte meadow floor', scene),
+    surfaceMaterial('worn earth trail', scene),
+  ];
+  /*
+   * The ground is most of the picture: it runs from under the mage's feet to
+   * the horizon, and it was one flat colour for the whole of it. So it carries
+   * the haze *and* the surface variation - patches, clumps and a dry verge
+   * beside the trail. The trail takes less of it, because a worn track is
+   * supposed to look worn evenly.
+   */
+  if (atmosphere) {
+    breatheOn(materials[0], atmosphere, { ground: 1 });
+    breatheOn(materials[1], atmosphere, { ground: 0.55 });
+  }
+  return materials;
 }

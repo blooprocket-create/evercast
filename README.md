@@ -96,6 +96,87 @@ soft shadows, layered distant hills, wind, and lit biome landmarks. In developme
 **N** previews the next biome and **Shift N** its transition; these shortcuts do not
 change simulation progress or appear in production.
 
+## Light and air
+
+The diorama is shaded by three custom shaders rather than by Babylon's defaults.
+
+- **`src/game/render/Atmosphere.ts`** is a material plugin that rides on the PBR
+  shader - so the lights, the shadows and the image processing are untouched -
+  and replaces flat fog with aerial perspective: haze that pools low and thins
+  with height, coloured from the ground haze along the floor to the sky at the
+  top of the frame, and lit *along* the sun rather than evenly. It also carries
+  the wind, which used to be the CPU rotating every prop on the road once a
+  frame and is now a vertex offset scaled by height above each prop's own base,
+  and a translucency term that lights a leaf with the sun behind it.
+- **`src/game/world/WorldBackdrop.ts`** casts the sky from the view ray instead
+  of painting it in screen space, which is what makes the gradient, the sun, the
+  cloud deck and the stars facts about the world rather than about the window.
+  The three parallax ridgelines are mixed out of the sky's own horizon, so they
+  nest inside it at every biome.
+- **`src/game/actors/ActorAssets.ts`** fades an enemy up as it arrives and down
+  as its body settles, which is what lets the shot be aimed further down the
+  road than the spawn line.
+- **`src/game/world/WorldHorizon.ts`** is the land past the last chunk, plus the
+  mist lying on it. A camera frustum widens with depth, so a ground made of
+  twelve-unit chunks runs out inside the frame however many of them are kept
+  alive - and the corners of the picture showed the world ending on a diagonal.
+  One mesh of four hundred vertices reaches further than any frame can, rolls
+  where the chunks are flat, and is continuous with them because both read the
+  same height function.
+
+Two things about the light are worth knowing before changing any of it. The
+**key-to-fill ratio** used to be about one to one - between the sky light, the
+rim and the sun, the sun was roughly a third of the light in the scene, so
+nothing had a lit side and a dark side and the shadow map had almost nothing to
+remove. `FILL_SCALE` and `KEY_SCALE` in `WorldGenerator` pull those apart
+without touching a single authored biome value. And the **foreground** is a
+deliberate plane: a few clumps between the camera and the road, cropped by the
+bottom of the frame and well inside the near blur, because a shot with nothing
+in front of its subject reads as an elevation drawing.
+
+The shot itself is composed by `src/game/render/Framing.ts`. The party stands
+about a third in from the left at every aspect the game is played at, with the
+road ahead - and whatever is walking down it - filling the rest.
+
+## Performance, and phones in particular
+
+The renderer decides a budget from the device before it draws anything, in
+`src/game/render/DeviceProfile.ts`. The problem on a handheld is heat rather
+than frame rate: a renderer that merely *reaches* sixty frames on a phone
+reaches them for a few minutes and is then throttled for the rest of a session
+that an idle game expects to be long. So the tiers cut what costs every frame
+forever.
+
+| | desktop | tablet | handheld |
+| --- | --- | --- | --- |
+| Frames per second | uncapped | 60 | 30 |
+| Shadow map | 2048 | 1024 | 512 |
+| Finishing passes | 6 | 4 | 1 |
+| Chunks built | 6 | 5 | 4 |
+
+`src/game/render/FrameGovernor.ts` then moves the resolution between bounds from
+measured frame times, because thermal throttling is exactly the failure a static
+profile cannot predict - it arrives minutes in, on hardware that was fast at the
+start. Players who disagree with any of it set **Frame rate** in Settings.
+
+Two structural fixes underneath the tiers apply everywhere. The glow layer used
+to render the whole scene a second time to discover that grass does not shine;
+it now sees only the materials that can glow. And the world kept thirteen
+terrain chunks alive spanning 144 units of road for a shot that shows about
+twenty-two, so chunks outside the frame are built no further and hidden rather
+than culled per mesh.
+
+Measured on a 390x844 viewport, same software renderer, same stage:
+
+| | before | after |
+| --- | --- | --- |
+| Meshes in the scene | 2,238 | 546 |
+| Vertices | 1,169,798 | 217,913 |
+| Meshes in the glow pass | 2,238 | 52 |
+| Shadow casters | 399 | 218 |
+| Draw calls per frame | 685 | 521 |
+| Frames drawn in 14s | 20 | 93 |
+
 ## Companions
 
 Up to five companions fight alongside the mage, drawn from a 30-strong roster

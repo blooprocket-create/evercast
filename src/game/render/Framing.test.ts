@@ -27,6 +27,42 @@ const ASPECTS = {
   'phone landscape 568x320': 568 / 320,
 };
 
+/** Where the mage stands across the frame, 0 at the left edge and 1 at the right. */
+function mageAcrossFrame(aspect: number): number {
+  const framing = framingFor(aspect);
+  const { width } = visibleSpan(framing, aspect);
+  return (0 - (framing.targetX - width / 2)) / width;
+}
+
+describe('where the party stands in the frame', () => {
+  it('is left of centre at every shape the game is played in', () => {
+    for (const [name, aspect] of Object.entries(ASPECTS)) {
+      const across = mageAcrossFrame(aspect);
+      // Left of centre, and not so far left that the party falls off the edge.
+      expect(across, name).toBeLessThan(0.42);
+      expect(across, name).toBeGreaterThan(0.2);
+    }
+  });
+
+  it('puts a landscape window within a few percent of where a phone puts it', () => {
+    // The two used to disagree by thirteen points of frame width, which is the
+    // whole of what the aim was changed for.
+    const desktop = mageAcrossFrame(16 / 9);
+    const phone = mageAcrossFrame(390 / 844);
+    expect(Math.abs(desktop - phone)).toBeLessThan(0.05);
+  });
+
+  it('leaves more road ahead of the party than behind it', () => {
+    // The road ahead is where the enemies arrive from and where the haze does
+    // its work; the space behind the back rank is only ever spare frame.
+    const framing = framingFor(16 / 9);
+    const { width } = visibleSpan(framing, 16 / 9);
+    const behind = FIGHT_MIN_X - (framing.targetX - width / 2);
+    const ahead = framing.targetX + width / 2 - FIGHT_MAX_X;
+    expect(ahead).toBeGreaterThan(behind);
+  });
+});
+
 describe('the fight fits the frame', () => {
   it.each(Object.entries(ASPECTS))('at %s', (_name, aspect) => {
     const framing = framingFor(aspect);
@@ -93,10 +129,15 @@ describe('a tall screen', () => {
     expect(phone).toBeGreaterThan(1);
   });
 
-  it('aims at the fight rather than at the mage', () => {
+  it('gives up the composed aim and centres the fight, having no width to spare', () => {
+    // A wide window can afford to stand the party off to one side; a phone
+    // cannot, because the fight is very nearly as wide as the frame. So the aim
+    // comes back to the middle of the fight - which still leaves the mage about
+    // a third in from the left, because the fight reaches further right of him
+    // than left.
     const phone = framingFor(390 / 844);
-    expect(phone.targetX).toBeGreaterThan(BASE_TARGET_X);
-    expect(phone.targetX).toBeLessThan(FIGHT_MAX_X);
+    expect(phone.targetX).toBeCloseTo((FIGHT_MIN_X + FIGHT_MAX_X) / 2, 5);
+    expect(phone.targetX).toBeLessThan(BASE_TARGET_X);
   });
 });
 

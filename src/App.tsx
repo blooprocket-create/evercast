@@ -19,7 +19,7 @@ export default function App() {
   // it rather than lifting onto a frozen interface. See `BootConditions`.
   const [awaySettled, setAwaySettled] = useState(false);
   const [titleLit, setTitleLit] = useState(false);
-  const { depthOfField, vfxQuality, damageNumbers } = useUiSettings().display;
+  const { depthOfField, frameRate, vfxQuality, damageNumbers } = useUiSettings().display;
   const phase = bootPhase({ assetsSettled, begun, awaySettled });
 
   // Effect budgets are fixed when the pool is built, so quality is the one
@@ -130,6 +130,12 @@ export default function App() {
   useEffect(() => {
     scene?.setDamageNumbersVisible(damageNumbers);
   }, [scene, damageNumbers]);
+
+  // Unlike quality, this needs no rebuild: the cap is read by the render loop
+  // every frame, so it applies to the next one.
+  useEffect(() => {
+    scene?.setFrameRate(frameRate);
+  }, [scene, frameRate]);
 
   const beginPlaying = () => {
     // Before `setBegun`, so the interval ends when the player pressed the button

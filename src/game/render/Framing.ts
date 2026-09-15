@@ -27,8 +27,25 @@ export const CAMERA_RADIUS = 17.5;
  */
 export const BASE_FOV = 0.68;
 
-/** Where the wide shot is aimed, and from how far above the road. */
-export const BASE_TARGET_X = 0.9;
+/**
+ * Where the wide shot is aimed, and from how far above the road.
+ *
+ * A landscape window shows twenty-two units of road for a fight that is under
+ * nine wide, and the aim decides where in all that space the party stands.
+ * Aimed at 0.9 it stood in the middle - the mage within a few percent of dead
+ * centre - which is the one place a side-on shot should never put its subject,
+ * and it did not even agree with itself: a phone has no spare width, so it
+ * centres the fight rather than the aim, and there the mage has always sat
+ * about a third in from the left.
+ *
+ * So the wide shot is aimed further down the road, which walks the party left
+ * to the third that portrait already used, and spends the width it frees on
+ * the road ahead - where the enemies come from, and where `Atmosphere` now has
+ * something to say. The arrival is covered by `ActorVisual`'s veil: at this aim
+ * the spawn line is just inside the frame on a wide screen, so an enemy fades
+ * up out of the haze instead of appearing at the edge of it.
+ */
+export const BASE_TARGET_X = 3.2;
 export const BASE_BETA = 1.31;
 
 /**
@@ -40,9 +57,10 @@ export const BASE_BETA = 1.31;
  * nobody stands with their shoulder off the frame. Everything between is the
  * fight.
  *
- * Enemies spawn at x = 13 and walk in, which is far outside this on every
- * aspect the game has ever used - that is the arrival, and it is meant to
- * happen off-stage.
+ * Enemies spawn at x = 13 - and a boss at 9.4 - and walk in from there. At the
+ * aim above a wide screen reaches the first and is well past the second, which
+ * is why the arrival is a veil rather than a hard edge: `ActorVisual` fades a
+ * foe up as it comes, so nothing pops into open grass.
  */
 export const FIGHT_MIN_X = -2.9;
 export const FIGHT_MAX_X = 5.9;

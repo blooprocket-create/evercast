@@ -224,6 +224,72 @@ disposing the world releases the templates and any late downloads. Asset loading
 changes deterministic combat or progression. The authored pack lives in
 `public/models/environment`, with editable Blender source in `art/environment`.
 
+## The render budget
+
+`game/render/DeviceProfile` is the only place that decides what the renderer is
+allowed to spend, and it is a pure function of a handful of facts about the
+device plus one impure reader (`readDeviceFacts`) that touches the browser. That
+split exists so the policy can be tested at every shape of device rather than on
+whatever the developer is holding, and so a webview that throws from
+`matchMedia` degrades to the conservative answer instead of failing to render.
+
+The budget is about **heat**, not frame rate. A phone has no fan: a renderer
+that merely reaches sixty frames on one reaches them until the chip throttles
+itself, which on an idle game is always. So the tiers cut per-frame cost - the
+frame cap, the shadow map, the finishing passes, how many chunks exist - and
+leave one-off costs alone.
+
+`game/render/FrameGovernor` is the half no profile can do: thermal throttling
+arrives minutes in, on hardware that was fast at the start. It watches achieved
+frames against the target and trades resolution, slowly and with hysteresis,
+because every change resizes the whole render-target chain. Pure, and tested
+against synthetic frame sequences.
+
+Three rules hold for anything added here:
+
+- **Nothing in the budget may change what is true.** The frame cap declines to
+  *draw* a frame; the simulation is event-driven and runs on its own clock.
+- **A tier only ever narrows.** `DeviceProfile.test.ts` asserts that no smaller
+  device spends more than a larger one on any line, so a new field cannot be
+  added to one tier and forgotten in another.
+- **The player can overrule the part they can feel.** Frame rate is a Settings
+  choice; `auto` defers to the tier.
+
+## Light and air
+
+`game/render/Atmosphere` is a Babylon material plugin, which is the whole of why
+it is safe: it injects into the PBR shader at two hook points rather than
+replacing it, so lighting, shadows, and image processing are exactly what they
+were. It owns three things that were previously either flat or on the CPU -
+aerial perspective, foliage wind, and leaf translucency - and one shared
+`AtmosphereState` that `WorldGenerator` writes once a frame from the biome.
+
+Scene fog is off, and must stay off: the plugin does that job, with a height and
+a direction to it. Anything that makes a PBR material should hand it to
+`breatheOn`; the scene's new-material observable catches whatever does not, and
+the call is idempotent so the overlap is free.
+
+`game/world/WorldBackdrop` casts the sky from the view ray rather than painting
+screen space, which is what keeps the horizon, the sun and the stars correct at
+every aspect `Framing` produces. Its ridgelines are mixed out of the sky's own
+horizon colour so the two cannot drift apart.
+
+`game/world/WorldHorizon` owns the ground past `CHUNK_FAR_Z`. The rule it exists
+for: **a chunked ground cannot fill a frustum.** The frustum widens with depth
+and the chunks do not, so the far corners of any wide shot will show the world
+ending unless something unchunked is underneath them. It and the chunk terrain
+read the same `terrainHeight`, and the horizon sits a hair below - so wherever
+chunks exist they win, and where they have run out the seam is invisible. A
+chunk's far rows were deleted to pay for it, which made the whole change
+slightly *cheaper* than what it replaced.
+
+The lighting has one number worth defending: the **key-to-fill ratio**. The sky
+light, the rim and the sun used to come out at roughly one to one, which is the
+ratio at which a landscape has no shape - and, less obviously, the ratio at
+which a shadow map is pointless, because a shadow only removes the key's share.
+`FILL_SCALE` and `KEY_SCALE` scale the authored biome values rather than
+replacing them, so the relative mood of the four zones is exactly as written.
+
 ## Snapshots and coordinator size
 
 `EvercastSimulation` is the orchestration boundary, not a dumping ground for every derived read model. Snapshot construction lives in `src/engine/snapshot/SimulationSnapshotBuilder.ts`, and event-to-text formatting lives in `src/engine/events/describeGameEvent.ts`.

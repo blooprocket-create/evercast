@@ -3,6 +3,7 @@ import '@babylonjs/core/Rendering/outlineRenderer';
 import '@babylonjs/loaders/glTF/2.0/glTFLoader';
 import '@babylonjs/loaders/glTF/2.0/Extensions/KHR_materials_specular';
 import type { GearSnapshot } from '../../engine/types';
+import type { AtmosphereState } from '../render/Atmosphere';
 import { stylizeActorMaterial } from '../render/StylizedMaterials';
 import manifest from '../../../public/models/characters/manifest.json';
 
@@ -17,7 +18,8 @@ export class ActorAssets {
   private disposed = false;
 
   constructor(private readonly scene: Scene, private readonly shadows?: ShadowGenerator,
-    private readonly loader: ActorLoader = (url, scene) => LoadAssetContainerAsync(url, scene)) {}
+    private readonly loader: ActorLoader = (url, scene) => LoadAssetContainerAsync(url, scene),
+    private readonly atmosphere?: AtmosphereState) {}
 
   /**
    * Starts every animated model downloading without building a visual for it.
@@ -65,7 +67,7 @@ export class ActorAssets {
         if (this.disposed || this.scene.isDisposed) { container.dispose(); return undefined; }
         for (const mesh of container.meshes) { mesh.isPickable = false; mesh.receiveShadows = true; }
         for (const material of container.materials) {
-          if (material instanceof PBRMaterial) stylizeActorMaterial(material);
+          if (material instanceof PBRMaterial) stylizeActorMaterial(material, this.atmosphere);
         }
         this.containers.add(container);
         return container;
@@ -104,12 +106,18 @@ export class ActorVisual {
   private flashTime = 0;
   private flashMeshes: AbstractMesh[] = [];
   private sockets = new Map<string, TransformNode>();
+  /** 0 is not there at all, 1 is solid. See `materialise`. */
+  private veil = 1;
+  private veilRate = 0;
 
   constructor(name: string, scene: Scene) { this.root = new TransformNode(name, scene); }
 
   attach(groups: AnimationGroup[], release: () => void): void {
     this.release = release;
     this.flashMeshes = this.root.getChildMeshes().filter(m => m.getTotalVertices()>0);
+    // The meshes arrive after the veil was asked for: a foe that spawned while
+    // its GLB was still downloading would otherwise snap in at full opacity.
+    this.applyVeil();
     this.sockets = new Map(this.root.getDescendants().filter((n): n is TransformNode => n instanceof TransformNode && n.name.startsWith('socket_')).map(n=>[n.name,n]));
     this.groups = new Map(groups.map((g) => [g.name, g]));
     for (const group of groups) group.stop();
@@ -135,7 +143,44 @@ export class ActorVisual {
     this.dying = false; this.locomotion = walking ? 'walk' : 'idle'; this.start(this.locomotion);
   }
 
+  /**
+   * Fades up out of nothing over `seconds` instead of appearing.
+   *
+   * The composition asks for this rather than taste: the shot is aimed further
+   * down the road than it used to be, so on a wide screen the spawn line is
+   * just inside the frame and a boss's is well inside it. An enemy that simply
+   * appeared there would be a pop in open grass. Walking out of the haze is
+   * both the fix and the better arrival - and it costs one number per actor,
+   * because `visibility` is a per-mesh value on a shared material.
+   */
+  materialise(seconds: number): void {
+    this.veil = 0;
+    this.veilRate = 1 / Math.max(0.01, seconds);
+    this.applyVeil();
+  }
+
+  /**
+   * How much of this actor is on screen, 0 to 1.
+   *
+   * Read by anything drawn *over* the actor rather than by it - a health bar
+   * hanging at full opacity above a foe that has not arrived yet is the veil
+   * defeating itself, and at the reframed aim the spawn line is in shot.
+   */
+  get solidity(): number {
+    return this.veil;
+  }
+
+  /** The other end of the same idea: a body settling out of the picture. */
+  dissolve(seconds: number): void {
+    this.veilRate = -1 / Math.max(0.01, seconds);
+  }
+
   update(delta: number): void {
+    if (this.veilRate !== 0) {
+      this.veil = Math.min(1, Math.max(0, this.veil + this.veilRate * delta));
+      if (this.veil >= 1 || this.veil <= 0) this.veilRate = 0;
+      this.applyVeil();
+    }
     this.flashTime = Math.max(0,this.flashTime-delta);
     for (const mesh of this.flashMeshes) {
       mesh.renderOverlay=this.flashTime>0;
@@ -182,6 +227,10 @@ export class ActorVisual {
   }
 
   dispose(): void { this.sockets.clear();this.flashMeshes=[]; this.release?.(); this.root.dispose(); this.groups.clear(); this.rest = []; }
+
+  private applyVeil(): void {
+    for (const mesh of this.flashMeshes) mesh.visibility = this.veil;
+  }
 
   private start(state: ActorState, duration?: number): void {
     for (const group of this.groups.values()) group.stop();
