@@ -37,6 +37,11 @@ There are no baked spell trajectories or world coordinates in the GLBs.
   Compiled mechanics only choose decoration; they never choose hit targets. ProcVfxPresenter consumes meteor, spread, status and secondary-damage events.
 - `CombatFxPresenter` owns impact glyphs/shards, critical emphasis, temporary chill,
   authored hit/death animation triggers, bounded camera impulses and optional light.
+  It also staggers the struck body away from the blow, given where the blow came from:
+  a bolt from the staff, the caster for an area effect that has no single origin, and
+  the attacker for a swing at the mage. Strength reads the two facts that stay true at
+  every stage - critical, and boss - and never the damage, which in an incremental game
+  saturates within an hour and would make every later hit look identical.
 - `DamageNumbers` reuses at most 24 DOM labels, formatted from emitted damage.
   Labels appear at visual impact and retain critical emphasis over tiny secondary hits.
 - `VfxPool` loads templates once, bakes the glTF coordinate conversion once, shares
@@ -48,6 +53,14 @@ the moving socket until its midpoint release. Direct flight lasts 140 ms; subseq
 pierce segments take 45 ms and chain hops 35 ms. Cosmetic jobs are capped at 650 ms.
 These timings never postpone authoritative damage or feed collision results back
 into the engine. Large frame steps can compress several visual moments into one frame.
+
+A retiring body comes apart rather than fading: the `Atmosphere` material plugin eats the
+surface along a front that is half the fragment's height and half noise, and lights the
+edge it leaves with an unclamped ember that crosses the bloom threshold. How far through
+a body is rides the draw rather than the material - every enemy of a type shares one
+material, so one set there would take all of them at once - which is why it is bound from
+`hardBindForSubMesh`, the one hook Babylon calls per mesh whether the material rebinds or
+not. It costs one extra `vec4` and a branch that is uniform across each draw.
 
 Death actors remain briefly available for the last impact and their authored death
 clip, with a 24-actor retirement ceiling. A bounded, one-second anchor cache handles

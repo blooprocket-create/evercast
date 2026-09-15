@@ -80,6 +80,143 @@ describe('the Blender cast', () => {
     expect(a.root.getChildMeshes().map(m=>m.material)).toEqual(materials);
   });
 
+  it('grows each clip out of the pose the one before it was holding', async () => {
+    const a = await create('briarling'), b = await create('briarling');
+    const joint = (actor: ActorVisual) => actor.root.getDescendants().find((n) => n.name.startsWith('joint_body')) as TransformNode;
+    // `b` never animates, so it holds the bind pose - which is exactly where a
+    // transition used to dump the whole body before going to frame zero.
+    const bind = joint(b).position.clone();
+    a.setLocomotion(true);
+    a.update(0.3);
+    const handoff = joint(a).position.clone();
+    const snapped = Vector3.Distance(bind, handoff);
+    expect(snapped).toBeGreaterThan(0.02);
+    a.play('attack');
+    a.update(1 / 60);
+    expect(Vector3.Distance(joint(a).position, handoff)).toBeLessThan(snapped / 4);
+  });
+
+  it('settles onto the clip exactly, so a blend leaves nothing behind', async () => {
+    const a = await create('briarling'), b = await create('briarling');
+    const joint = (actor: ActorVisual) => actor.root.getDescendants().find((n) => n.name.startsWith('joint_body')) as TransformNode;
+    a.setLocomotion(true);
+    a.update(0.3);
+    a.play('attack');
+    // Both are swinging from a clock of zero; one arrived there out of a walk.
+    // Past the blend they have to agree to the bit, or an actor keeps a trace
+    // of every transition it ever made.
+    a.update(0.3);
+    b.play('attack');
+    b.update(0.3);
+    expect(joint(a).position.asArray()).toEqual(joint(b).position.asArray());
+    expect(joint(a).rotationQuaternion?.asArray()).toEqual(joint(b).rotationQuaternion?.asArray());
+  });
+
+  it('throws a struck body off the blow and puts it back on its feet', async () => {
+    const actor = await create('briarling');
+    const hinge = actor.root.getChildren().find((n) => n.name.endsWith('-hinge')) as TransformNode;
+    expect(hinge).toBeTruthy();
+    expect(hinge.position.asArray()).toEqual([0, 0, 0]);
+    actor.shove(new Vector3(1, 0, 0), 0.2, 0.26);
+    actor.update(0.05);
+    expect(hinge.position.x).toBeGreaterThan(0.05);
+    expect(hinge.rotation.z).toBeLessThan(0);
+    actor.update(0.5);
+    // Exactly home: a hinge left a millimetre out is a body a millimetre off
+    // its own feet for the rest of the run.
+    expect(hinge.position.asArray()).toEqual([0, 0, 0]);
+    expect(hinge.rotation.asArray()).toEqual([0, 0, 0]);
+  });
+
+  it('staggers in the body\'s own frame, whichever way it is facing', async () => {
+    const actor = await create('briarling');
+    const hinge = actor.root.getChildren().find((n) => n.name.endsWith('-hinge')) as TransformNode;
+    actor.root.rotation.y = Math.PI / 2;
+    // Struck from behind in world space, with the body turned a quarter turn:
+    // the recoil belongs along its local z, not along the world x it came in on.
+    actor.shove(new Vector3(1, 0, 0), 0.2);
+    actor.update(0.05);
+    expect(hinge.position.z).toBeGreaterThan(0.05);
+    expect(Math.abs(hinge.position.x)).toBeLessThan(0.01);
+  });
+
+  it('staggers a body mid-swing, which is the only reaction it can show there', async () => {
+    const actor = await create('briarling');
+    const hinge = actor.root.getChildren().find((n) => n.name.endsWith('-hinge')) as TransformNode;
+    actor.play('attack');
+    actor.update(0.05);
+    actor.play('hit');
+    // The flinch clip is refused so the swing survives - so if the stagger did
+    // not layer over it, most hits in a busy fight would show nothing at all.
+    expect(actor.root.metadata.animation).toBe('attack');
+    actor.shove(new Vector3(-1, 0, 0), 0.15);
+    actor.update(0.04);
+    expect(hinge.position.x).toBeLessThan(-0.02);
+  });
+
+  it('replaces a stagger rather than summing two, and leaves the dead alone', async () => {
+    const actor = await create('briarling');
+    const hinge = actor.root.getChildren().find((n) => n.name.endsWith('-hinge')) as TransformNode;
+    actor.shove(new Vector3(1, 0, 0), 0.2);
+    actor.update(0.05);
+    const single = hinge.position.x;
+    actor.shove(new Vector3(1, 0, 0), 0.2);
+    actor.update(0.05);
+    // Two blows in a frame must not launch anything across the road.
+    expect(hinge.position.x).toBeCloseTo(single, 5);
+    actor.update(0.5);
+    actor.play('death');
+    actor.shove(new Vector3(1, 0, 0), 0.2);
+    actor.update(0.05);
+    expect(hinge.position.asArray()).toEqual([0, 0, 0]);
+  });
+
+  it('takes a body apart rather than turning it transparent', async () => {
+    const actor = await create('briarling');
+    const meshes = actor.root.getChildMeshes().filter((m) => m.getTotalVertices() > 0);
+    expect(meshes.length).toBeGreaterThan(0);
+    expect(actor.solidity).toBe(1);
+    actor.dissolve(0.7);
+    actor.update(0.35);
+    // Halfway through, the shader is doing the work and the flat fade has
+    // barely started - but it is already under one, or Babylon would dispatch
+    // the mesh to the opaque pass and discard the alpha the shader computes.
+    for (const mesh of meshes) {
+      expect(mesh.visibility).toBeLessThan(1);
+      expect(mesh.visibility).toBeGreaterThan(0.8);
+    }
+    expect(actor.solidity).toBeCloseTo(0.5, 2);
+    actor.update(0.4);
+    for (const mesh of meshes) expect(mesh.visibility).toBe(0);
+    expect(actor.solidity).toBe(0);
+  });
+
+  it('keeps an arrival a veil, because walking out of haze is not dying', async () => {
+    const actor = await create('briarling');
+    const mesh = actor.root.getChildMeshes().find((m) => m.getTotalVertices() > 0)!;
+    actor.materialise(0.55);
+    expect(mesh.visibility).toBe(0);
+    actor.update(0.275);
+    // Flat, and exactly the veil: no burn is running, so nothing else may
+    // touch the number.
+    expect(mesh.visibility).toBeCloseTo(0.5, 5);
+    expect(actor.solidity).toBeCloseTo(0.5, 5);
+    actor.update(0.4);
+    expect(mesh.visibility).toBe(1);
+  });
+
+  it('puts a body that gets back up back together', async () => {
+    const actor = await create('briarling');
+    const mesh = actor.root.getChildMeshes().find((m) => m.getTotalVertices() > 0)!;
+    actor.play('death');
+    actor.dissolve(0.7);
+    actor.update(0.5);
+    expect(mesh.visibility).toBeLessThan(1);
+    actor.revive(false);
+    expect(mesh.visibility).toBe(1);
+    expect(actor.solidity).toBe(1);
+  });
+
   it('does not resurrect a disposed actor after its GLB arrives', async () => {
     library.dispose();
     const container = await loadLocal('/models/characters/moss_slime.glb', scene);

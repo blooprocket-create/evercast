@@ -2,8 +2,12 @@ import { Color3, PointLight, Scene, Vector3 } from '@babylonjs/core';
 import type { ActorVisual } from '../actors/ActorAssets';
 import type { Hit } from './CombatVfxPlan';
 import { VfxPool, type School } from './VfxPool';
+import { impulseStrength } from '../actors/PoseBlend';
 import { DamageNumbers } from './DamageNumbers';
 import type { GameEvent } from '../../engine/events/GameEvent';
+
+/** Scratch, so a busy frame of hits allocates nothing. */
+const SHOVE = new Vector3();
 
 /** Local transient feedback: never touches shared actor materials or authoritative state. */
 export class CombatFxPresenter {
@@ -32,9 +36,23 @@ export class CombatFxPresenter {
     this.numbers.setVisible(visible);
   }
 
-  hit(hit: Hit, position: Vector3, actor?: ActorVisual): void {
+  /**
+   * `from` is where the blow came from, so the body can be thrown away from it.
+   *
+   * Optional because not every hit has one to give - a damage-over-tick has no
+   * direction - and a hit that cannot say where it came from should still land,
+   * just without the shove.
+   */
+  hit(hit: Hit, position: Vector3, actor?: ActorVisual, from?: Vector3, boss = false): void {
     actor?.play('hit');
     actor?.flash(hit.critical);
+    if (actor && from) {
+      SHOVE.copyFrom(position).subtractInPlace(from);
+      SHOVE.y = 0;
+      if (SHOVE.lengthSquared() > 1e-6) {
+        actor.shove(SHOVE, impulseStrength({ critical: hit.critical, boss }));
+      }
+    }
     this.numbers.show(hit, position);
     const school = hit.source === 'chain' ? 'storm' : hit.source === 'splash' ? 'fire' : 'arcane';
     this.burst(position, school, hit.critical ? 1.45 : 0.7, hit.critical);
@@ -57,12 +75,31 @@ export class CombatFxPresenter {
     }
   }
 
-  effect(event: Extract<GameEvent, { type: 'effect_hit' }>, position: Vector3, actor?: ActorVisual): void {
+  effect(
+    event: Extract<GameEvent, { type: 'effect_hit' }>,
+    position: Vector3,
+    actor?: ActorVisual,
+    from?: Vector3,
+    boss = false,
+  ): void {
     this.numbers.show({ ...event, critical: !!event.empowered }, position);
     actor?.flash(!!event.empowered);
     if (event.effect === 'dot') this.burst(position, 'plague', 0.35);
     else {
       actor?.play('hit');
+      if (actor && from) {
+        SHOVE.copyFrom(position).subtractInPlace(from);
+        SHOVE.y = 0;
+        // A meteor arrives from overhead, so it has no useful lateral source -
+        // it gets a stagger away from the caster instead of a sideways shunt.
+        if (SHOVE.lengthSquared() > 1e-6) {
+          actor.shove(
+            SHOVE,
+            impulseStrength({ critical: !!event.empowered, boss }) *
+              (event.effect === 'meteor' ? 1.3 : 1),
+          );
+        }
+      }
       this.impactFrame(position, event.effect === 'meteor' ? 1.6 : 1.1);
     }
   }

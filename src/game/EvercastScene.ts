@@ -34,6 +34,7 @@ import { WorldHealthBars } from './vfx/WorldHealthBars';
 import { SpellVfxPresenter } from './vfx/SpellVfxPresenter';
 import { castDuration } from './vfx/CombatVfxPlan';
 import { BossTracker } from './BossTracker';
+import { impulseStrength } from './actors/PoseBlend';
 import { AtmosphereState, breatheOn } from './render/Atmosphere';
 import { CombatFeel } from './render/CombatFeel';
 import { watchContextLoss } from './render/ContextLoss';
@@ -59,6 +60,14 @@ import { TitleSigil } from './title/TitleSigil';
 
 /** Roughly head height above an enemy's feet. */
 const HEALTH_BAR_OFFSET = new Vector3(0, 1.55, 0);
+
+/**
+ * Which way the mage is thrown by his own cast: back down the road, away from
+ * everything he is throwing it at.
+ */
+const CAST_RECOIL = new Vector3(-1, 0, 0);
+/** Scratch for the blow the mage takes; a busy frame allocates nothing. */
+const MAGE_SHOVE = new Vector3();
 
 /** Matches DEFAULT_UI_SETTINGS.display.depthOfField; the store is the authority. */
 const DEFAULT_DEPTH_OF_FIELD = 0.75;
@@ -356,6 +365,19 @@ export class EvercastScene {
     // Deep enough to read now that the key is carrying the lighting. The grade
     // is what makes them blue; this only decides how much light is left in them.
     this.shadows.setDarkness(0.16);
+    /*
+     * A body that is arriving or coming apart keeps a shadow, and loses it at
+     * the same rate it loses itself.
+     *
+     * Babylon drops transparent casters from the shadow map entirely, and the
+     * moment a burn starts the body is transparent - so a corpse still lying
+     * there at full opacity would have its shadow blink out from under it a
+     * frame before it began to dissolve. With both of these on, the shadow's
+     * strength is `mesh.visibility`, which is the same number the fade is
+     * written to, so the two go together.
+     */
+    this.shadows.transparencyShadow = true;
+    this.shadows.enableSoftTransparentShadow = true;
 
     // The rim: a cool backlight from behind and above the lane, opposite the
     // sun. It contributes almost nothing to overall exposure and everything to
@@ -420,6 +442,7 @@ export class EvercastScene {
         this.enemyActor(id)?.root.position.add(new Vector3(0, 0.65, 0)) ??
         this.transientAnchors.get(id)?.position,
       actor: (id) => this.enemyActor(id),
+      boss: this.bosses.has,
     });
 
     // A handle for tuning the look from the console - toggling an effect off
@@ -538,12 +561,32 @@ export class EvercastScene {
     );
     this.partyBars.update();
     for (const event of events) {
-      if (event.type === 'spell_cast') this.mage.play('attack', castDuration(snapshot.castInterval));
+      if (event.type === 'spell_cast') {
+        this.mage.play('attack', castDuration(snapshot.castInterval));
+        /*
+         * A recoil the cast clip cannot give.
+         *
+         * `castDuration` warps that clip to the cast interval, which at a built
+         * spell is a sixteenth of a second - far too short to read as a motion
+         * at all. This runs on its own clock instead, so the cast keeps a
+         * follow-through however fast the mage is casting, and the staff moves
+         * with it because the socket hangs off the same hinge.
+         */
+        this.mage.shove(CAST_RECOIL, 0.055, 0.2);
+      }
       // The swing is played from the windup so it leads the blow, rather than
       // animating a hit the mage has already taken.
       if (event.type === 'enemy_windup')
         this.enemyMeshes.get(event.instanceId)?.play('attack', event.durationSeconds);
-      if (event.type === 'enemy_attack') this.mage.play('hit');
+      if (event.type === 'enemy_attack') {
+        this.mage.play('hit');
+        const attacker = this.enemyActor(event.instanceId)?.root.position;
+        if (attacker) {
+          MAGE_SHOVE.copyFrom(this.mage.root.position).subtractInPlace(attacker);
+          MAGE_SHOVE.y = 0;
+          this.mage.shove(MAGE_SHOVE, impulseStrength({}));
+        }
+      }
       if (event.type === 'mage_defeated') {
         this.mage.play('death');
         this.mageRecovery = 1.2;

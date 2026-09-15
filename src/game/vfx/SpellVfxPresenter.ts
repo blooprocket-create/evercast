@@ -13,6 +13,8 @@ export interface VfxAnchors {
   mage(): Vector3;
   target(id: number): Vector3 | undefined;
   actor(id: number): ActorVisual | undefined;
+  /** A boss barely rocks when it is hit; everything else takes the blow. */
+  boss(id: number): boolean;
 }
 
 /** Short cosmetic timeline. Simulation has already resolved every event before ingestion. */
@@ -35,11 +37,32 @@ export class SpellVfxPresenter {
     events: readonly GameEvent[],
   ): void {
     if (this.disposed) return;
+    /*
+     * Boss identity, asked now rather than when the effect plays.
+     *
+     * `EvercastScene.sync` forgets a boss as soon as the batch that killed it
+     * has been planned - deliberately, so that batch still knows - and
+     * everything below is *scheduled*, not run. Asked from inside a job, the
+     * answer for a killing blow is therefore always no, and the last hit a boss
+     * ever takes would rock it like a slime. The same is true of the explosions
+     * deferred just below, which is why the answer travels with them.
+     */
+    const bosses = new Set<number>();
+    for (const event of events)
+      if (
+        (event.type === 'projectile_hit' || event.type === 'effect_hit') &&
+        this.anchors.boss(event.instanceId)
+      )
+        bosses.add(event.instanceId);
+    const isBoss = (id: number): boolean => bosses.has(id);
     const explosions = events.filter((e) => e.type === 'effect_hit' && e.effect === 'explosion');
-    this.procs.ingest(events.filter((e) => e.type !== 'effect_hit' || e.effect !== 'explosion'));
+    this.procs.ingest(
+      events.filter((e) => e.type !== 'effect_hit' || e.effect !== 'explosion'),
+      isBoss,
+    );
     if (explosions.length)
       this.schedule(castDuration(snapshot.castInterval) * 0.5 + 0.14, 'explosions', () =>
-        this.procs.ingest(explosions),
+        this.procs.ingest(explosions, isBoss),
       );
     if (snapshot.enemies && snapshot.elapsedSeconds !== undefined)
       this.procs.syncStatuses(snapshot.enemies, snapshot.elapsedSeconds);
@@ -155,7 +178,14 @@ export class SpellVfxPresenter {
             this.combat.burst(source, 'fire', Math.min(3, radius));
           }
           if (hit.terminal) this.combat.burst(p, 'storm', 1.65, true);
-          this.combat.hit(hit, p, this.anchors.actor(hit.instanceId));
+          // A bolt from the staff has no `fromId`; it came from the mage.
+          this.combat.hit(
+            hit,
+            p,
+            this.anchors.actor(hit.instanceId),
+            source ?? this.anchors.mage(),
+            isBoss(hit.instanceId),
+          );
           if (hit.healing && hit.healing !== '0') this.siphon(p);
         });
       }

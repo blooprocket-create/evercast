@@ -1,9 +1,10 @@
 import { AbstractMesh, AnimationGroup, AssetContainer, LoadAssetContainerAsync, MeshBuilder, PBRMaterial, Color3, Scene, ShadowGenerator, TransformNode, Vector3, Quaternion } from '@babylonjs/core';
+import { CROSS_FADE, crossFadeWeight, impulseAmount } from './PoseBlend';
 import '@babylonjs/core/Rendering/outlineRenderer';
 import '@babylonjs/loaders/glTF/2.0/glTFLoader';
 import '@babylonjs/loaders/glTF/2.0/Extensions/KHR_materials_specular';
 import type { GearSnapshot } from '../../engine/types';
-import type { AtmosphereState } from '../render/Atmosphere';
+import { burnAway, type AtmosphereState } from '../render/Atmosphere';
 import { stylizeActorMaterial } from '../render/StylizedMaterials';
 import manifest from '../../../public/models/characters/manifest.json';
 
@@ -91,6 +92,21 @@ export class ActorAssets {
 
 type RestPose = { node: TransformNode; position: Vector3; scaling: Vector3; rotation: Vector3; quaternion: Quaternion | null };
 
+/**
+ * One channel a clip writes to, and what it held when the last transition began.
+ *
+ * Collected from the clips themselves rather than from the node tree, which is
+ * what makes the cross-fade correct by construction: whatever an animation
+ * targets is exactly what gets blended, whether that is a joint's rotation or
+ * a prop's scale, and a model that animates something nobody thought of is
+ * covered without anyone having to think of it.
+ */
+type PoseTrack = {
+  target: Record<string, unknown>;
+  property: string;
+  captured: Vector3 | Quaternion;
+};
+
 /** Presentation clock never changes combat timing or game state. */
 export class ActorVisual {
   readonly root: TransformNode;
@@ -109,11 +125,35 @@ export class ActorVisual {
   /** 0 is not there at all, 1 is solid. See `materialise`. */
   private veil = 1;
   private veilRate = 0;
+  /** 0 is whole, 1 is gone. See `dissolve`. */
+  private burn = 0;
+  private burnRate = 0;
+  /** Every channel the clips write, for the cross-fade. See `PoseTrack`. */
+  private tracks: PoseTrack[] = [];
+  private fadeLeft = 0;
+  private fadeFor = 0;
+  /**
+   * The node the whole body hangs from, owned by this class alone.
+   *
+   * Inserted between `root` and the glTF conversion root so recoil has
+   * somewhere to go. It cannot be written onto either of those: `root`'s
+   * position is overwritten by the scene every frame from the simulation, and
+   * the conversion root carries the importer's handedness fix.
+   */
+  private hinge?: TransformNode;
+  private impulseLeft = 0;
+  private impulseFor = 0;
+  private readonly impulse = new Vector3();
 
   constructor(name: string, scene: Scene) { this.root = new TransformNode(name, scene); }
 
   attach(groups: AnimationGroup[], release: () => void): void {
     this.release = release;
+    this.hinge = new TransformNode(`${this.root.name}-hinge`, this.root.getScene());
+    this.hinge.parent = this.root;
+    for (const child of [...this.root.getChildren()]) {
+      if (child !== this.hinge) child.parent = this.hinge;
+    }
     this.flashMeshes = this.root.getChildMeshes().filter(m => m.getTotalVertices()>0);
     // The meshes arrive after the veil was asked for: a foe that spawned while
     // its GLB was still downloading would otherwise snap in at full opacity.
@@ -124,8 +164,33 @@ export class ActorVisual {
     this.rest = this.root.getDescendants(false).filter((n): n is TransformNode => n instanceof TransformNode).map((node) => ({
       node, position: node.position.clone(), scaling: node.scaling.clone(), rotation: node.rotation.clone(), quaternion: node.rotationQuaternion?.clone() ?? null,
     }));
+    this.tracks = collectTracks(groups);
     this.setGear(this.gear);
-    this.start(this.state, this.playbackDuration);
+    this.start(this.state, this.playbackDuration, true);
+  }
+
+  /**
+   * Throws the body, in world space, away from whatever hit it.
+   *
+   * Layered over the clip rather than replacing it, which is the whole point:
+   * `play('hit')` refuses to interrupt a swing, so in a busy fight most hits
+   * used to land on an actor that showed nothing at all. This one always reads,
+   * because it moves the node the clips do not touch.
+   */
+  shove(direction: Vector3, strength: number, seconds = 0.26): void {
+    if (!this.hinge || this.dying || strength <= 0) return;
+    // Into the body's own frame. The actors only ever turn about y, so this is
+    // exact and costs two trig calls rather than a matrix inverse.
+    const yaw = this.root.rotation.y;
+    const cos = Math.cos(yaw), sin = Math.sin(yaw);
+    const x = direction.x * cos - direction.z * sin;
+    const z = direction.x * sin + direction.z * cos;
+    const length = Math.hypot(x, z) || 1;
+    // A second blow while the first is still settling replaces it rather than
+    // summing: two hits in a frame must not launch anything across the road.
+    this.impulse.set((x / length) * strength, 0, (z / length) * strength);
+    this.impulseFor = Math.max(0.01, seconds);
+    this.impulseLeft = this.impulseFor;
   }
 
   setLocomotion(walking: boolean): void {
@@ -140,7 +205,9 @@ export class ActorVisual {
   }
 
   revive(walking: boolean): void {
-    this.dying = false; this.locomotion = walking ? 'walk' : 'idle'; this.start(this.locomotion);
+    this.dying = false; this.locomotion = walking ? 'walk' : 'idle'; this.start(this.locomotion, undefined, true);
+    this.burn = 0; this.burnRate = 0; this.veil = 1; this.veilRate = 0;
+    this.applyVeil();
   }
 
   /**
@@ -167,18 +234,37 @@ export class ActorVisual {
    * defeating itself, and at the reframed aim the spawn line is in shot.
    */
   get solidity(): number {
-    return this.veil;
+    return this.veil * (1 - this.burn);
   }
 
-  /** The other end of the same idea: a body settling out of the picture. */
+  /**
+   * The other end, and not the same idea at all: a body coming apart.
+   *
+   * The arrival is a veil because a foe walking out of the haze should look
+   * like weather. A death should not - a corpse that simply grew transparent
+   * was the one moment in a fight where the game admitted the bodies were
+   * meshes being switched off. This hands the job to the shader instead, which
+   * eats the surface along a noise front and lights the edge it leaves, and it
+   * costs one number per body because the amount is bound per mesh rather than
+   * per material. See `burnAway`.
+   *
+   * The flat fade is still underneath it, well back: it is what a surface the
+   * plugin never reached - the matte fallback capsule, most of all - still
+   * does, and it is what takes the last of the body off the screen.
+   */
   dissolve(seconds: number): void {
-    this.veilRate = -1 / Math.max(0.01, seconds);
+    this.burnRate = 1 / Math.max(0.01, seconds);
   }
 
   update(delta: number): void {
     if (this.veilRate !== 0) {
       this.veil = Math.min(1, Math.max(0, this.veil + this.veilRate * delta));
       if (this.veil >= 1 || this.veil <= 0) this.veilRate = 0;
+      this.applyVeil();
+    }
+    if (this.burnRate !== 0) {
+      this.burn = Math.min(1, this.burn + this.burnRate * delta);
+      if (this.burn >= 1) this.burnRate = 0;
       this.applyVeil();
     }
     this.flashTime = Math.max(0,this.flashTime-delta);
@@ -193,6 +279,20 @@ export class ActorVisual {
     const duration = this.playbackDuration ?? clipDuration;
     const loop = this.state === 'idle' || this.state === 'walk';
     if (group && duration > 0) group.goToFrame(group.from + (loop ? this.clock % duration : Math.min(this.clock, duration)) / duration * clipDuration * fps);
+    /*
+     * The cross-fade runs after the clip has been sampled, never before: the
+     * clip writes the pose, and this pulls that pose back toward the one the
+     * actor was holding when the state changed. Doing it the other way round
+     * would have `goToFrame` overwrite the blend the instant it was applied.
+     *
+     * On the presentation delta rather than the real one, like everything else
+     * here, so hit-stop freezes a transition mid-blend along with the picture.
+     */
+    if (this.fadeLeft > 0) {
+      this.fadeLeft -= delta;
+      this.applyCrossFade(crossFadeWeight(this.fadeLeft, this.fadeFor));
+    }
+    this.applyImpulse(delta);
     if (!loop && this.clock >= duration && !this.dying) this.start(this.locomotion);
   }
 
@@ -229,19 +329,120 @@ export class ActorVisual {
   dispose(): void { this.sockets.clear();this.flashMeshes=[]; this.release?.(); this.root.dispose(); this.groups.clear(); this.rest = []; }
 
   private applyVeil(): void {
-    for (const mesh of this.flashMeshes) mesh.visibility = this.veil;
+    /*
+     * Cubed, so the fade sits behind the dissolve rather than beside it: the
+     * body holds better than nine tenths of its alpha through the first half
+     * of a burn, where the shader is doing the work, and only gives it up at
+     * the end. It also has to be strictly under one for any burn at all, or
+     * Babylon dispatches the mesh to the opaque pass and throws the alpha the
+     * shader just computed away.
+     */
+    const fade = this.veil * (1 - this.burn * this.burn * this.burn);
+    for (const mesh of this.flashMeshes) {
+      mesh.visibility = fade;
+      burnAway(mesh, this.burn);
+    }
   }
 
-  private start(state: ActorState, duration?: number): void {
+  /**
+   * `hard` snaps to the bind pose instead of blending out of whatever was
+   * showing. Two callers want that and nothing else does: the first frame after
+   * the meshes arrive, which has no previous pose to blend from, and `revive`,
+   * which is a reset rather than a transition - an actor coming back must land
+   * on its bind pose rather than approach it, or a body that died mid-blend
+   * could get up still slightly folded.
+   */
+  private start(state: ActorState, duration?: number, hard = false): void {
     for (const group of this.groups.values()) group.stop();
-    for (const pose of this.rest) {
-      pose.node.position.copyFrom(pose.position); pose.node.scaling.copyFrom(pose.scaling); pose.node.rotation.copyFrom(pose.rotation);
-      if (pose.quaternion) pose.node.rotationQuaternion = pose.quaternion.clone();
+    if (hard) {
+      for (const pose of this.rest) {
+        pose.node.position.copyFrom(pose.position); pose.node.scaling.copyFrom(pose.scaling); pose.node.rotation.copyFrom(pose.rotation);
+        if (pose.quaternion) pose.node.rotationQuaternion = pose.quaternion.clone();
+      }
+      this.fadeLeft = 0;
+      this.impulseLeft = 0;
+      this.hinge?.position.setAll(0);
+      this.hinge?.rotation.setAll(0);
+    } else {
+      // Whatever is on screen right now becomes the thing the new clip grows
+      // out of. Captured before `goToFrame` overwrites it, which is the only
+      // moment the outgoing pose still exists anywhere.
+      this.capturePose();
+      this.fadeFor = CROSS_FADE[state];
+      this.fadeLeft = this.fadeFor;
     }
     this.state = state; this.clock = 0;
     this.playbackDuration = duration;
     this.root.metadata.animation = state;
     const group = this.groups.get(state);
     if (group) { group.start(true); group.pause(); group.goToFrame(group.from); }
+    if (!hard) this.applyCrossFade(crossFadeWeight(this.fadeLeft, this.fadeFor));
   }
+
+  private capturePose(): void {
+    for (const track of this.tracks) {
+      const value = track.target[track.property];
+      if (value instanceof Vector3 && track.captured instanceof Vector3) track.captured.copyFrom(value);
+      else if (value instanceof Quaternion && track.captured instanceof Quaternion) track.captured.copyFrom(value);
+    }
+  }
+
+  /** `weight` is how much of the captured pose is still showing. */
+  private applyCrossFade(weight: number): void {
+    if (weight <= 0) return;
+    for (const track of this.tracks) {
+      const value = track.target[track.property];
+      if (value instanceof Vector3 && track.captured instanceof Vector3) {
+        Vector3.LerpToRef(value, track.captured, weight, value);
+      } else if (value instanceof Quaternion && track.captured instanceof Quaternion) {
+        Quaternion.SlerpToRef(value, track.captured, weight, value);
+      }
+    }
+  }
+
+  private applyImpulse(delta: number): void {
+    if (!this.hinge || this.impulseLeft <= 0) return;
+    this.impulseLeft -= delta;
+    const elapsed = 1 - Math.max(0, this.impulseLeft) / this.impulseFor;
+    const amount = impulseAmount(elapsed);
+    this.hinge.position.set(this.impulse.x * amount, 0, this.impulse.z * amount);
+    // The body leans into the blow as well as sliding under it, which is what
+    // keeps a shove from reading as the whole model being nudged sideways.
+    this.hinge.rotation.set(this.impulse.z * amount * 1.6, 0, -this.impulse.x * amount * 1.6);
+    if (this.impulseLeft <= 0) {
+      this.impulseLeft = 0;
+      this.hinge.position.setAll(0);
+      this.hinge.rotation.setAll(0);
+    }
+  }
+}
+
+/**
+ * Every distinct channel the clips write to, deduplicated.
+ *
+ * A model's clips overwhelmingly target the same joints as one another, so the
+ * union is barely larger than any one clip - and it has to be the union, or a
+ * joint that only the death clip moves would be left mid-fade forever.
+ */
+function collectTracks(groups: readonly AnimationGroup[]): PoseTrack[] {
+  const tracks: PoseTrack[] = [];
+  const seen = new Set<string>();
+  for (const group of groups) {
+    for (const targeted of group.targetedAnimations) {
+      const property = targeted.animation.targetProperty;
+      const target = targeted.target as Record<string, unknown> & { uniqueId?: number };
+      if (!target || typeof property !== 'string') continue;
+      const key = `${target.uniqueId ?? String(target)}:${property}`;
+      if (seen.has(key)) continue;
+      const value = target[property];
+      // Position, rotation and scale are the whole of what a glTF clip writes.
+      // Anything else - a morph weight, a colour - is left to the clip alone
+      // rather than blended wrongly.
+      if (value instanceof Vector3) tracks.push({ target, property, captured: value.clone() });
+      else if (value instanceof Quaternion) tracks.push({ target, property, captured: value.clone() });
+      else continue;
+      seen.add(key);
+    }
+  }
+  return tracks;
 }
