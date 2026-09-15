@@ -310,6 +310,29 @@ The solver is analytical past its sample window, as the seam always anticipated:
 
 Coverage includes the boot phase reducer and the gate it drives, the title framing (a camera pose round-trip, and the Babylon `setTarget` behaviour it depends on) and the sigil it raises (fog opt-out, drift bounds, reduced motion, teardown), onboarding marks (that each retires on the state it describes, that one speaks at a time, and that none precedes the premise), deterministic advancement, multi-enemy overlap, push/farm behavior, content references, spell compilation, gear, Spell Point economy/pathing, first-clear Essence, save migrations and the version window the codec accepts, offline settlement (a day away from a played save inside a bounded budget, exactness within the sample window, rate scaling past it, and no synthesised Essence or stage), the advance loop's runaway guard, save loading that never throws on the way up, prestige reset boundaries, and architecture guards preventing presentation dependencies from entering `src/engine`.
 
+## Commands, and what automation may touch
+
+`executeCommand` is every mutation the interface can ask for, in one module.
+It lived inside `EvercastSimulation` until the coordinator's 300-line guard
+fired twice in a row as commands were added - which was the guard working
+rather than being in the way. A dispatcher that grows with every feature is not
+coordination, and it now has somewhere to grow.
+
+`src/engine/automation/` is the other half of that seam. Its one design rule -
+**automate what has one right answer, never what has a build behind it** - is
+what keeps Spell Point *purchases* in and node *activation* out, and it is
+guarded by a test rather than by memory, because a later hand could add the
+wrong key without noticing what it had automated away.
+
+Automation runs from one call site, as an encounter is created, and that is
+load-bearing. It changes the mage's damage, so it changes when the next enemy
+dies: fire it at a moment that depends on how `advance` was chunked and a run
+simulated in one pass diverges from the same run simulated in frames. Encounter
+creation is already an event the loop stops on, and both the cleared and
+defeated paths route through travel to reach it. The draw it performs
+deliberately bypasses `execute`, which would otherwise hand every automatic
+summon to the reveal overlay.
+
 ## The Surge, and the one command with a deadline
 
 `src/engine/combat/Surge.ts` owns the only player input in combat. Three

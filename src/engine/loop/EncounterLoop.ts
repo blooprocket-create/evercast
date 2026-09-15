@@ -24,6 +24,12 @@ export interface EncounterLoopSystems {
   encounters: EncounterSystem;
   combat: CombatSystem;
   progression: ProgressionSystem;
+  /**
+   * One automation pass. A closure rather than the system itself, so the loop
+   * never learns what automation depends on - which is most of the other
+   * systems in the engine.
+   */
+  automate: (state: GameState) => void;
 }
 
 /**
@@ -59,6 +65,17 @@ export class EncounterLoop {
     tickCounterspell(run, consumed);
 
     if (run.travelElapsed + EPSILON >= this.config.travelSeconds) {
+      /*
+       * Automation runs here and nowhere else, and the call site is the whole
+       * determinism story: buying gear changes the mage's damage, which changes
+       * when the next enemy dies - so it must not fire at a moment that depends
+       * on how `advance` was chunked. Arriving at an encounter is already an
+       * event the loop stops on, and both the cleared path and the defeated one
+       * route through travel to get here, so one hook covers every way a fight
+       * can end. It is also when a player would have done it: you kit up
+       * between fights, not mid-swing.
+       */
+      this.systems.automate(state);
       const descriptor = this.systems.encounters.createForRun(run);
       run.encounter = descriptor.encounter;
       run.enemies = [];

@@ -8,6 +8,7 @@ import { SummonSurface } from '../surfaces/SummonSurface';
 import { RebirthSurface } from '../surfaces/RebirthSurface';
 import { AttunementsSurface } from '../surfaces/AttunementsSurface';
 import { SettingsSurface } from '../surfaces/SettingsSurface';
+import { AutomationSurface } from '../surfaces/AutomationSurface';
 import { ChronicleSurface } from '../surfaces/ChronicleSurface';
 
 /**
@@ -81,6 +82,14 @@ export const DESTINATIONS: RegisteredDestination[] = [
     Component: SummonSurface,
   },
   {
+    id: 'automation',
+    group: 'power',
+    label: 'Automation',
+    icon: 'automation',
+    archetype: 'detail',
+    Component: AutomationSurface,
+  },
+  {
     id: 'attunements',
     group: 'power',
     label: 'Attunements',
@@ -136,7 +145,6 @@ export const DEFAULT_PINNED = ['character', 'spell-tree', 'gear'];
  */
 const STRESS: RegisteredDestination[] = [
   { id: 'gear-trees', group: 'power', label: 'Gear Trees', icon: 'gearTree', archetype: 'graph', Component: Placeholder },
-  { id: 'automation', group: 'power', label: 'Automation', icon: 'automation', archetype: 'ledger', Component: Placeholder },
   { id: 'map', group: 'world', label: 'Map', icon: 'map', archetype: 'dashboard', Component: Placeholder },
   { id: 'bestiary', group: 'world', label: 'Bestiary', icon: 'bestiary', archetype: 'ledger', badge: () => 7, Component: Placeholder },
   { id: 'story', group: 'world', label: 'Story', icon: 'story', archetype: 'ledger', Component: Placeholder },

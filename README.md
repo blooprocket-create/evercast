@@ -212,6 +212,36 @@ asked for rather than because anything recorded that they saw it. Only the
 opening premise is stored, in the save rather than beside the preferences, so it
 travels with an export and a Rebirth never replays it.
 
+## Automation
+
+Evercast's opening line is "Nothing here needs your hands", and until
+`src/engine/automation/` that stopped being true after about an hour: the whole
+gold economy was a button, tapped a few hundred times a stage.
+
+The rule that decides what belongs there:
+
+> **Automate what has one right answer. Never automate what has a build behind
+> it.**
+
+So Gold, Spell Points and shards are handed over, and each defaults on because
+giving them away costs the player no decision they were making. Summoning is
+there too but defaults *off* - the reveal is content rather than friction.
+Activating a spell node is deliberately absent and must stay absent: the routes
+are exclusive, a capstone is a choice, and a game that picked the tree for you
+would have automated away the only thing Evercast is about. Party slots are out
+for the same reason.
+
+Automation runs as an encounter is created, and that call site is the whole
+determinism story. Buying gear changes the mage's damage, which changes when
+the next enemy dies - so it must not fire at a moment that depends on how
+`advance` was chunked. Arriving at an encounter is already an event the loop
+stops on, and both the cleared path and the defeated one route through travel
+to reach it, so one hook covers every way a fight can end.
+
+The engine owns the purchase rule and `tools/balance/` now imports it, so a
+balance run measures the player the game actually has. See [the progression
+curve](docs/PROGRESSION_CURVE_V1.md) for what that changed.
+
 ## The Surge
 
 Every other decision in Evercast is made in a menu and then watched. The Surge

@@ -5,6 +5,7 @@ import type { SpellTreeState } from './spellTree/types';
 import type { CombatPosition, EnemyStatuses, SpellCombatState } from './combat/SpellCombatState';
 import type { CompanionAura, CompanionCombatant, CompanionsState } from './companions/types';
 import type { CounterspellState } from './combat/Surge';
+import type { AutomationSettings } from './automation/AutomationSystem';
 
 export type RunMode = 'push' | 'farm';
 export type CombatPhase = 'travel' | 'combat';
@@ -98,6 +99,12 @@ export interface RunState {
    */
   counter?: CounterspellState;
   /**
+   * Whether automation's next gear purchase leans defensive. Run state rather
+   * than a setting: it is policy in flight, not something the player chose,
+   * and a Rebirth may as well start it afresh.
+   */
+  automationWantHp?: boolean;
+  /**
    * The party as it stands in this encounter. Rebuilt from `CompanionsState`
    * whenever the roster changes, so ownership is persistent and hit points are
    * not - exactly the split enemies already use.
@@ -152,6 +159,12 @@ export interface MetaState {
   lifetimeKills: number;
   storyFlags: string[];
   unlockedSystems: string[];
+  /**
+   * What the player has handed over. Meta rather than run state, because a
+   * Rebirth resetting these would mean re-enabling them every prestige - and
+   * the whole point of automation is not being asked again.
+   */
+  automation: AutomationSettings;
 }
 
 export interface GameState {

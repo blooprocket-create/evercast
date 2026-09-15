@@ -15,6 +15,8 @@ import {
 import type { CombatPhase, EnemyState, GameState, RunMode, RunStatistics } from '../model';
 import { ENEMIES } from '../../content/enemies';
 // prettier-ignore
+import { AUTOMATION_KEYS, DEFAULT_AUTOMATION, type AutomationSettings } from '../automation/AutomationSystem';
+// prettier-ignore
 import { COUNTER_MAX_CHARGES, COUNTER_RECHARGE_SECONDS, STAGGER_AMPLIFICATION } from '../../content/combatTuning';
 import { createCounterspellState, type CounterspellState } from '../combat/Surge';
 import { ZONES } from '../../content/zones';
@@ -740,7 +742,29 @@ function deserializeMeta(raw: unknown, attunements: readonly string[]): GameStat
     // still a blob that has to be held in memory and written back on every save.
     storyFlags: guardedIdList(source.storyFlags, () => true, LIMITS.storyFlags),
     unlockedSystems: guardedIdList(source.unlockedSystems, () => true, LIMITS.unlockedSystems),
+    automation: guardedAutomation(source.automation),
   };
+}
+
+/**
+ * What the player has handed over.
+ *
+ * A save written before automation existed carries nothing here and gets the
+ * defaults, which is the right answer rather than merely a safe one: those
+ * players have been buying gear by hand for the whole of their run, and the
+ * update should hand them the thing it added rather than make them find a
+ * setting to turn it on.
+ *
+ * Each key is read individually so an edited or partial object cannot leave a
+ * field undefined and put a `boolean` check onto a value that is not one.
+ */
+function guardedAutomation(raw: unknown): AutomationSettings {
+  const source = guardedObject(raw);
+  const settings = { ...DEFAULT_AUTOMATION };
+  for (const key of AUTOMATION_KEYS) {
+    settings[key] = guardedBoolean(source[key], DEFAULT_AUTOMATION[key]);
+  }
+  return settings;
 }
 
 function deserializeEquipment(raw: unknown, version: number): EquipmentState {

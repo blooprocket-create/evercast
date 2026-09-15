@@ -121,25 +121,28 @@ const counter = counterspellState(run);
     encounterSpawnedEnemies: run.encounter?.spawnedEnemies ?? 0,
     encounterAliveEnemies: run.enemies.length,
     spawnInterval: run.encounter?.spawnInterval ?? config.enemySpawnInterval,
-phase: run.phase,
-boss: run.encounter?.bossStage ?? false,
-surge: surging
-  ? {
-      instanceId: surging.instanceId,
-      enemyName: surging.name,
-      secondsRemaining: Math.max(0, surging.attackCooldown),
-      windowSeconds: surgeWindup(surging),
-    }
-  : null,
-counterspell: {
-  charges: counter.charges,
-  maxCharges: COUNTER_MAX_CHARGES,
-  rechargeFraction:
-    counter.charges >= COUNTER_MAX_CHARGES
-      ? 1
-      : Math.min(1, Math.max(0, 1 - counter.recharge / COUNTER_RECHARGE_SECONDS)),
-  ready: surging !== undefined && counter.charges >= 1,
-},
+    phase: run.phase,
+    boss: run.encounter?.bossStage ?? false,
+    surge: surging
+      ? {
+          instanceId: surging.instanceId,
+          enemyName: surging.name,
+          secondsRemaining: Math.max(0, surging.attackCooldown),
+          windowSeconds: surgeWindup(surging),
+        }
+      : null,
+    counterspell: {
+      charges: counter.charges,
+      maxCharges: COUNTER_MAX_CHARGES,
+      rechargeFraction:
+        counter.charges >= COUNTER_MAX_CHARGES
+          ? 1
+          : Math.min(1, Math.max(0, 1 - counter.recharge / COUNTER_RECHARGE_SECONDS)),
+      ready: surging !== undefined && counter.charges >= 1,
+    },
+    // Copied, not referenced: a surface that mutated the snapshot would be
+    // writing straight into meta with no command and no save behind it.
+    automation: { ...state.meta.automation },
     casts: run.stats.casts,
     kills: run.stats.kills,
     deaths: run.stats.deaths,

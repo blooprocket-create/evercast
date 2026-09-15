@@ -1,3 +1,4 @@
+import { DEFAULT_AUTOMATION } from './automation/AutomationSystem';
 import { createCounterspellState } from './combat/Surge';
 import type { EngineConfig } from './config';
 import { createInitialCompanionsState } from './companions/CompanionSystem';
@@ -52,6 +53,7 @@ export function createInitialMetaState(): MetaState {
     highestStageEver: 1,
     lifetimeKills: 0,
     storyFlags: [],
+    automation: { ...DEFAULT_AUTOMATION },
     unlockedSystems: [],
   };
 }

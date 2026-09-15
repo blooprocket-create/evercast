@@ -1,3 +1,4 @@
+import type { AutomationKey, AutomationSettings } from './automation/AutomationSystem';
 import type { CombatPosition } from './combat/SpellCombatState';
 import type { ChronicleLine } from './events/Chronicle';
 
@@ -160,6 +161,7 @@ export interface SimulationSnapshot {
   /** The Surge in the air right now, if one is. */
   surge: SurgeSnapshot | null;
   counterspell: CounterspellSnapshot;
+  automation: AutomationSettings;
   casts: number;
   kills: number;
   deaths: number;
@@ -278,4 +280,5 @@ export type EngineCommand =
   | { type: 'equip_companion'; definitionId: string; slot: number }
   | { type: 'unequip_companion'; slot: number }
   | { type: 'mark_story_flag'; flag: string }
-  | { type: 'counterspell' };
+  | { type: 'counterspell' }
+  | { type: 'set_automation'; key: AutomationKey; enabled: boolean };
