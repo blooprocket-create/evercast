@@ -86,7 +86,7 @@ export const DESTINATIONS: RegisteredDestination[] = [
     group: 'power',
     label: 'Automation',
     icon: 'automation',
-    archetype: 'detail',
+    archetype: 'dashboard',
     Component: AutomationSurface,
   },
   {

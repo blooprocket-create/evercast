@@ -103,6 +103,42 @@ describe('ui architecture', () => {
     expect(bare).toEqual([]);
   });
 
+  /**
+   * And that the archetype it reaches is the one it says it reaches.
+   *
+   * The check above only asks whether a surface imports *an* archetype, which
+   * a review caught as the weaker half of the pair: Automation was converted
+   * from a bare `div` to a `Dashboard` while its registry entry still read
+   * `archetype: 'detail'`, and nothing noticed. The metadata is what the rail
+   * and any future registry-driven tooling classify a destination by, so a
+   * surface whose entry disagrees with its own root is lying to both.
+   */
+  it('makes every registered destination declare the archetype it actually renders', () => {
+    const registry = readFileSync(join(UI_ROOT, 'nav', 'registry.tsx'), 'utf8');
+    const imports = new Map(
+      [...registry.matchAll(/import \{ (\w+) \} from '\.\.\/surfaces\/(\w+)'/g)].map(
+        (match) => [match[1], match[2]],
+      ),
+    );
+    const entries = [
+      ...registry.matchAll(/archetype: '(\w+)',[\s\S]{0,200}?Component: (\w+),/g),
+    ].map((match) => ({ archetype: match[1], component: match[2] }));
+
+    expect(entries.length).toBeGreaterThan(0);
+    const mismatches: string[] = [];
+    for (const { archetype, component } of entries) {
+      const file = imports.get(component);
+      if (!file) continue; // A placeholder, which renders nothing at all.
+      const source = readFileSync(join(UI_ROOT, 'surfaces', `${file}.tsx`), 'utf8');
+      // `dashboard` is rendered by `Dashboard`, and so on for all five.
+      const expected = archetype[0].toUpperCase() + archetype.slice(1);
+      if (!new RegExp(`from '\\.\\./archetypes/${expected}'`).test(source)) {
+        mismatches.push(`${file} declares "${archetype}" but does not import ${expected}`);
+      }
+    }
+    expect(mismatches).toEqual([]);
+  });
+
   it('never positions a surface by hardcoded pixels', () => {
     // `.slot-staff { top: 205px }` is why the old paperdoll could not hold a
     // ninth gear slot. Surfaces describe data; archetypes own geometry.
